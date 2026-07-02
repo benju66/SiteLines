@@ -1,0 +1,116 @@
+/* Base + design tokens (README "Design Tokens"). Static shell chrome uses
+   these CSS custom properties; dynamic data-driven colors come from
+   src/theme/tokens.ts via inline styles. */
+
+:root {
+  /* surfaces & text */
+  --app-bg: #dfe2e6;
+  --card: #fbfbfc;
+  --sidebar: #f5f6f8;
+  --white: #ffffff;
+  --fill-1: #f4f5f7;
+  --fill-2: #f6f7f9;
+  --fill-3: #eef0f3;
+
+  /* borders */
+  --bd-card: #d4d8dd;
+  --bd-1: #e2e5e9;
+  --bd-2: #e4e7eb;
+  --bd-row: #eef0f2;
+  --bd-3: #dde1e6;
+
+  /* text */
+  --tx-primary: #1a1d21;
+  --tx-secondary: #4b525c;
+  --tx-secondary-2: #5b626c;
+  --tx-tertiary: #7b828c;
+  --tx-tertiary-2: #8a919b;
+  --tx-faint: #9298a1;
+  --tx-faint-2: #a2a8b0;
+
+  --accent: #e8590c;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--app-bg);
+  font-family: var(--font-sans);
+  color: var(--tx-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100%;
+}
+
+::selection {
+  background: #e8590c33;
+}
+
+/* thin custom scrollbar for scrolling regions */
+.scry::-webkit-scrollbar {
+  width: 10px;
+}
+.scry::-webkit-scrollbar-thumb {
+  background: #cfd3d9;
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* --- hover states (can't be inline) --- */
+.sl-hover-row:hover {
+  background: var(--fill-2);
+}
+.sl-nav-item:hover:not(.is-active) {
+  background: #eceef1;
+}
+.sl-chip:hover:not(.is-active) {
+  background: #f2f4f6;
+  border-color: #cdd2d8;
+}
+.sl-scope-btn:hover:not(.is-active) {
+  background: #f2f4f6;
+  border-color: #cdd2d8;
+}
+.sl-icon-btn:hover {
+  background: var(--fill-1);
+}
+.sl-search-btn:hover {
+  background: #e9ecef;
+}
+.sl-activity-btn:hover {
+  background: var(--fill-1);
+}
+.sl-proj-tag:hover {
+  filter: brightness(0.96);
+}
+.sl-linked-row:hover {
+  background: var(--fill-1);
+  border-color: #cdd2d8;
+}
+.sl-party-link:hover {
+  color: #24507a;
+}
+.sl-respond-btn:hover {
+  background: #000;
+}
+.sl-palette-row:hover {
+  background: var(--fill-1);
+}

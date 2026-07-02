@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:#dfe2e6;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#1a1d21;-webkit-font-smoothing:antialiased}
+  ::selection{background:#e8590c33}
+  .scry::-webkit-scrollbar{width:10px}
+  .scry::-webkit-scrollbar-thumb{background:#cfd3d9;border-radius:6px;border:3px solid transparent;background-clip:content-box}
+  @keyframes slInR{from{transform:translateX(100%)}to{transform:translateX(0)}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes popIn{from{opacity:0;transform:translateY(-8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+</style>
+</helmet>
+<div style="height:100vh;padding:16px;display:flex;justify-content:center">
+<div style="width:100%;max-width:1440px;height:100%;background:#fbfbfc;border:1px solid #d4d8dd;border-radius:12px;box-shadow:0 1px 2px rgba(20,25,35,.05),0 12px 40px rgba(20,25,35,.08);overflow:hidden;display:flex">
+
+  <!-- ============ SIDEBAR ============ -->
+  <div class="scry" style="width:248px;flex:none;background:#f5f6f8;border-right:1px solid #e2e5e9;display:flex;flex-direction:column;overflow-y:auto">
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 16px 14px">
+      <div style="width:28px;height:28px;border-radius:7px;background:#1a1d21;display:flex;align-items:center;justify-content:center;flex:none">
+        <div style="width:12px;height:12px;border-radius:50%;border:2.5px solid #e8590c"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;line-height:1.1">
+        <span style="font-size:14px;font-weight:700;letter-spacing:-.3px">Sitelines</span>
+        <span style="font-size:10.5px;color:#8a919b">Ben Ostrander · PM</span>
+      </div>
+    </div>
+
+    <div style="padding:2px 12px 10px">
+      <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#a2a8b0;font-weight:600;padding:0 4px 6px">Project</div>
+      <sc-for list="{{ scopeItems }}" as="s" hint-placeholder-count="3">
+        <button onClick="{{ s.onClick }}" style="{{ s.style }}" style-hover="{{ s.hover }}">
+          <sc-if value="{{ s.dot }}" hint-placeholder-val="{{ true }}"><span style="width:8px;height:8px;border-radius:2px;background:{{ s.dot }};flex:none"></span></sc-if>
+          <sc-if value="{{ s.allIcon }}" hint-placeholder-val="{{ false }}"><span style="width:8px;height:8px;border-radius:2px;background:linear-gradient(135deg,#2f5f8a 50%,#2f7d76 50%);flex:none"></span></sc-if>
+          <span style="flex:1;text-align:left">{{ s.label }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="padding:2px 12px 2px">
+      <button onClick="{{ overviewNav.onClick }}" style="{{ overviewNav.style }}" style-hover="{{ overviewNav.hover }}">
+        <span style="width:18px;height:18px;border-radius:5px;background:#1a1d21;display:flex;align-items:center;justify-content:center;flex:none"><span style="width:9px;height:9px;border-radius:2px;border:2px solid #fff"></span></span>
+        <span style="flex:1;text-align:left;font-weight:600">Overview</span>
+      </button>
+      <button onClick="{{ homeNav.onClick }}" style="{{ homeNav.style }}" style-hover="{{ homeNav.hover }}">
+        <span style="width:18px;height:18px;border-radius:5px;background:#e8590c;display:flex;align-items:center;justify-content:center;flex:none"><span style="width:7px;height:7px;border-radius:50%;border:2px solid #fff"></span></span>
+        <span style="flex:1;text-align:left;font-weight:600">My Court</span>
+        <sc-if value="{{ homeNav.count }}" hint-placeholder-val="{{ 5 }}"><span style="{{ homeNav.badgeStyle }}">{{ homeNav.count }}</span></sc-if>
+      </button>
+    </div>
+
+    <sc-for list="{{ navGroups }}" as="g" hint-placeholder-count="2">
+      <div style="padding:10px 12px 2px">
+        <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#a2a8b0;font-weight:600;padding:0 4px 4px">{{ g.label }}</div>
+        <sc-for list="{{ g.items }}" as="t" hint-placeholder-count="6">
+          <button onClick="{{ t.onClick }}" style="{{ t.style }}" style-hover="{{ t.hover }}">
+            <span style="{{ t.codeStyle }}">{{ t.code }}</span>
+            <span style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.label }}</span>
+            <sc-if value="{{ t.count }}" hint-placeholder-val="{{ 0 }}"><span style="{{ t.badgeStyle }}">{{ t.count }}</span></sc-if>
+          </button>
+        </sc-for>
+      </div>
+    </sc-for>
+
+    <div style="flex:1"></div>
+    <div style="margin:12px;padding:11px 12px;border-radius:9px;background:#fff;border:1px solid #e6e9ed;display:flex;align-items:center;gap:10px">
+      <div style="width:9px;height:9px;border-radius:50%;background:#e8590c;box-shadow:0 0 0 3px #e8590c22;flex:none"></div>
+      <div style="line-height:1.25">
+        <div style="font-size:12.5px;font-weight:600"><span style="font-family:ui-monospace,Menlo,monospace">{{ overdueTotal }}</span> overdue</div>
+        <div style="font-size:10.5px;color:#8a919b">across your projects</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MAIN ============ -->
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:#fbfbfc">
+
+    <!-- header -->
+    <div style="padding:16px 22px 14px;border-bottom:1px solid #e4e7eb;background:#fff">
+      <div style="display:flex;align-items:flex-start;gap:16px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h1 style="margin:0;font-size:19px;font-weight:700;letter-spacing:-.4px">{{ head.title }}</h1>
+            <span style="font-size:12.5px;color:#8a919b">{{ head.count }}</span>
+            <span style="{{ head.scopeStyle }}">{{ head.scopeLabel }}</span>
+          </div>
+          <p style="margin:4px 0 0;font-size:12.5px;color:#7b828c">{{ head.desc }}</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex:none">
+          <button onClick="{{ openPalette }}" style="display:flex;align-items:center;gap:8px;background:#f1f3f5;border:1px solid #e2e5e9;border-radius:8px;padding:6px 9px 6px 10px;cursor:pointer;font-family:inherit;color:#8a919b;font-size:12px;min-width:186px" style-hover="{background:#e9ecef}">
+            <span style="width:11px;height:11px;border-radius:50%;border:1.6px solid #a2a8b0;flex:none"></span>
+            <span style="flex:1;text-align:left">Search…</span>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;background:#fff;border:1px solid #dfe3e8;border-radius:4px;padding:1px 5px;color:#8a919b">⌘K</span>
+          </button>
+          <button onClick="{{ openActivity }}" style="display:flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e5e9;border-radius:8px;padding:6px 11px;cursor:pointer;font-family:inherit;color:#4b525c;font-size:12px;font-weight:550" style-hover="{background:#f4f5f7}">
+            Activity
+            <span style="background:#e8590c;color:#fff;font-family:ui-monospace,Menlo,monospace;font-size:9.5px;font-weight:700;border-radius:20px;padding:1px 5px">{{ activityCount }}</span>
+          </button>
+        </div>
+      </div>
+
+      <sc-if value="{{ head.showControls }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
+          <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:6px;align-items:center">
+              <span style="font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#a2a8b0;margin-right:2px">Type</span>
+              <sc-for list="{{ typeChips }}" as="c" hint-placeholder-count="5">
+                <button onClick="{{ c.onClick }}" style="{{ c.style }}" style-hover="{{ c.hover }}">{{ c.label }}</button>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ head.showViews }}" hint-placeholder-val="{{ true }}">
+            <div style="width:1px;height:20px;background:#e4e7eb"></div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <span style="font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#a2a8b0;margin-right:2px">Views</span>
+              <sc-for list="{{ savedViews }}" as="c" hint-placeholder-count="5">
+                <button onClick="{{ c.onClick }}" style="{{ c.style }}" style-hover="{{ c.hover }}">{{ c.label }}</button>
+              </sc-for>
+            </div>
+          </sc-if>
+          <div style="flex:1"></div>
+          <sc-if value="{{ head.showToggle }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;background:#eef0f3;border:1px solid #e0e3e8;border-radius:8px;padding:2px;flex:none">
+              <button onClick="{{ setCourt }}" style="{{ toggle.courtStyle }}">In My Court</button>
+              <button onClick="{{ setAll }}" style="{{ toggle.allStyle }}">All</button>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- content -->
+    <div class="scry" style="flex:1;overflow-y:auto">
+
+      <!-- ---- OVERVIEW (dashboard placeholder) ---- -->
+      <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:18px 22px 26px">
+          <div style="display:flex;align-items:center;gap:9px;background:#eaf1f8;border:1px solid #c3d5e8;border-radius:9px;padding:10px 13px;margin-bottom:18px">
+            <span style="width:8px;height:8px;border-radius:50%;background:#2f5f8a;flex:none"></span>
+            <span style="font-size:12px;color:#2f5f8a;line-height:1.4"><b>Placeholder dashboard.</b> Portfolio metrics populate live once connected to the Procore API — figures below use sample data to lock the layout.</span>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+            <sc-for list="{{ ovKpis }}" as="k" hint-placeholder-count="4">
+              <div style="background:#fff;border:1px solid #e4e7eb;border-radius:9px;padding:14px 15px">
+                <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:#8a919b;font-weight:600">{{ k.label }}</div>
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:26px;font-weight:680;margin-top:6px;color:{{ k.color }}">{{ k.value }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px">
+            <sc-for list="{{ projectCards }}" as="p" hint-placeholder-count="2">
+              <div style="background:#fff;border:1px solid #e4e7eb;border-radius:10px;padding:16px 17px">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span style="width:10px;height:10px;border-radius:3px;background:{{ p.color }};flex:none"></span>
+                  <span style="font-size:15px;font-weight:680;letter-spacing:-.2px">{{ p.name }}</span>
+                  <div style="flex:1"></div>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:650;color:{{ p.color }}">{{ p.pctW }}</span>
+                </div>
+                <div style="height:7px;background:#eef0f3;border-radius:99px;overflow:hidden;margin-top:10px">
+                  <div style="height:100%;width:{{ p.pctW }};background:{{ p.color }};border-radius:99px"></div>
+                </div>
+                <div style="display:flex;gap:10px;margin-top:15px">
+                  <div style="flex:1;background:#f6f7f9;border-radius:8px;padding:10px 11px">
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-size:18px;font-weight:680">{{ p.rfis }}</div>
+                    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#8a919b;margin-top:2px">Open RFIs</div>
+                  </div>
+                  <div style="flex:1;background:#f6f7f9;border-radius:8px;padding:10px 11px">
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-size:18px;font-weight:680">{{ p.subs }}</div>
+                    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#8a919b;margin-top:2px">Submittals</div>
+                  </div>
+                  <div style="flex:1;background:#fdf0ea;border-radius:8px;padding:10px 11px">
+                    <div style="font-family:ui-monospace,Menlo,monospace;font-size:18px;font-weight:680;color:{{ p.overdueColor }}">{{ p.overdue }}</div>
+                    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#8a919b;margin-top:2px">Overdue</div>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#a2a8b0;font-weight:600;margin:22px 0 10px">Trends · from Procore</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <sc-for list="{{ chartSlots }}" as="c" hint-placeholder-count="3">
+              <div style="{{ c.wrap }}">
+                <div style="font-size:12.5px;font-weight:600;margin-bottom:10px">{{ c.title }}</div>
+                <div style="height:150px;border-radius:8px;background:repeating-linear-gradient(-45deg,#eef1f4,#eef1f4 10px,#f5f7f9 10px,#f5f7f9 20px);border:1px dashed #d7dce1;display:flex;align-items:center;justify-content:center">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#aab0b8;letter-spacing:.5px">{{ c.hint }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ---- HOME / LIST TABLE ---- -->
+      <sc-if value="{{ isTable }}" hint-placeholder-val="{{ true }}">
+        <div>
+          <div style="display:grid;grid-template-columns:12px 46px minmax(120px,1fr) 104px 132px 98px;gap:12px;align-items:center;padding:8px 22px;background:#f4f5f7;border-bottom:1px solid #e4e7eb;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#9298a1;font-weight:600;position:sticky;top:0;z-index:1">
+            <span></span><span>Type</span><span>Item</span><span>Project</span><span>{{ cols.who }}</span><span style="text-align:right">{{ cols.right }}</span>
+          </div>
+          <sc-for list="{{ rows }}" as="it" hint-placeholder-count="6">
+            <div onClick="{{ it.openDetail }}" style="display:grid;grid-template-columns:12px 46px minmax(120px,1fr) 104px 132px 98px;gap:12px;align-items:center;padding:11px 22px;border-bottom:1px solid #eef0f2;cursor:pointer" style-hover="{background:#f6f7f9}">
+              <span title="{{ it.status.label }}" style="width:9px;height:9px;border-radius:50%;background:{{ it.status.dot }};box-shadow:0 0 0 3px {{ it.status.ring }};flex:none"></span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:9.5px;font-weight:650;letter-spacing:.3px;color:#5b626c;background:#eef0f3;border:1px solid #e2e5e9;padding:2px 5px;border-radius:4px;text-align:center;justify-self:start">{{ it.code }}</span>
+              <div style="min-width:0">
+                <div style="font-size:13px;font-weight:530;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.title }}</div>
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#9298a1;margin-top:1px">{{ it.number }}</div>
+              </div>
+              <button onClick="{{ it.openProject }}" style="{{ it.projStyle }}" style-hover="{{ it.projHover }}">{{ it.proj.short }}</button>
+              <div style="min-width:0">
+                <sc-if value="{{ it.isYou }}" hint-placeholder-val="{{ true }}">
+                  <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#1a1d21"><span style="font-size:9px;font-weight:700;letter-spacing:.4px;background:#1a1d21;color:#fff;padding:2px 5px;border-radius:4px">YOU</span>{{ it.waitSub }}</span>
+                </sc-if>
+                <sc-if value="{{ it.notYou }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-size:12.5px;color:#4b525c">{{ it.wait }}</span>
+                </sc-if>
+              </div>
+              <div style="text-align:right;min-width:0">
+                <sc-if value="{{ it.showPill }}" hint-placeholder-val="{{ false }}"><span style="{{ it.pillStyle }}">{{ it.status.label }}</span></sc-if>
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:{{ it.dateColor }};margin-top:3px">{{ it.date }}</div>
+              </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:52px;text-align:center;color:#9298a1;font-size:13px">Nothing here for these filters. Try <b style="color:#5b626c">All</b> or reset the view.</div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ---- FINANCIAL ---- -->
+      <sc-if value="{{ isFinancial }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:20px 22px">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+            <sc-for list="{{ fin.kpis }}" as="k" hint-placeholder-count="6">
+              <div style="background:#fff;border:1px solid #e4e7eb;border-radius:9px;padding:14px 15px">
+                <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:#8a919b;font-weight:600">{{ k.label }}</div>
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:22px;font-weight:680;margin-top:6px;color:{{ k.color }}">{{ k.value }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:18px;background:#fff;border:1px solid #e4e7eb;border-radius:9px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 130px 130px 130px;gap:12px;padding:9px 16px;background:#f4f5f7;border-bottom:1px solid #e4e7eb;font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:#9298a1;font-weight:600">
+              <span>{{ fin.head.h0 }}</span><span style="text-align:right">{{ fin.head.h1 }}</span><span style="text-align:right">{{ fin.head.h2 }}</span><span style="text-align:right">{{ fin.head.h3 }}</span>
+            </div>
+            <sc-for list="{{ fin.rows }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) 130px 130px 130px;gap:12px;padding:10px 16px;border-bottom:1px solid #eef0f2;align-items:center">
+                <span style="font-size:12.5px;font-weight:530">{{ r.c0 }}</span>
+                <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#4b525c">{{ r.c1 }}</span>
+                <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#4b525c">{{ r.c2 }}</span>
+                <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:{{ r.c3color }}">{{ r.c3 }}</span>
+              </div>
+            </sc-for>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 130px 130px 130px;gap:12px;padding:11px 16px;background:#f9fafb;align-items:center">
+              <span style="font-size:12.5px;font-weight:700">{{ fin.total.c0 }}</span>
+              <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:700">{{ fin.total.c1 }}</span>
+              <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:700">{{ fin.total.c2 }}</span>
+              <span style="text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:700;color:{{ fin.total.c3color }}">{{ fin.total.c3 }}</span>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ---- PHOTOS ---- -->
+      <sc-if value="{{ isPhotos }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:20px 22px">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+            <sc-for list="{{ photos }}" as="p" hint-placeholder-count="8">
+              <div style="border:1px solid #e4e7eb;border-radius:9px;overflow:hidden;background:#fff">
+                <div style="position:relative;height:118px;background:repeating-linear-gradient(45deg,#e9ecef,#e9ecef 9px,#eef1f4 9px,#eef1f4 18px);display:flex;align-items:center;justify-content:center">
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#aab0b8;letter-spacing:.5px">JOBSITE PHOTO</span>
+                  <span style="{{ p.tagStyle }}">{{ p.proj.short }}</span>
+                  <sc-if value="{{ p.mine }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:8px;right:8px;font-size:8.5px;font-weight:700;letter-spacing:.4px;background:#e8590c;color:#fff;padding:2px 6px;border-radius:4px">FLAGGED</span></sc-if>
+                </div>
+                <div style="padding:9px 11px">
+                  <div style="font-size:12px;font-weight:550;line-height:1.3">{{ p.caption }}</div>
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#9298a1;margin-top:3px">{{ p.date }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:52px;text-align:center;color:#9298a1;font-size:13px">No flagged photos. Toggle to <b style="color:#5b626c">All</b> to browse the album.</div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ---- DAILY LOG ---- -->
+      <sc-if value="{{ isDailyLog }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:18px 22px;display:flex;flex-direction:column;gap:12px">
+          <sc-for list="{{ logs }}" as="l" hint-placeholder-count="4">
+            <div style="background:#fff;border:1px solid #e4e7eb;border-radius:9px;padding:14px 16px">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:650">{{ l.date }}</span>
+                <span style="{{ l.projStyle }}">{{ l.proj.short }}</span>
+                <div style="flex:1"></div>
+                <sc-if value="{{ l.mine }}" hint-placeholder-val="{{ true }}"><span style="font-size:10px;font-weight:700;letter-spacing:.3px;background:#fbf1d8;color:#8a6300;border:1px solid #efd89a;padding:2px 8px;border-radius:5px">NEEDS SIGN-OFF</span></sc-if>
+                <sc-if value="{{ l.signed }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px;font-weight:700;letter-spacing:.3px;background:#e7f4ec;color:#2c7a4f;border:1px solid #bfe3cd;padding:2px 8px;border-radius:5px">SIGNED</span></sc-if>
+              </div>
+              <div style="display:flex;gap:18px;margin-top:10px;flex-wrap:wrap">
+                <div><span style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#9298a1">Weather</span><div style="font-size:12.5px;font-weight:530;margin-top:1px">{{ l.weather }}</div></div>
+                <div><span style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#9298a1">Temp</span><div style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:530;margin-top:1px">{{ l.temp }}</div></div>
+                <div><span style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#9298a1">Manpower</span><div style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:530;margin-top:1px">{{ l.crew }} on site</div></div>
+              </div>
+              <p style="margin:10px 0 0;font-size:12.5px;line-height:1.5;color:#3c434c">{{ l.notes }}</p>
+            </div>
+          </sc-for>
+          <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:52px;text-align:center;color:#9298a1;font-size:13px">No logs awaiting your sign-off. Toggle to <b style="color:#5b626c">All</b> for the full log.</div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ---- DIRECTORY ---- -->
+      <sc-if value="{{ isDirectory }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="display:grid;grid-template-columns:minmax(140px,1.3fr) 128px 92px 62px minmax(0,1fr) 54px;gap:12px;align-items:center;padding:8px 22px;background:#f4f5f7;border-bottom:1px solid #e4e7eb;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#9298a1;font-weight:600;position:sticky;top:0;z-index:1">
+            <span>Name</span><span>Role</span><span>Trade</span><span>Projects</span><span>Contact</span><span style="text-align:right">Open</span>
+          </div>
+          <sc-for list="{{ contacts }}" as="c" hint-placeholder-count="6">
+            <div style="{{ c.rowStyle }}">
+              <div style="min-width:0">
+                <div style="font-size:13px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.name }}</div>
+                <div style="font-size:11px;color:#9298a1;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.company }}</div>
+              </div>
+              <span style="font-size:12px;color:#4b525c">{{ c.role }}</span>
+              <span style="font-size:11.5px;color:#7b828c">{{ c.trade }}</span>
+              <div style="display:flex;gap:4px">
+                <sc-for list="{{ c.projTags }}" as="p" hint-placeholder-count="2"><span title="{{ p.full }}" style="width:9px;height:9px;border-radius:2px;background:{{ p.color }}"></span></sc-for>
+              </div>
+              <div style="min-width:0">
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#4b525c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.email }}</div>
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#9298a1;margin-top:1px">{{ c.phone }}</div>
+              </div>
+              <div style="text-align:right">
+                <sc-if value="{{ c.openCount }}" hint-placeholder-val="{{ 0 }}"><span title="Open ball-in-court items involving this contact" style="font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;color:#e8590c;background:#fdf0ea;border:1px solid #f2c9b6;border-radius:20px;padding:2px 8px">{{ c.openCount }}</span></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+</div>
+
+  <!-- ============ COMMAND PALETTE ============ -->
+  <sc-if value="{{ paletteOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePalette }}" style="position:fixed;inset:0;background:rgba(20,25,35,.34);display:flex;align-items:flex-start;justify-content:center;padding-top:11vh;z-index:60">
+      <div onClick="{{ stop }}" style="width:580px;max-width:92vw;background:#fff;border-radius:13px;box-shadow:0 24px 64px rgba(20,25,35,.35);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid #eef0f2">
+          <span style="width:14px;height:14px;border-radius:50%;border:1.8px solid #a2a8b0;flex:none"></span>
+          <input value="{{ query }}" onInput="{{ onQuery }}" autofocus placeholder="Search RFIs, submittals, tools…" style="flex:1;border:none;outline:none;font-family:inherit;font-size:15px;color:#1a1d21;background:transparent" />
+          <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;background:#f1f3f5;border:1px solid #e2e5e9;border-radius:4px;padding:2px 6px;color:#8a919b">esc</span>
+        </div>
+        <div class="scry" style="max-height:52vh;overflow-y:auto;padding:6px">
+          <sc-for list="{{ paletteResults }}" as="r" hint-placeholder-count="6">
+            <button onClick="{{ r.open }}" style="display:flex;align-items:center;gap:11px;width:100%;padding:9px 11px;border:none;background:transparent;border-radius:8px;cursor:pointer;font-family:inherit;text-align:left" style-hover="{background:#f4f5f7}">
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:9px;font-weight:700;color:#5b626c;background:#eef0f3;border:1px solid #e2e5e9;padding:3px 6px;border-radius:5px;min-width:42px;text-align:center;flex:none">{{ r.code }}</span>
+              <span style="flex:1;min-width:0">
+                <span style="display:block;font-size:13px;font-weight:540;color:#1a1d21;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.title }}</span>
+                <span style="display:block;font-size:11px;color:#9298a1;margin-top:1px">{{ r.sub }}</span>
+              </span>
+            </button>
+          </sc-for>
+          <sc-if value="{{ paletteEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:34px;text-align:center;color:#9298a1;font-size:13px">No matches for “{{ query }}”.</div>
+          </sc-if>
+        </div>
+        <div style="display:flex;gap:16px;padding:9px 16px;border-top:1px solid #eef0f2;background:#fafbfc;font-size:10.5px;color:#9298a1">
+          <span>↵ open</span><span>esc close</span><span style="margin-left:auto">Search across all tools · sample data</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ ACTIVITY DRAWER ============ -->
+  <sc-if value="{{ activityOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeActivity }}" style="position:fixed;inset:0;background:rgba(20,25,35,.3);z-index:55">
+      <div onClick="{{ stop }}" class="scry" style="position:absolute;right:0;top:0;height:100%;width:400px;max-width:92vw;background:#fbfbfc;box-shadow:-8px 0 40px rgba(20,25,35,.2);display:flex;flex-direction:column;overflow-y:auto">
+        <div style="display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid #e4e7eb;position:sticky;top:0;background:#fff;z-index:1">
+          <span style="font-size:15px;font-weight:680">Activity</span>
+          <div style="flex:1"></div>
+          <button onClick="{{ closeActivity }}" style="width:26px;height:26px;border-radius:7px;border:1px solid #e2e5e9;background:#fff;cursor:pointer;color:#6b727b;font-size:15px;line-height:1;font-family:inherit" style-hover="{background:#f4f5f7}">×</button>
+        </div>
+        <div style="padding:8px 0">
+          <sc-for list="{{ activityFeed }}" as="a" hint-placeholder-count="6">
+            <div style="display:flex;gap:11px;padding:12px 18px;border-bottom:1px solid #f0f2f4">
+              <span style="width:9px;height:9px;border-radius:50%;background:{{ a.dot }};margin-top:4px;flex:none"></span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12.5px;line-height:1.4;color:#1a1d21">{{ a.text }}</div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:5px">
+                  <span style="{{ a.projStyle }}">{{ a.proj.short }}</span>
+                  <span style="font-size:11px;color:#9298a1">{{ a.sub }}</span>
+                  <span style="flex:1"></span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#aab0b8">{{ a.when }}</span>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ RECORD DETAIL DRAWER ============ -->
+  <sc-if value="{{ detailOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeDetail }}" style="position:fixed;inset:0;background:rgba(20,25,35,.3);z-index:55">
+      <div onClick="{{ stop }}" class="scry" style="position:absolute;right:0;top:0;height:100%;width:452px;max-width:94vw;background:#fbfbfc;box-shadow:-8px 0 40px rgba(20,25,35,.2);display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid #e4e7eb;background:#fff;flex:none">
+          <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:700;color:#5b626c;background:#eef0f3;border:1px solid #e2e5e9;padding:3px 7px;border-radius:5px">{{ det.code }}</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:650;color:#4b525c">{{ det.number }}</span>
+          <div style="flex:1"></div>
+          <button onClick="{{ closeDetail }}" style="width:26px;height:26px;border-radius:7px;border:1px solid #e2e5e9;background:#fff;cursor:pointer;color:#6b727b;font-size:15px;line-height:1;font-family:inherit" style-hover="{background:#f4f5f7}">×</button>
+        </div>
+        <div class="scry" style="flex:1;overflow-y:auto;padding:18px">
+          <h2 style="margin:0;font-size:17px;font-weight:680;line-height:1.3;letter-spacing:-.2px">{{ det.title }}</h2>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <span style="{{ det.statusPill }}">{{ det.statusLabel }}</span>
+            <span style="{{ det.projStyle }}">{{ det.proj.short }}</span>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#e8ebee;border:1px solid #e8ebee;border-radius:9px;overflow:hidden;margin-top:16px">
+            <div style="background:#fff;padding:11px 13px">
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#9298a1">Waiting on</div>
+              <div style="margin-top:3px">
+                <sc-if value="{{ det.isYou }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600"><span style="font-size:9px;font-weight:700;background:#1a1d21;color:#fff;padding:2px 5px;border-radius:4px">YOU</span></span></sc-if>
+                <sc-if value="{{ det.hasParty }}" hint-placeholder-val="{{ false }}"><button onClick="{{ det.openParty }}" style="font-size:13px;font-weight:600;color:#2f5f8a;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:2px" style-hover="{color:#24507a}">{{ det.who }} →</button></sc-if>
+                <sc-if value="{{ det.plainWho }}" hint-placeholder-val="{{ true }}"><span style="font-size:13px;font-weight:540;color:#3c434c">{{ det.who }}</span></sc-if>
+              </div>
+            </div>
+            <div style="background:#fff;padding:11px 13px">
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#9298a1">Due / status</div>
+              <div style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:600;margin-top:4px;color:{{ det.urgColor }}">{{ det.date }}</div>
+            </div>
+            <div style="background:#fff;padding:11px 13px">
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#9298a1">Project</div>
+              <div style="font-size:13px;font-weight:540;margin-top:4px;color:#3c434c">{{ det.proj.full }}</div>
+            </div>
+            <div style="background:#fff;padding:11px 13px">
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#9298a1">Tool</div>
+              <div style="font-size:13px;font-weight:540;margin-top:4px;color:#3c434c">{{ det.toolLabel }}</div>
+            </div>
+          </div>
+
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#a2a8b0;font-weight:600;margin:18px 0 7px">Description</div>
+          <p style="margin:0;font-size:12.5px;line-height:1.55;color:#3c434c">{{ det.desc }}</p>
+
+          <sc-if value="{{ det.hasLinks }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#a2a8b0;font-weight:600;margin:18px 0 8px">Linked records</div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <sc-for list="{{ det.links }}" as="l" hint-placeholder-count="2">
+                <button onClick="{{ l.open }}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:1px solid #e2e5e9;border-radius:8px;padding:9px 11px;cursor:pointer;font-family:inherit" style-hover="{background:#f4f5f7;border-color:#cdd2d8}">
+                  <span style="width:7px;height:7px;border-radius:50%;background:{{ l.dot }};flex:none"></span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:9px;font-weight:700;color:#5b626c;background:#eef0f3;border:1px solid #e2e5e9;padding:2px 5px;border-radius:4px;flex:none">{{ l.code }}</span>
+                  <span style="flex:1;min-width:0"><span style="display:block;font-size:12.5px;font-weight:540;color:#1a1d21;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.title }}</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#9298a1">{{ l.num }}</span></span>
+                  <span style="{{ l.projStyle }}">{{ l.proj.short }}</span>
+                  <span style="color:#c4c9cf;font-size:15px;flex:none">›</span>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#a2a8b0;font-weight:600;margin:18px 0 9px">Ball-in-court history</div>
+          <div style="display:flex;flex-direction:column;gap:0">
+            <sc-for list="{{ det.activity }}" as="e" hint-placeholder-count="3">
+              <div style="display:flex;gap:11px">
+                <div style="display:flex;flex-direction:column;align-items:center;flex:none">
+                  <span style="width:9px;height:9px;border-radius:50%;background:{{ e.dot }};margin-top:3px"></span>
+                  <span style="width:1.5px;flex:1;background:#e4e7eb;min-height:14px"></span>
+                </div>
+                <div style="padding-bottom:12px">
+                  <div style="font-size:12.5px;color:#1a1d21;line-height:1.4">{{ e.text }}</div>
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#aab0b8;margin-top:2px">{{ e.when }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#a2a8b0;font-weight:600;margin:8px 0 9px">Attachments</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <sc-for list="{{ det.atts }}" as="a" hint-placeholder-count="2">
+              <span style="display:inline-flex;align-items:center;gap:7px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#5b626c;background:#fff;border:1px solid #e2e5e9;border-radius:7px;padding:6px 10px"><span style="width:8px;height:8px;border-radius:2px;background:#c4c9cf"></span>{{ a }}</span>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;gap:9px;padding:13px 18px;border-top:1px solid #e4e7eb;background:#fff;flex:none">
+          <button style="flex:1;font-size:12.5px;font-weight:600;padding:9px;border-radius:8px;border:none;background:#1a1d21;color:#fff;cursor:pointer;font-family:inherit" style-hover="{background:#000}">Respond</button>
+          <button style="font-size:12.5px;font-weight:550;padding:9px 14px;border-radius:8px;border:1px solid #d7dbe0;background:#fff;color:#4b525c;cursor:pointer;font-family:inherit" style-hover="{background:#f4f5f7}">Forward</button>
+          <button style="font-size:12.5px;font-weight:550;padding:9px 14px;border-radius:8px;border:1px solid #d7dbe0;background:#fff;color:#4b525c;cursor:pointer;font-family:inherit" style-hover="{background:#f4f5f7}">Resolve</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const PROJ = {
+  mckenna:{ short:'McKenna', full:'McKenna Crossing', color:'#2f5f8a', bg:'#eaf1f8' },
+  opiii:  { short:'OP_III',  full:'OP_III',           color:'#2f7d76', bg:'#e7f2f1' },
+};
+const PCT = { mckenna:62, opiii:41 };
+const URG = {
+  over:  { dot:'#e8590c', ring:'#e8590c22', color:'#b23c0e', rank:0 },
+  week:  { dot:'#d99400', ring:'#d9940026', color:'#8a6300', rank:1 },
+  track: { dot:'#3fa06a', ring:'#3fa06a22', color:'#2c7a4f', rank:2 },
+  muted: { dot:'#c4c9cf', ring:'#c4c9cf22', color:'#9298a1', rank:3 },
+};
+const TONE = {
+  danger:{ c:'#b23c0e', bg:'#fbe9e0', bd:'#f2c9b6' },
+  warn:  { c:'#8a6300', bg:'#fbf1d8', bd:'#efd89a' },
+  ok:    { c:'#2c7a4f', bg:'#e7f4ec', bd:'#bfe3cd' },
+  info:  { c:'#2f5f8a', bg:'#eaf1f8', bd:'#c3d5e8' },
+  muted: { c:'#6b727b', bg:'#eef0f3', bd:'#dde1e6' },
+};
+const TOOLS = {
+  overview:     { label:'Overview',       code:'',      view:'overview',  desc:'Portfolio health across all projects.' },
+  home:         { label:'My Court',       code:'',      view:'home',      desc:'Every open ball-in-court item across your projects, sorted by urgency.' },
+  directory:    { label:'Directory',      code:'DIR',   view:'directory', desc:'Project contacts — owner, design team, subs, and agencies.' },
+  rfis:         { label:'RFIs',           code:'RFI',   view:'list', grp:0, coord:true, who:'Waiting on', right:'Age',    desc:'Requests for information.' },
+  submittals:   { label:'Submittals',     code:'SUB',   view:'list', grp:0, coord:true, who:'Waiting on', right:'Status', desc:'Shop drawings, product data, samples.' },
+  drawings:     { label:'Drawings',       code:'DWG',   view:'list', grp:0, who:'Revision',   right:'Issued', desc:'Current drawing set and revisions.' },
+  specs:        { label:'Specifications', code:'SPEC',  view:'list', grp:0, who:'Revision',   right:'Issued', desc:'Project specification sections.' },
+  changeEvents: { label:'Change Events',  code:'CE',    view:'list', grp:0, coord:true, who:'Owner',     right:'Status', desc:'Potential changes being tracked and priced.' },
+  punch:        { label:'Punch List',     code:'PUN',   view:'list', grp:0, coord:true, who:'Assigned',  right:'Status', desc:'Deficiencies to close out.' },
+  dailyLog:     { label:'Daily Log',      code:'LOG',   view:'dailyLog', grp:0, desc:'Field reports, weather, and manpower.' },
+  photos:       { label:'Photos',         code:'IMG',   view:'photos',   grp:0, desc:'Jobsite documentation.' },
+  meetings:     { label:'Meetings',       code:'MTG',   view:'list', grp:0, who:'Owner',      right:'When',   desc:'Agendas, minutes, and follow-ups.' },
+  schedule:     { label:'Schedule',       code:'TASK',  view:'list', grp:0, who:'Owner',      right:'Target', desc:'Milestones and near-term look-ahead.' },
+  documents:    { label:'Documents',      code:'DOC',   view:'list', grp:0, who:'Owner',      right:'Status', desc:'Contracts, permits, reports, insurance.' },
+  primeContract:{ label:'Prime Contract', code:'PC',    view:'financial', grp:1, desc:'Owner contract value and billing to date.' },
+  budget:       { label:'Budget',         code:'BUD',   view:'financial', grp:1, desc:'Cost control by division.' },
+  commitments:  { label:'Commitments',    code:'COM',   view:'list', grp:1, coord:true, who:'Owner', right:'Value',  desc:'Subcontracts and purchase orders.' },
+  changeOrders: { label:'Change Orders',  code:'CO',    view:'list', grp:1, coord:true, who:'Waiting on', right:'Status', desc:'Executed and pending contract changes.' },
+  invoicing:    { label:'Invoicing',      code:'INV',   view:'list', grp:1, coord:true, who:'Waiting on', right:'Amount', desc:'Pay applications in and out.' },
+};
+const GROUPS = [
+  { label:'Core', keys:['directory'] },
+  { label:'Project Management', keys:['rfis','submittals','drawings','specs','changeEvents','punch','dailyLog','photos','meetings','schedule','documents'] },
+  { label:'Financial Management', keys:['primeContract','budget','commitments','changeOrders','invoicing'] },
+];
+const DATA = {
+  rfis:[
+    { p:'mckenna', num:'#042', title:'Tunnel tie-in elevation conflict at existing garage', who:'Structural EOR', mine:false, date:'due Jun 24', urg:'over',  open:true,  st:{label:'Open',tone:'danger'} },
+    { p:'mckenna', num:'#039', title:'Boring log mislabeling clarification',                who:'Braun Intertec', mine:false, date:'due Jul 3',  urg:'week',  open:true,  st:{label:'Open',tone:'warn'} },
+    { p:'mckenna', num:'#044', title:'Fire-rated ceiling assembly at Unit 210',            who:'You',            mine:true,  date:'due Jul 8',  urg:'track', open:true,  st:{label:'Draft',tone:'muted'} },
+    { p:'opiii',   num:'#021', title:'Door hardware spec conflict, Level 2',               who:'Architect',      mine:false, date:'due Jul 2',  urg:'week',  open:true,  st:{label:'Open',tone:'warn'} },
+    { p:'opiii',   num:'#019', title:'Slab depression at mechanical room',                 who:'Architect',      mine:false, date:'answered',   urg:'muted', open:false, st:{label:'Closed',tone:'ok'} },
+  ],
+  submittals:[
+    { p:'mckenna', num:'#118', title:'Door hardware spec, Type 4 sets',   who:'You',       mine:true,  date:'due Jul 7', urg:'track', open:true, st:{label:'Under Review',tone:'info'} },
+    { p:'mckenna', num:'#112', title:'Structural steel — sequence B',     who:'Architect', mine:false, date:'due Jul 5', urg:'week',  open:true, st:{label:'Submitted',tone:'info'} },
+    { p:'opiii',   num:'#094', title:'Curtain wall shop drawings',        who:'You',       mine:true,  date:'due Jul 6', urg:'track', open:true, st:{label:'Under Review',tone:'info'} },
+    { p:'opiii',   num:'#088', title:'Elevator cab finishes',             who:'Sub',       mine:false, date:'w/ sub',    urg:'week',  open:true, st:{label:'Revise & Resubmit',tone:'warn'} },
+  ],
+  changeOrders:[
+    { p:'mckenna', num:'CO #007', title:'Site grade correction scope', who:'Owner', mine:false, date:'due Jun 18', urg:'over',  open:true,  st:{label:'Pending Owner',tone:'danger'} },
+    { p:'opiii',   num:'CO #003', title:'Added generator pad',         who:'You',   mine:true,  date:'needs pricing', urg:'week', open:true, st:{label:'Draft',tone:'muted'} },
+    { p:'mckenna', num:'CO #005', title:'Revised canopy steel',        who:'Owner', mine:false, date:'Jun 12',     urg:'track', open:false, st:{label:'Approved',tone:'ok'} },
+  ],
+  punch:[
+    { p:'opiii',   num:'#012', title:'Corridor finish touch-up, Wing B', who:'Sub', mine:false, date:'due Jul 4', urg:'week',  open:true, st:{label:'Open',tone:'warn'} },
+    { p:'mckenna', num:'#008', title:'Sealant at storefront jambs',      who:'Sub', mine:false, date:'overdue',   urg:'over',  open:true, st:{label:'Open',tone:'danger'} },
+    { p:'opiii',   num:'#015', title:'Touch-up paint, stair 2',          who:'You', mine:true,  date:'verify',    urg:'track', open:true, st:{label:'Ready to Verify',tone:'info'} },
+  ],
+  changeEvents:[
+    { p:'mckenna', num:'CE #014', title:'Unforeseen rock at footing F-12',        who:'You', mine:true,  date:'price pending', urg:'week',  st:{label:'Open',tone:'warn'} },
+    { p:'opiii',   num:'CE #009', title:'Owner-requested lobby finish upgrade',   who:'You', mine:true,  date:'ROM sent',      urg:'track', st:{label:'Open',tone:'info'} },
+    { p:'mckenna', num:'CE #011', title:'Weather delay — May storms',             who:'—',   mine:false, date:'documented',    urg:'muted', st:{label:'Void',tone:'muted'} },
+  ],
+  commitments:[
+    { p:'mckenna', num:'SC-14', title:'Concrete — Cemstone',        who:'—',   mine:false, date:'$1.24M', urg:'track', st:{label:'Executed',tone:'ok'} },
+    { p:'opiii',   num:'SC-22', title:'Curtain wall — Harmon',      who:'You', mine:true,  date:'$3.10M', urg:'week',  st:{label:'Out for Signature',tone:'warn'} },
+    { p:'mckenna', num:'PO-08', title:'Elevators — Otis',           who:'You', mine:true,  date:'$412K',  urg:'track', st:{label:'Draft',tone:'muted'} },
+  ],
+  invoicing:[
+    { p:'mckenna', num:'App 08', title:'Cemstone — May progress', who:'You',   mine:true,  date:'$186,400',   urg:'week',  st:{label:'Pending Review',tone:'warn'} },
+    { p:'opiii',   num:'App 05', title:'Harmon — deposit',        who:'You',   mine:true,  date:'$310,000',   urg:'track', st:{label:'Pending Review',tone:'info'} },
+    { p:'mckenna', num:'App 07', title:'Owner pay app — June',    who:'Owner', mine:false, date:'$1,020,000', urg:'track', st:{label:'Submitted',tone:'info'} },
+  ],
+  meetings:[
+    { p:'mckenna', num:'OAC 14',   title:'Owner–Architect–Contractor weekly', who:'You', mine:true, date:'Jul 2, 9:00a', urg:'week',  st:{label:'Agenda Due',tone:'warn'} },
+    { p:'opiii',   num:'COORD 06', title:'MEP coordination',                  who:'You', mine:true, date:'Jul 3, 1:00p', urg:'track', st:{label:'Scheduled',tone:'info'} },
+    { p:'mckenna', num:'OAC 13',   title:'OAC weekly — minutes',              who:'You', mine:true, date:'Jun 25',       urg:'track', st:{label:'Minutes Draft',tone:'muted'} },
+  ],
+  schedule:[
+    { p:'mckenna', num:'M-03', title:'Underground MEP rough-in',   who:'—', mine:false, date:'Jun 27', urg:'over',  st:{label:'Behind',tone:'danger'} },
+    { p:'mckenna', num:'M-04', title:'Structural steel top-out',   who:'—', mine:false, date:'Jul 10', urg:'week',  st:{label:'On Track',tone:'ok'} },
+    { p:'opiii',   num:'M-06', title:'Curtain wall start',         who:'—', mine:false, date:'Jul 21', urg:'track', st:{label:'On Track',tone:'ok'} },
+  ],
+  drawings:[
+    { p:'mckenna', num:'S-101', title:'Foundation Plan',    who:'Rev 3', mine:true,  date:'Jun 28', urg:'week',  st:{label:'Under Review',tone:'info'} },
+    { p:'mckenna', num:'A-201', title:'Level 2 Floor Plan', who:'Rev 4', mine:false, date:'Jun 20', urg:'track', st:{label:'Current',tone:'ok'} },
+    { p:'opiii',   num:'A-501', title:'Wall Sections',      who:'Rev 2', mine:false, date:'Jun 15', urg:'track', st:{label:'Current',tone:'ok'} },
+    { p:'opiii',   num:'A-200', title:'Level 1 Floor Plan', who:'Rev 1', mine:false, date:'May 30', urg:'muted', st:{label:'Superseded',tone:'muted'} },
+  ],
+  specs:[
+    { p:'mckenna', num:'08 71 00', title:'Door Hardware',           who:'Rev 2', mine:true,  date:'Jun 22', urg:'week',  st:{label:'Revised',tone:'warn'} },
+    { p:'mckenna', num:'03 30 00', title:'Cast-in-Place Concrete',  who:'Rev 1', mine:false, date:'May 10', urg:'track', st:{label:'Current',tone:'ok'} },
+    { p:'opiii',   num:'08 44 13', title:'Glazed Curtain Walls',    who:'Rev 1', mine:false, date:'May 18', urg:'track', st:{label:'Current',tone:'ok'} },
+  ],
+  documents:[
+    { p:'opiii',   num:'INS',    title:'Certificate of Insurance — Harmon',       who:'You', mine:true,  date:'exp Aug 1', urg:'week',  st:{label:'Renew Soon',tone:'warn'} },
+    { p:'mckenna', num:'GEO',    title:'Geotech Report — Braun Intertec',         who:'—',   mine:false, date:'Apr 02',    urg:'track', st:{label:'Final',tone:'ok'} },
+    { p:'mckenna', num:'PERMIT', title:'Building Permit — City of Prior Lake',    who:'—',   mine:false, date:'Mar 15',    urg:'track', st:{label:'Issued',tone:'ok'} },
+  ],
+};
+const PHOTOS = [
+  { p:'mckenna', caption:'Footing F-12 rock condition', date:'Jun 29', mine:true },
+  { p:'opiii',   caption:'Curtain wall mockup review',  date:'Jun 30', mine:true },
+  { p:'mckenna', caption:'Level 2 slab pour',           date:'Jun 27', mine:false },
+  { p:'mckenna', caption:'Storefront install',          date:'Jun 24', mine:false },
+  { p:'opiii',   caption:'Corridor Wing B punch walk',  date:'Jun 28', mine:false },
+  { p:'opiii',   caption:'Site logistics / crane set',  date:'Jun 20', mine:false },
+  { p:'mckenna', caption:'Underground MEP rough-in',    date:'Jun 26', mine:false },
+  { p:'opiii',   caption:'MEP overhead coordination',   date:'Jun 22', mine:false },
+];
+const LOGS = [
+  { p:'mckenna', date:'Jun 30', weather:'Partly cloudy', temp:'78°F', crew:34, mine:true,  notes:'Structural steel erection continued at grid C–F. Concrete washout relocated per SWPPP. Rock encountered at footing F-12 — see CE #014.' },
+  { p:'opiii',   date:'Jun 30', weather:'Clear',         temp:'81°F', crew:26, mine:true,  notes:'Curtain wall mockup reviewed with Harmon. MEP overhead rough-in continued Level 1. No safety incidents.' },
+  { p:'mckenna', date:'Jun 27', weather:'Rain AM',       temp:'66°F', crew:18, mine:false, notes:'Slab pour Level 2 completed. 2-hour weather delay in the morning. Pump truck demobilized 2:30p.' },
+  { p:'opiii',   date:'Jun 28', weather:'Clear',         temp:'79°F', crew:22, mine:false, notes:'Punch walk of Wing B corridor with owner rep. Touch-up list issued to finishes sub.' },
+];
+const ACTIVITY = [
+  { p:'mckenna', text:'Structural EOR has not responded to RFI #042', sub:'Tunnel tie-in conflict', tone:'danger', when:'2h ago' },
+  { p:'mckenna', text:'CO #007 still pending Owner approval',        sub:'18 days open',            tone:'danger', when:'today' },
+  { p:'opiii',   text:'Submittal #094 is ready for your review',     sub:'Curtain wall shop dwgs',  tone:'info',   when:'today' },
+  { p:'mckenna', text:'You logged Daily Log for Jun 30',             sub:'Awaiting sign-off',       tone:'warn',   when:'1d ago' },
+  { p:'opiii',   text:'CO #003 needs pricing before submission',     sub:'Added generator pad',     tone:'warn',   when:'1d ago' },
+  { p:'mckenna', text:'Submittal #112 submitted to Architect',       sub:'Structural steel seq. B', tone:'info',   when:'2d ago' },
+  { p:'opiii',   text:'Punch #012 assigned to sub',                  sub:'Corridor Wing B',         tone:'muted',  when:'3d ago' },
+];
+const DIV = {
+  mckenna:[['Concrete',3.10,2.90,2.10],['Structural Steel',4.60,4.40,1.80],['Curtain Wall',2.20,2.00,0.40],['MEP',6.80,6.10,2.60],['Finishes',5.40,4.20,1.90],['General Conditions',3.34,1.60,1.00]],
+  opiii:  [['Concrete',2.30,2.10,1.40],['Structural Steel',3.40,3.10,0.90],['Curtain Wall',3.10,2.80,0.50],['MEP',4.60,3.00,0.80],['Finishes',3.30,0.90,0.30],['General Conditions',1.81,0.70,0.20]],
+};
+const CHG = { mckenna:0.84, opiii:0.31 };
+const OU  = { mckenna:0.12, opiii:-0.08 };
+// A record only has a "ball in court" while it is live — terminal states never feed My Court.
+const TERMINAL = new Set(['Closed','Approved','Current','Superseded','Void','Final','Issued','Executed','Answered','Scheduled']);
+const COURT_TOOLS = new Set(['rfis','submittals','changeEvents','changeOrders','punch','commitments','invoicing','meetings','drawings','specs','documents']);
+function isBic(tool,r){ return COURT_TOOLS.has(tool) && !(r.st && TERMINAL.has(r.st.label)); }
+// cross-tool links, keyed "tool:num"
+const LINKS = {
+  'rfis:#042':[['drawings','S-101']],
+  'drawings:S-101':[['rfis','#042']],
+  'rfis:#021':[['submittals','#118'],['specs','08 71 00']],
+  'submittals:#118':[['rfis','#021'],['specs','08 71 00']],
+  'specs:08 71 00':[['submittals','#118'],['rfis','#021']],
+  'changeEvents:CE #014':[['rfis','#042']],
+  'invoicing:App 08':[['commitments','SC-14']],
+  'commitments:SC-22':[['submittals','#094'],['invoicing','App 05']],
+  'submittals:#094':[['commitments','SC-22']],
+  'invoicing:App 05':[['commitments','SC-22']],
+};
+const WHO2ID = { 'You':'self','Structural EOR':'eor','Braun Intertec':'braun','Architect':'arch','Owner':'owner','Sub':'finishes' };
+const DIRECTORY = [
+  { id:'self',     name:'Ben Ostrander',      company:'Meridian Builders (GC)',         role:'Project Manager',      trade:'General Contractor', email:'ben.ostrander@meridianbuild.com', phone:'612-555-0142', projects:['mckenna','opiii'] },
+  { id:'eor',      name:'Dan Reismann, PE',   company:'Larson Structural',              role:'Structural EOR',       trade:'Structural Eng.',    email:'dreismann@larsonse.com',          phone:'651-555-0188', projects:['mckenna'] },
+  { id:'braun',    name:'Braun Intertec',     company:'Braun Intertec',                 role:'Geotechnical Eng.',    trade:'Geotech',            email:'projects@braunintertec.com',      phone:'952-555-0110', projects:['mckenna'] },
+  { id:'arch',     name:'Maria Chen, AIA',    company:'Fieldhouse Architects',          role:'Architect of Record',  trade:'Architecture',       email:'mchen@fieldhouse-arch.com',       phone:'612-555-0176', projects:['mckenna','opiii'] },
+  { id:'owner',    name:'Tom Weller',         company:'Orchard Path Senior Living',     role:'Owner Representative', trade:'Owner',              email:'tweller@orchardpath.org',         phone:'952-555-0133', projects:['mckenna','opiii'] },
+  { id:'harmon',   name:'Harmon Inc.',        company:'Harmon',                         role:'Curtain Wall Sub',     trade:'Glazing',            email:'estimating@harmoninc.com',        phone:'651-555-0155', projects:['opiii'], match:'Harmon' },
+  { id:'cemstone', name:'Cemstone',           company:'Cemstone',                       role:'Concrete Sub',         trade:'Concrete',           email:'dispatch@cemstone.com',           phone:'651-555-0121', projects:['mckenna'], match:'Cemstone' },
+  { id:'otis',     name:'Otis Elevator',      company:'Otis',                           role:'Elevator Sub',         trade:'Conveying',          email:'service@otis.com',                phone:'800-555-0199', projects:['mckenna'], match:'Elevator' },
+  { id:'ahj',      name:'City of Prior Lake', company:'City of Prior Lake',             role:'Building Official',    trade:'Authority (AHJ)',    email:'permits@priorlake.gov',           phone:'952-555-0100', projects:['mckenna'] },
+  { id:'finishes', name:'Northland Finishes', company:'Northland Finishes',             role:'Finishes Sub',         trade:'Finishes',           email:'ops@northlandfinishes.com',       phone:'763-555-0166', projects:['opiii','mckenna'], match:'finish' },
+];
+
+class Component extends DCLogic {
+  state = { tool:'home', project:'all', type:'all', court:'all', savedView:'all', detail:null, activity:false, palette:false, query:'', dirFocus:null };
+
+  componentDidMount(){
+    this._key = (e)=>{
+      if((e.metaKey||e.ctrlKey) && (e.key==='k'||e.key==='K')){ e.preventDefault(); this.setState(s=>({palette:!s.palette, query:''})); }
+      else if(e.key==='Escape'){ this.setState({palette:false, detail:null, activity:false}); }
+    };
+    window.addEventListener('keydown', this._key);
+  }
+  componentWillUnmount(){ if(this._key) window.removeEventListener('keydown', this._key); }
+
+  chip(active, ac) {
+    const c = ac || '#1a1d21';
+    const base = 'display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:550;padding:5px 10px;border-radius:7px;cursor:pointer;line-height:1;font-family:inherit;white-space:nowrap;';
+    return active ? base + `background:${c};color:#fff;border:1px solid ${c};` : base + 'background:#fff;color:#4b525c;border:1px solid #dde1e6;';
+  }
+  chipHover(active){ return active ? '' : '{background:#f2f4f6;border-color:#cdd2d8}'; }
+
+  navItem(active) {
+    const base = 'display:flex;align-items:center;gap:9px;width:100%;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:12.5px;line-height:1.2;font-family:inherit;border:1px solid transparent;text-align:left;margin-bottom:1px;';
+    return active ? base + 'background:#fff;color:#1a1d21;font-weight:600;border-color:#e2e5e9;box-shadow:0 1px 2px rgba(20,25,35,.05);' : base + 'background:transparent;color:#525963;';
+  }
+  navHover(active){ return active ? '' : '{background:#eceef1}'; }
+  badge(accent){ return `font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:700;min-width:18px;text-align:center;padding:1px 5px;border-radius:20px;flex:none;${accent?'background:#e8590c;color:#fff;':'background:#e4e7eb;color:#5b626c;'}`; }
+  pill(tone){ const t=TONE[tone]||TONE.muted; return `display:inline-block;font-size:10px;font-weight:650;letter-spacing:.2px;padding:2px 8px;border-radius:20px;line-height:1.4;color:${t.c};background:${t.bg};border:1px solid ${t.bd};`; }
+  projTag(p, click){ return `display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:3px 9px;border-radius:6px;line-height:1.3;font-family:inherit;border:1px solid ${p.color}33;background:${p.bg};color:${p.color};${click?'cursor:pointer;':'cursor:default;'}`; }
+
+  scoped(list){ const { project } = this.state; return (list||[]).filter(r => project==='all' || r.p===project); }
+  courtCount(key){ return this.scoped(DATA[key]||[]).filter(r=>r.mine).length; }
+
+  mapRow(key, r, showPill, isHome){
+    const p = PROJ[r.p], u = URG[r.urg]||URG.track;
+    return {
+      code: TOOLS[key].code, number: r.num, title: r.title,
+      wait: r.who, waitSub:'', isYou: r.mine, notYou: !r.mine,
+      status: { label:r.st?r.st.label:'', dot:u.dot, ring:u.ring, color:u.color },
+      date: r.date, dateColor: showPill ? '#9298a1' : u.color,
+      showPill: !!showPill && !!r.st, pillStyle: r.st ? this.pill(r.st.tone) : '',
+      proj: p, projStyle: this.projTag(p, isHome), projHover: isHome ? `{filter:brightness(.96);border-color:${p.color}66}` : '',
+      openProject: isHome ? ((e)=>{ if(e&&e.stopPropagation)e.stopPropagation(); this.setState({project:r.p}); }) : ((e)=>{ if(e&&e.stopPropagation)e.stopPropagation(); this.setState({detail:{tool:key,r}}); }),
+      openDetail: ()=>this.setState({detail:{tool:key,r}}),
+    };
+  }
+
+  fmt(m){ return '$'+m.toFixed(2)+'M'; }
+
+  financial(){
+    const { tool, project } = this.state;
+    const keys = project==='all' ? ['mckenna','opiii'] : [project];
+    let b=0,c=0,i=0,chg=0,ou=0; const agg={};
+    keys.forEach(k=>{ chg+=CHG[k]; ou+=OU[k]; DIV[k].forEach(([n,bb,cc,ii])=>{ if(!agg[n])agg[n]=[0,0,0]; agg[n][0]+=bb; agg[n][1]+=cc; agg[n][2]+=ii; b+=bb;c+=cc;i+=ii; }); });
+    const order=['Concrete','Structural Steel','Curtain Wall','MEP','Finishes','General Conditions'];
+    if(tool==='budget'){
+      const kpis=[
+        {label:'Original Budget',value:this.fmt(b-chg),color:'#1a1d21'},
+        {label:'Approved Changes',value:'+'+this.fmt(chg),color:'#2f5f8a'},
+        {label:'Revised Budget',value:this.fmt(b),color:'#1a1d21'},
+        {label:'Committed',value:this.fmt(c),color:'#1a1d21'},
+        {label:'Invoiced to Date',value:this.fmt(i),color:'#1a1d21'},
+        {label:'Projected Over / Under',value:(ou>=0?'+':'')+this.fmt(ou),color:ou>0?'#b23c0e':'#2c7a4f'},
+      ];
+      const rows=order.map(n=>{ const d=agg[n]; const left=d[0]-d[1]; return {c0:n,c1:this.fmt(d[0]),c2:this.fmt(d[1]),c3:this.fmt(left),c3color:left<0?'#b23c0e':'#4b525c'}; });
+      return {kpis,head:{h0:'Division',h1:'Budget',h2:'Committed',h3:'Uncommitted'},rows,total:{c0:'Total',c1:this.fmt(b),c2:this.fmt(c),c3:this.fmt(b-c),c3color:'#1a1d21'}};
+    } else {
+      const kpis=[
+        {label:'Contract Sum',value:this.fmt(b-chg),color:'#1a1d21'},
+        {label:'Approved COs',value:'+'+this.fmt(chg),color:'#2f5f8a'},
+        {label:'Revised Contract',value:this.fmt(b),color:'#1a1d21'},
+        {label:'Invoiced to Date',value:this.fmt(i),color:'#1a1d21'},
+        {label:'Balance to Finish',value:this.fmt(b-i),color:'#1a1d21'},
+        {label:'Retainage Held',value:this.fmt(i*0.05),color:'#8a6300'},
+      ];
+      const rows=order.map(n=>{ const d=agg[n]; const pct=Math.round(d[2]/d[0]*100); return {c0:n,c1:this.fmt(d[0]),c2:this.fmt(d[2]),c3:pct+'%',c3color:'#4b525c'}; });
+      return {kpis,head:{h0:'Division',h1:'Scheduled Value',h2:'Invoiced',h3:'% Billed'},rows,total:{c0:'Total',c1:this.fmt(b),c2:this.fmt(i),c3:Math.round(i/b*100)+'%',c3color:'#1a1d21'}};
+    }
+  }
+
+  viewMatch(r){
+    const v = this.state.savedView;
+    if(v==='overdue') return r.urg==='over';
+    if(v==='week') return r.urg==='week';
+    if(v==='mine') return r.mine;
+    if(v==='others') return !r.mine;
+    return true;
+  }
+
+  renderVals(){
+    const { tool, project, type, court, savedView, query, dirFocus } = this.state;
+    const T = TOOLS[tool];
+    const view = T.view;
+    const isHome = view==='home';
+    const isOverview = view==='overview';
+    const overdueTotal = ['rfis','submittals','changeOrders','punch','changeEvents','commitments','invoicing','schedule'].reduce((a,k)=>a+this.scoped(DATA[k]||[]).filter(r=>r.urg==='over').length,0);
+
+    // sidebar scope
+    const scopeItems = [
+      {key:'all',label:'All Projects',allIcon:true},
+      {key:'mckenna',label:'McKenna Crossing',dot:PROJ.mckenna.color},
+      {key:'opiii',label:'OP_III',dot:PROJ.opiii.color},
+    ].map(s=>({label:s.label,dot:project===s.key?null:s.dot,allIcon:s.allIcon&&project!==s.key,onClick:()=>this.setState({project:s.key}),style:this.chip(project===s.key,'#3c434c')+'width:100%;justify-content:flex-start;margin-bottom:4px;padding:7px 10px;',hover:this.chipHover(project===s.key)}));
+
+    // My Court = every LIVE ball-in-court item across all court-bearing tools (both yours and others' clocks).
+    const homeAll = [...COURT_TOOLS].flatMap(k=>this.scoped(DATA[k]||[]).filter(r=>isBic(k,r)).map(r=>({k,r})));
+
+    // nav
+    const overviewNav = { onClick:()=>this.setState({tool:'overview'}), style:this.navItem(isOverview), hover:this.navHover(isOverview) };
+    const homeNav = { onClick:()=>this.setState({tool:'home'}), style:this.navItem(isHome), hover:this.navHover(isHome), count: homeAll.length||null, badgeStyle:this.badge(true) };
+    const navGroups = GROUPS.map(g=>({ label:g.label, items:g.keys.map(k=>{ const active=tool===k; const cnt=COURT_TOOLS.has(k)?this.scoped(DATA[k]||[]).filter(r=>isBic(k,r)&&r.mine).length:0; return { label:TOOLS[k].label, code:TOOLS[k].code, onClick:()=>this.setState({tool:k}), style:this.navItem(active), hover:this.navHover(active), count:cnt||null, badgeStyle:this.badge(false), codeStyle:`font-family:ui-monospace,Menlo,monospace;font-size:8.5px;font-weight:700;letter-spacing:.2px;color:${active?'#2f5f8a':'#8a919b'};background:${active?'#eaf1f8':'#e9ebee'};border-radius:4px;width:34px;text-align:center;padding:3px 0;flex:none` }; }) }));
+
+    // header scope tag
+    const scopeLabel = project==='all' ? 'All Projects' : PROJ[project].full;
+    const scopeStyle = project==='all' ? 'font-size:11px;color:#8a919b;background:#eef0f3;border:1px solid #e2e5e9;padding:2px 8px;border-radius:5px' : `font-size:11px;font-weight:600;color:${PROJ[project].color};background:${PROJ[project].bg};border:1px solid ${PROJ[project].color}33;padding:2px 8px;border-radius:5px`;
+
+    // content
+    let rows=[], cols={who:'Waiting on',right:'Age'}, isEmpty=false, headCount='';
+    let photos=[], logs=[], fin=null, ovKpis=[], projectCards=[], chartSlots=[], contacts=[];
+    const isTable = isHome || view==='list';
+    const isFinancial = view==='financial';
+    const isPhotos = view==='photos';
+    const isDailyLog = view==='dailyLog';
+    const isDirectory = view==='directory';
+
+    if(isHome){
+      let hr = homeAll;
+      const tmap={rfi:'rfis',submittal:'submittals',co:'changeOrders',punch:'punch'};
+      if(type!=='all') hr = hr.filter(x=>x.k===tmap[type]);
+      hr = hr.filter(x=>this.viewMatch(x.r));
+      hr = hr.slice().sort((a,b)=>URG[a.r.urg].rank-URG[b.r.urg].rank || 0);
+      rows = hr.map(x=>this.mapRow(x.k, x.r, false, true));
+      cols={who:'Waiting on',right:'Age'};
+      headCount = rows.length+(rows.length===1?' open item':' open items');
+    } else if(view==='list'){
+      let lr = this.scoped(DATA[tool]||[]);
+      if(court==='court') lr = lr.filter(r=>r.mine);
+      lr = lr.filter(r=>this.viewMatch(r));
+      lr = lr.slice().sort((a,b)=>URG[a.urg].rank-URG[b.urg].rank || 0);
+      rows = lr.map(r=>this.mapRow(tool, r, true, false));
+      cols={who:T.who||'Waiting on',right:T.right||'Status'};
+      headCount = rows.length+(rows.length===1?' item':' items');
+    } else if(isFinancial){
+      fin = this.financial();
+    } else if(isPhotos){
+      let ph = PHOTOS.filter(x=>project==='all'||x.p===project);
+      if(court==='court') ph=ph.filter(x=>x.mine);
+      photos = ph.map(x=>({...x, proj:PROJ[x.p], tagStyle:`position:absolute;bottom:8px;left:8px;font-size:10px;font-weight:600;color:#fff;background:${PROJ[x.p].color}dd;padding:2px 7px;border-radius:5px`}));
+      headCount = photos.length+' photos';
+    } else if(isDailyLog){
+      let lg = LOGS.filter(x=>project==='all'||x.p===project);
+      if(court==='court') lg=lg.filter(x=>x.mine);
+      logs = lg.map(x=>({...x, proj:PROJ[x.p], signed:!x.mine, projStyle:this.projTag(PROJ[x.p],false)}));
+      headCount = logs.length+' entries';
+    } else if(isDirectory){
+      contacts = DIRECTORY.filter(c=>project==='all'||c.projects.indexOf(project)>=0).map(c=>{
+        let n=0; [...COURT_TOOLS].forEach(k=>this.scoped(DATA[k]||[]).forEach(r=>{ if(isBic(k,r) && (WHO2ID[r.who]===c.id || (c.match && r.title.toLowerCase().indexOf(c.match.toLowerCase())>=0))) n++; }));
+        const focus = dirFocus===c.id;
+        return { name:c.name, company:c.company, role:c.role, trade:c.trade, email:c.email, phone:c.phone,
+          projTags:c.projects.map(p=>({color:PROJ[p].color, full:PROJ[p].full})),
+          openCount:n||null,
+          rowStyle:'display:grid;grid-template-columns:minmax(140px,1.3fr) 128px 92px 62px minmax(0,1fr) 54px;gap:12px;align-items:center;padding:11px 22px;border-bottom:1px solid #eef0f2;'+(focus?'background:#fdf6ee;box-shadow:inset 3px 0 0 #e8590c;':'') };
+      });
+      headCount = contacts.length+' contacts';
+    } else if(isOverview){
+      const ovkeys=['rfis','submittals','changeOrders','punch','changeEvents','commitments','invoicing','schedule'];
+      let open=0,over=0,mine=0,week=0;
+      ovkeys.forEach(k=>this.scoped(DATA[k]).forEach(r=>{ if(r.open!==false){ open++; if(r.urg==='over')over++; if(r.urg==='week')week++; } if(r.mine)mine++; }));
+      ovKpis=[
+        {label:'Open Items',value:open,color:'#1a1d21'},
+        {label:'Overdue',value:over,color:'#b23c0e'},
+        {label:'In Your Court',value:mine,color:'#e8590c'},
+        {label:'Due This Week',value:week,color:'#8a6300'},
+      ];
+      const pk = project==='all'?['mckenna','opiii']:[project];
+      projectCards = pk.map(k=>{
+        const rf = DATA.rfis.filter(r=>r.p===k&&r.open).length;
+        const sb = DATA.submittals.filter(r=>r.p===k).length;
+        const ov = ['rfis','submittals','changeOrders','punch'].reduce((a,t)=>a+DATA[t].filter(r=>r.p===k&&r.urg==='over').length,0);
+        return { name:PROJ[k].full, color:PROJ[k].color, pctW:PCT[k]+'%', rfis:rf, subs:sb, overdue:ov, overdueColor: ov>0?'#b23c0e':'#1a1d21' };
+      });
+      chartSlots=[
+        {title:'RFI & submittal aging', hint:'RESPONSE-TIME CHART', wrap:'background:#fff;border:1px solid #e4e7eb;border-radius:10px;padding:15px'},
+        {title:'Ball-in-court over time', hint:'YOURS vs. OTHERS TREND', wrap:'background:#fff;border:1px solid #e4e7eb;border-radius:10px;padding:15px'},
+        {title:'Budget · committed · invoiced', hint:'STACKED BAR BY PROJECT', wrap:'background:#fff;border:1px solid #e4e7eb;border-radius:10px;padding:15px;grid-column:1 / -1'},
+      ];
+    }
+    isEmpty = isTable ? rows.length===0 : (isPhotos ? photos.length===0 : (isDailyLog ? logs.length===0 : false));
+
+    // controls
+    const showToggle = view==='list' || isPhotos || isDailyLog;
+    const showViews = isHome || view==='list';
+    const showControls = isHome || view==='list' || isPhotos || isDailyLog;
+    const segOn='font-size:11.5px;font-weight:600;padding:5px 12px;border-radius:6px;cursor:pointer;font-family:inherit;border:none;background:#fff;color:#1a1d21;box-shadow:0 1px 2px rgba(20,25,35,.08);';
+    const segOff='font-size:11.5px;font-weight:550;padding:5px 12px;border-radius:6px;cursor:pointer;font-family:inherit;border:none;background:transparent;color:#6b727b;';
+    const toggle={ courtStyle: court==='court'?segOn:segOff, allStyle: court==='all'?segOn:segOff };
+    const typeChips=[{k:'all',l:'All'},{k:'rfi',l:'RFIs'},{k:'submittal',l:'Submittals'},{k:'co',l:'Change Orders'},{k:'punch',l:'Punch'}].map(c=>({label:c.l,onClick:()=>this.setState({type:c.k}),style:this.chip(type===c.k),hover:this.chipHover(type===c.k)}));
+    const savedViews=[{k:'all',l:'Everything'},{k:'overdue',l:'Overdue'},{k:'week',l:'Due this week'},{k:'mine',l:'In my court'},{k:'others',l:'Waiting on others'}].map(v=>({label:v.l,onClick:()=>this.setState({savedView:v.k}),style:this.chip(savedView===v.k,'#3c434c'),hover:this.chipHover(savedView===v.k)}));
+
+    // command palette
+    const LISTKEYS = Object.keys(TOOLS).filter(k=>TOOLS[k].view==='list');
+    const q = (query||'').trim().toLowerCase();
+    let paletteResults=[];
+    if(q){
+      LISTKEYS.forEach(k=>DATA[k].forEach(r=>{
+        if((r.title+' '+r.num+' '+TOOLS[k].label).toLowerCase().indexOf(q)>=0){
+          paletteResults.push({ code:TOOLS[k].code, title:r.title, sub:PROJ[r.p].short+' · '+TOOLS[k].label, open:()=>this.setState({tool:k, detail:{tool:k,r}, palette:false}) });
+        }
+      }));
+    } else {
+      paletteResults = Object.keys(TOOLS).filter(k=>k!=='home'&&k!=='overview').map(k=>({ code:TOOLS[k].code||'—', title:TOOLS[k].label, sub:'Open tool', open:()=>this.setState({tool:k, palette:false}) }));
+    }
+    paletteResults = paletteResults.slice(0,24);
+    const paletteEmpty = paletteResults.length===0;
+
+    // activity
+    const activityFeed = ACTIVITY.filter(a=>project==='all'||a.p===project).map(a=>({...a, proj:PROJ[a.p], projStyle:this.projTag(PROJ[a.p],false), dot:(TONE[a.tone]||TONE.muted).c}));
+
+    // detail
+    let det=null; const detailOpen=!!this.state.detail;
+    if(detailOpen){
+      const dk=this.state.detail.tool, r=this.state.detail.r, dp=PROJ[r.p], du=URG[r.urg]||URG.track;
+      const stLabel = r.st?r.st.label:'Open';
+      const partyId = WHO2ID[r.who]; const partyContact = (partyId&&partyId!=='self')?DIRECTORY.find(c=>c.id===partyId):null;
+      const links = (LINKS[dk+':'+r.num]||[]).map(pair=>{ const lt=pair[0], ln=pair[1]; const lr=(DATA[lt]||[]).find(x=>x.num===ln); if(!lr) return null; const lu=URG[lr.urg]||URG.track; return {code:TOOLS[lt].code, title:lr.title, num:lr.num, proj:PROJ[lr.p], projStyle:this.projTag(PROJ[lr.p],false), dot:lu.dot, open:()=>this.setState({detail:{tool:lt,r:lr}})}; }).filter(Boolean);
+      det={
+        code:TOOLS[dk].code||'ITEM', number:r.num, title:r.title, toolLabel:TOOLS[dk].label,
+        proj:dp, projStyle:this.projTag(dp,false),
+        statusLabel:stLabel, statusPill:this.pill(r.st?r.st.tone:'muted'),
+        who:r.who, isYou:r.mine, notYou:!r.mine, date:r.date, urgColor:du.color,
+        hasParty:!!partyContact, plainWho:!r.mine && !partyContact, openParty: partyContact?(()=>this.setState({tool:'directory', dirFocus:partyContact.id, detail:null})):null,
+        links, hasLinks:links.length>0,
+        desc:`${TOOLS[dk].label.replace(/s$/,'')} on ${dp.full}. Currently ${stLabel.toLowerCase()}; ${r.mine?'awaiting your action.':'the ball is with '+r.who+'.'}`,
+        activity:[
+          {text:r.mine?'Assigned to you for action':`${r.who} currently holds the ball`, when:'now', dot:du.dot},
+          {text:`Ben Ostrander opened ${r.num}`, when:r.date, dot:'#c4c9cf'},
+          {text:`Filed under ${dp.full}`, when:'', dot:'#c4c9cf'},
+        ],
+        atts:['Reference set.pdf','Field photo.jpg'],
+      };
+    }
+
+    return {
+      overdueTotal, scopeItems, overviewNav, homeNav, navGroups,
+      head:{ title:T.label, desc:T.desc, count:headCount, scopeLabel, scopeStyle, showToggle, showViews, showControls },
+      isHome, isOverview, isTable, isFinancial, isPhotos, isDailyLog, isDirectory,
+      rows, cols, isEmpty, photos, logs, fin, ovKpis, projectCards, chartSlots, contacts,
+      typeChips, savedViews, toggle,
+      setCourt:()=>this.setState({court:'court'}), setAll:()=>this.setState({court:'all'}),
+      openPalette:()=>this.setState({palette:true,query:''}), closePalette:()=>this.setState({palette:false}),
+      onQuery:(e)=>this.setState({query:e.target.value}),
+      paletteOpen:this.state.palette, query, paletteResults, paletteEmpty,
+      openActivity:()=>this.setState({activity:true}), closeActivity:()=>this.setState({activity:false}),
+      activityOpen:this.state.activity, activityFeed, activityCount:ACTIVITY.length,
+      detailOpen, det, closeDetail:()=>this.setState({detail:null}),
+      stop:(e)=>{ if(e&&e.stopPropagation)e.stopPropagation(); },
+    };
+  }
+}
+</script>
+</body>
+</html>
