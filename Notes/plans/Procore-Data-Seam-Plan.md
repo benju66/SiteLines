@@ -96,20 +96,42 @@ These are the functions that turn raw view rows into full `Item`s; test them har
   provider; states render; pure logic unit-tested; typecheck + build green; `:5173`
   click-through. Stop; don't wire Supabase yet.
 
-### Phase 1.5 — PREREQUISITE: FP-Analytics compliance refactor (other repo)
-- **Scope (owner's compliance spec, 2026-07-02, in the FP-Analytics repo):**
+### Phase 1.5 — PREREQUISITE: sync-service compliance refactor + fresh Supabase
+
+**Situation update (2026-07-02, from the owner):**
+- The original Supabase project is **DELETED** — all `procore_*_master` tables
+  are gone; the old `.env` Supabase creds are dead. A **new Supabase project
+  must be provisioned** as part of this phase (⛔ cost/confirmation gate; then
+  new creds into `.env`). Silver lining: no legacy replace-created tables to
+  migrate — write clean, keyed DDL from day one.
+- The **Procore app registration is live and intact** (client id/secret + DMSA
+  install), currently permitted on **Orchard Path III ONLY**. Do NOT touch the
+  Procore app registration — it is reused as-is; only `.env` consumes it.
+  `ACTIVE_PROJECT_IDS` therefore starts as OP_III only; McKenna is added later
+  (admin adds it to the app's permitted projects in Procore App Management +
+  one id in the allowlist). Until then McKenna shows seed/no live data — expected.
+- FP-Analytics was **never a git repo** (verified) — no history to preserve, and
+  the hardcoded secrets never left the machine. Owner-approved direction:
+  **move the pipeline INTO this repo** (e.g. `sync/`: `procore_pipeline.py`,
+  `requirements.txt`, `.env` — never committed; `.gitignore` covers it). Old
+  folder stays as local archive; PDFs/OAS dumps stay local-only (not repo
+  material). The "FP-Analytics" name is retired (compliance framing).
+
+- **Scope (owner's compliance spec, 2026-07-02):**
   (a) `ACTIVE_PROJECT_IDS` allowlist gating the deep-fetch loop (global project
   discovery retained); (b) replace→staging+UPSERT+scoped-purge with real DDL/
   migrations — **fix the `paginated_get` failure-vs-empty conflation FIRST**
   (a failed fetch must never read as "purge everything"); (c) request jitter
-  `random.uniform(0.5, 1.5)` in pagination; (d) 🔴 secrets rotation (hardcoded
-  creds in both sandbox scripts incl. a plaintext Supabase DB password).
+  `random.uniform(0.5, 1.5)` in pagination; (d) secrets hygiene: hardcoded
+  creds in the two sandbox scripts move to `.env` (never left the machine, so
+  rotation is optional-but-cheap; the old Supabase password is moot — project
+  deleted); (e) provision the new Supabase project + write the DDL migrations.
 - **Why prerequisite:** Phase 2's views want the stable, keyed DDL this refactor
   introduces; and compliance posture (cache-sync per Procore ToS) should be
   settled before we build more on the cache. Standing boundary: synced data
   never feeds AI/ML training or long-term archives detached from app operation.
-- **Approval gates:** ⛔ DB schema migrations (present DDL and STOP); ⛔ secrets
-  rotation touches live credentials.
+- **Approval gates:** ⛔ Supabase project creation (cost); ⛔ DB schema
+  migrations (present DDL and STOP); ⛔ anything touching the live Procore app.
 - Details, per-table upsert keys, and hazards: research doc §5 + §7.
 
 ### Phase 2 — Supabase normalization views (SQL, server-side)
