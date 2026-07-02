@@ -4,6 +4,10 @@
 > Read this top-to-bottom, then re-read the actual current files before editing.
 > Parent: `PLAN.md` (repo root) + `design_handoff_sitelines/README.md` + `design_handoff_sitelines/DATA_CONTRACT.md`.
 > Sibling repo (the data source): `C:/Users/BUrness/Dev/FP-Analytics`.
+> **REQUIRED READING for Phases 2–4:** `Notes/research/Procore-API-Integration-Research.md`
+> (2026-07-02) — auth/DMSA, rate limits, delta-sync support, ToS/compliance
+> constraints, and the pipeline compliance refactor that is now a PREREQUISITE
+> for Phase 2 (see below).
 
 ## 0. How to use this doc
 1. Read `design_handoff_sitelines/README.md`, `design_handoff_sitelines/DATA_CONTRACT.md`, and `PLAN.md` (repo root). `design_handoff_sitelines/DATA_CONTRACT.md` is the seam this whole workstream serves.
@@ -91,6 +95,22 @@ These are the functions that turn raw view rows into full `Item`s; test them har
 - **Exit criteria:** app still runs identically on the **seed** source through the
   provider; states render; pure logic unit-tested; typecheck + build green; `:5173`
   click-through. Stop; don't wire Supabase yet.
+
+### Phase 1.5 — PREREQUISITE: FP-Analytics compliance refactor (other repo)
+- **Scope (owner's compliance spec, 2026-07-02, in the FP-Analytics repo):**
+  (a) `ACTIVE_PROJECT_IDS` allowlist gating the deep-fetch loop (global project
+  discovery retained); (b) replace→staging+UPSERT+scoped-purge with real DDL/
+  migrations — **fix the `paginated_get` failure-vs-empty conflation FIRST**
+  (a failed fetch must never read as "purge everything"); (c) request jitter
+  `random.uniform(0.5, 1.5)` in pagination; (d) 🔴 secrets rotation (hardcoded
+  creds in both sandbox scripts incl. a plaintext Supabase DB password).
+- **Why prerequisite:** Phase 2's views want the stable, keyed DDL this refactor
+  introduces; and compliance posture (cache-sync per Procore ToS) should be
+  settled before we build more on the cache. Standing boundary: synced data
+  never feeds AI/ML training or long-term archives detached from app operation.
+- **Approval gates:** ⛔ DB schema migrations (present DDL and STOP); ⛔ secrets
+  rotation touches live credentials.
+- Details, per-table upsert keys, and hazards: research doc §5 + §7.
 
 ### Phase 2 — Supabase normalization views (SQL, server-side)
 - **Scope:** SQL views/RPCs over `procore_*_master` producing `sitelines_items`,
