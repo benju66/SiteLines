@@ -45,6 +45,17 @@ Lint is not configured; typecheck + test + build are the gate.
   with co-located `.test.ts`; pass `today`/`now` in — never read the clock inside.
 - Non-clickable `ProjectTag` renders a `<span>` (nested-button DOM fix) — keep it.
 
+## Model & effort headers on launch prompts
+
+Whenever you produce a launch/kickoff prompt for a future session (in a
+kickoff file or in chat), open it with a **⚙️ Run with:** line naming the
+recommended model + effort and a short why — the owner sets it via `/model`
+before pasting. Defaults: **Opus 4.8 · xhigh** for implementing well-specified
+plans; **Opus 4.8 · high** for mechanical work; **Fable 5 · high** only for
+ambiguous/hardest reasoning or long autonomous runs (2× price), and as the
+mid-session escalation when stuck. Full decision table:
+`.claude/skills/plan-phases/SKILL.md` § Model & effort recommendation.
+
 ## Planning
 
 New features/workstreams go through the `plan-phases` skill

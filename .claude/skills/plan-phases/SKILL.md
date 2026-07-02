@@ -166,6 +166,8 @@ this block. Template:
 # Kickoff — <Feature>, Phase <N>: <one-line>
 
 ## ▶ Launch prompt (paste this to start a fresh session)
+> **⚙️ Run with: <Model> · effort <level>** — <why>. (`/model <model-id>` first.)
+>
 > Implement **Phase <N> of <Feature>** (<one-line>). Read these in full, then follow them:
 > - `Notes/kickoffs/<YYYY-MM-DD> - <Feature> Phase <N> Kickoff.md` (this file)
 > - `PLAN.md` (Phase <N>) + `design_handoff_sitelines/README.md` + `design_handoff_sitelines/DATA_CONTRACT.md`
@@ -186,6 +188,30 @@ This file is the **detailed, self-contained kickoff the fresh session actually
 reads** — NOT what you paste into chat (Step 5). Keep all the depth here so the
 chat hand-off stays short.
 
+## Model & effort recommendation (REQUIRED on every launch prompt)
+
+Every launch prompt — the top block of a kickoff file AND the short chat
+hand-off — must open with a one-line **Run with:** header naming the model and
+effort the implementing session should use, with a ~5-word reason. The owner
+acts on it via `/model` before pasting the prompt (Claude Code cannot switch
+its own model). Format:
+
+> **⚙️ Run with: <Model> · effort <level>** — <why, in a few words>. Escalate
+> to `claude-fable-5` mid-session (`/model claude-fable-5`) if genuinely stuck.
+
+Decision rule (derive, don't guess):
+
+| Work profile | Recommend |
+|---|---|
+| Implementation of a well-specified plan; coding/agentic; correctness-critical spots | **Opus 4.8 · xhigh** (the default for phases produced by this skill) |
+| Mechanical / repetitive / pattern-following (wiring, per-tool extension, doc passes) | **Opus 4.8 · high** |
+| Ambiguous or hardest-tier reasoning; architecture from scratch; long AUTONOMOUS runs; escalation after 4.8 hits a wall | **Fable 5 · high** (2× price; thinking always on; slower turns — don't default to it) |
+
+Rationale: spend capability where ambiguity lives. This skill's whole job is to
+remove ambiguity before implementation, so phases it produces rarely need
+Fable 5. Note model guidance drifts — if the current model lineup differs from
+this table, check via the claude-api skill and update this section.
+
 ## Phase sizing rule
 
 Each phase must be completable in **one fresh session**: roughly one vertical
@@ -205,6 +231,7 @@ full kickoff text.** The detail lives in the `Notes/kickoffs/` file; the chat
 prompt just tells a fresh session to go read that file and start, so the owner
 never has to open it. Keep it to ~3–6 lines, containing only:
 
+- the **⚙️ Run with:** model/effort header (see "Model & effort recommendation");
 - the phase to implement and the feature name;
 - "Read `Notes/kickoffs/<YYYY-MM-DD> - <Feature> Phase <N> Kickoff.md` in full and
   follow it" — the file carries the required reading + guardrails, so do NOT repeat them;
