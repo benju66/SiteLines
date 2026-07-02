@@ -1,5 +1,4 @@
 // Content router — picks the surface for the active tool's view type.
-// Not-yet-built view types render a placeholder (see PLAN.md).
 
 import { TOOLS } from '@/data/tools'
 import { useApp } from '@/state/AppContext'
@@ -7,31 +6,29 @@ import { DailyLogView } from '@/components/views/DailyLogView'
 import { DirectoryView } from '@/components/views/DirectoryView'
 import { FinancialView } from '@/components/views/FinancialView'
 import { MyCourtView } from '@/components/views/MyCourtView'
+import { OverviewView } from '@/components/views/OverviewView'
 import { PhotosView } from '@/components/views/PhotosView'
-import { PlaceholderView } from '@/components/views/PlaceholderView'
 import { ToolRegisterView } from '@/components/views/ToolRegisterView'
+import type { ViewType } from '@/types'
+import type { ComponentType } from 'react'
+
+const VIEWS: Record<ViewType, ComponentType> = {
+  home: MyCourtView,
+  list: ToolRegisterView,
+  directory: DirectoryView,
+  financial: FinancialView,
+  photos: PhotosView,
+  dailyLog: DailyLogView,
+  overview: OverviewView,
+}
 
 export function MainContent() {
   const { state } = useApp()
-  const view = TOOLS[state.tool].view
+  const View = VIEWS[TOOLS[state.tool].view]
 
   return (
     <div className="scry" style={{ flex: 1, overflowY: 'auto' }}>
-      {view === 'home' ? (
-        <MyCourtView />
-      ) : view === 'list' ? (
-        <ToolRegisterView />
-      ) : view === 'directory' ? (
-        <DirectoryView />
-      ) : view === 'financial' ? (
-        <FinancialView />
-      ) : view === 'photos' ? (
-        <PhotosView />
-      ) : view === 'dailyLog' ? (
-        <DailyLogView />
-      ) : (
-        <PlaceholderView />
-      )}
+      <View />
     </div>
   )
 }

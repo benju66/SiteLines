@@ -30,7 +30,13 @@ unlocked ÷ effort)** while respecting cross-links between views.
 | 5 | Command palette (overlay) | ✅ Done |
 | 6 | Financial — Budget + Prime Contract | ✅ Done |
 | 7 | Photos + Daily Log | ✅ Done |
-| 8 | Overview (placeholder dashboard) | ⬜ Next |
+| 8 | Overview (placeholder dashboard) | ✅ Done |
+
+**🏁 UI workstream complete (2026-07-02):** every surface and overlay from the
+design handoff is built and verified against the reference screenshots. The app
+is feature-complete on seed data. Remaining work lives in the
+[Procore Data Seam plan](Notes/plans/Procore-Data-Seam-Plan.md) (Phases 2–4:
+Supabase views → live wiring → pipeline coverage).
 
 All not-yet-built views currently route to `PlaceholderView`
 ([MainContent.tsx](src/components/layout/MainContent.tsx)), so nav is fully functional throughout.

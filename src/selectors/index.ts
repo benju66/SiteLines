@@ -6,7 +6,7 @@
 // changes here.
 
 import { TOOLS } from '@/data/tools'
-import { COURT_TOOLS, isBallInCourt } from '@/lib/ballInCourt'
+import { COURT_TOOLS, TERMINAL, isBallInCourt } from '@/lib/ballInCourt'
 import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
@@ -125,6 +125,44 @@ export function headerMeta(data: SiteData, state: AppState) {
     showViews: isHome || view === 'list',
     showControls: isHome || view === 'list' || view === 'photos' || view === 'dailyLog',
   }
+}
+
+// ---- Overview (dashboard placeholder) ----
+
+const isOpen = (r: Item) => !(r.status && TERMINAL.has(r.status.label))
+
+/**
+ * Portfolio KPIs across the aggregate tools, in scope. "Open" means
+ * non-terminal status (the same TERMINAL set that governs My Court); overdue /
+ * due-this-week / in-your-court are counted among open items only.
+ */
+export function overviewStats(items: ItemsByTool, project: ProjectScope) {
+  let open = 0
+  let over = 0
+  let week = 0
+  let mine = 0
+  for (const k of AGGREGATE_KEYS) {
+    for (const r of scoped(items[k], project)) {
+      if (!isOpen(r)) continue
+      open++
+      if (r.urgency === 'over') over++
+      if (r.urgency === 'week') week++
+      if (r.mine) mine++
+    }
+  }
+  return { open, over, week, mine }
+}
+
+/** Per-project mini-stats for the Overview project cards. */
+export function projectCardStats(items: ItemsByTool, project: Project) {
+  const openRfis = items.rfis.filter((r) => r.project === project && isOpen(r)).length
+  const submittals = items.submittals.filter((r) => r.project === project).length
+  const overdueKeys: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch']
+  const overdue = overdueKeys.reduce(
+    (n, k) => n + items[k].filter((r) => r.project === project && r.urgency === 'over').length,
+    0,
+  )
+  return { openRfis, submittals, overdue }
 }
 
 // ---- Financial rollups (DATA_CONTRACT §6) ----
