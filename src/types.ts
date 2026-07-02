@@ -73,6 +73,25 @@ export interface Contact {
   match?: string // optional keyword to associate records by title
 }
 
+/** A jobsite photo (README §4). `mine` = flagged by Ben. */
+export interface Photo {
+  project: Project
+  caption: string
+  date: string
+  mine: boolean
+}
+
+/** A daily-log field report (README §5). `mine` = awaiting Ben's sign-off. */
+export interface DailyLogEntry {
+  project: Project
+  date: string
+  weather: string
+  temp: string
+  crew: number
+  mine: boolean
+  notes: string
+}
+
 /** One activity-feed event (DATA_CONTRACT §7). */
 export interface ActivityEvent {
   project: Project

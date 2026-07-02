@@ -4,8 +4,10 @@
 
 import type { DataSource, Snapshot } from '@/lib/dataSource'
 import { ACTIVITY } from './activity'
+import { DAILY_LOGS } from './dailyLogs'
 import { DIRECTORY } from './directory'
 import { FINANCIALS } from './financials'
+import { PHOTOS } from './photos'
 import { DATA } from './records'
 
 export function createSeedSource(opts: { delayMs?: number; fail?: boolean } = {}): DataSource {
@@ -16,7 +18,7 @@ export function createSeedSource(opts: { delayMs?: number; fail?: boolean } = {}
       if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs))
       if (fail) throw new Error('Simulated sync failure (seed source, ?fail)')
       return {
-        data: { itemsByTool: DATA, contacts: DIRECTORY, activity: ACTIVITY, financials: FINANCIALS },
+        data: { itemsByTool: DATA, contacts: DIRECTORY, activity: ACTIVITY, financials: FINANCIALS, photos: PHOTOS, dailyLogs: DAILY_LOGS },
         syncedAt: new Date(),
       }
     },

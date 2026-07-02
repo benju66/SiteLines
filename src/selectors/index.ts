@@ -70,6 +70,16 @@ export function listRows(items: ItemsByTool, state: AppState): Item[] {
   return rows.filter((r) => matchesSavedView(r, state.savedView)).sort(byUrgency)
 }
 
+/**
+ * Photos / daily logs in scope: project-scoped, and the In My Court toggle
+ * narrows to Ben's items (flagged photos / logs needing his sign-off). Saved
+ * views don't apply to these surfaces.
+ */
+export function mediaInScope<T extends { project: Item['project']; mine: boolean }>(list: T[], state: AppState): T[] {
+  const rows = scoped(list, state.project)
+  return state.court === 'court' ? rows.filter((r) => r.mine) : rows
+}
+
 /** Contacts in scope for the Directory view. */
 export function directoryContacts(contacts: Contact[], project: ProjectScope): Contact[] {
   return project === 'all' ? contacts : contacts.filter((c) => c.projects.includes(project))
@@ -101,6 +111,12 @@ export function headerMeta(data: SiteData, state: AppState) {
   } else if (view === 'directory') {
     const n = directoryContacts(data.contacts, state.project).length
     count = `${n} ${n === 1 ? 'contact' : 'contacts'}`
+  } else if (view === 'photos') {
+    const n = mediaInScope(data.photos, state).length
+    count = `${n} ${n === 1 ? 'photo' : 'photos'}`
+  } else if (view === 'dailyLog') {
+    const n = mediaInScope(data.dailyLogs, state).length
+    count = `${n} ${n === 1 ? 'entry' : 'entries'}`
   }
   return {
     isHome,

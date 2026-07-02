@@ -3,9 +3,11 @@
 
 import { TOOLS } from '@/data/tools'
 import { useApp } from '@/state/AppContext'
+import { DailyLogView } from '@/components/views/DailyLogView'
 import { DirectoryView } from '@/components/views/DirectoryView'
 import { FinancialView } from '@/components/views/FinancialView'
 import { MyCourtView } from '@/components/views/MyCourtView'
+import { PhotosView } from '@/components/views/PhotosView'
 import { PlaceholderView } from '@/components/views/PlaceholderView'
 import { ToolRegisterView } from '@/components/views/ToolRegisterView'
 
@@ -23,6 +25,10 @@ export function MainContent() {
         <DirectoryView />
       ) : view === 'financial' ? (
         <FinancialView />
+      ) : view === 'photos' ? (
+        <PhotosView />
+      ) : view === 'dailyLog' ? (
+        <DailyLogView />
       ) : (
         <PlaceholderView />
       )}

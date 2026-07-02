@@ -29,8 +29,8 @@ unlocked ÷ effort)** while respecting cross-links between views.
 | 4 | Activity drawer (overlay) | ✅ Done |
 | 5 | Command palette (overlay) | ✅ Done |
 | 6 | Financial — Budget + Prime Contract | ✅ Done |
-| 7 | Photos + Daily Log | ⬜ Next |
-| 8 | Overview (placeholder dashboard) | ⬜ |
+| 7 | Photos + Daily Log | ✅ Done |
+| 8 | Overview (placeholder dashboard) | ⬜ Next |
 
 All not-yet-built views currently route to `PlaceholderView`
 ([MainContent.tsx](src/components/layout/MainContent.tsx)), so nav is fully functional throughout.
