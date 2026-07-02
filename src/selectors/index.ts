@@ -9,9 +9,9 @@ import { TOOLS } from '@/data/tools'
 import { COURT_TOOLS, isBallInCourt } from '@/lib/ballInCourt'
 import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
-import { urgency } from '@/theme/tokens'
+import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { Contact, Item, ToolKey } from '@/types'
+import type { Contact, FinancialSource, Item, Project, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -108,6 +108,95 @@ export function headerMeta(data: SiteData, state: AppState) {
     showToggle: view === 'list' || view === 'photos' || view === 'dailyLog',
     showViews: isHome || view === 'list',
     showControls: isHome || view === 'list' || view === 'photos' || view === 'dailyLog',
+  }
+}
+
+// ---- Financial rollups (DATA_CONTRACT §6) ----
+
+export interface FinancialViewModel {
+  kpis: { label: string; value: string; color: string }[]
+  head: [string, string, string, string]
+  rows: { name: string; c1: string; c2: string; c3: string; c3Negative?: boolean }[]
+  total: { c1: string; c2: string; c3: string }
+}
+
+const fmtM = (m: number) => `$${m.toFixed(2)}M`
+/** Signed $M, formatted with an explicit +/− (avoids "$-0.08M"). */
+const fmtSigned = (m: number) => `${m >= 0 ? '+' : '-'}${fmtM(Math.abs(m))}`
+
+/**
+ * Budget / Prime Contract view-model: per-division numbers summed across the
+ * scope (both projects under "All"), with derived KPIs. `%` and derived values
+ * are computed here, never stored (DATA_CONTRACT §6).
+ */
+export function financialView(
+  fin: FinancialSource,
+  tool: 'budget' | 'primeContract',
+  project: ProjectScope,
+): FinancialViewModel {
+  const keys: Project[] = project === 'all' ? ['mckenna', 'opiii'] : [project]
+
+  // Aggregate by division name, preserving first-seen order.
+  const agg = new Map<string, [number, number, number]>()
+  let budget = 0
+  let committed = 0
+  let invoiced = 0
+  let changes = 0
+  let overUnder = 0
+  for (const k of keys) {
+    changes += fin.approvedChanges[k]
+    overUnder += fin.projectedOverUnder[k]
+    for (const [name, b, c, i] of fin.divisions[k]) {
+      const d = agg.get(name) ?? [0, 0, 0]
+      d[0] += b
+      d[1] += c
+      d[2] += i
+      agg.set(name, d)
+      budget += b
+      committed += c
+      invoiced += i
+    }
+  }
+
+  const ink = '#1a1d21'
+  if (tool === 'budget') {
+    return {
+      kpis: [
+        { label: 'Original Budget', value: fmtM(budget - changes), color: ink },
+        { label: 'Approved Changes', value: `+${fmtM(changes)}`, color: tone.info.c },
+        { label: 'Revised Budget', value: fmtM(budget), color: ink },
+        { label: 'Committed', value: fmtM(committed), color: ink },
+        { label: 'Invoiced to Date', value: fmtM(invoiced), color: ink },
+        { label: 'Projected Over / Under', value: fmtSigned(overUnder), color: overUnder > 0 ? tone.danger.c : tone.ok.c },
+      ],
+      head: ['Division', 'Budget', 'Committed', 'Uncommitted'],
+      rows: [...agg.entries()].map(([name, [b, c]]) => ({
+        name,
+        c1: fmtM(b),
+        c2: fmtM(c),
+        c3: fmtM(b - c),
+        c3Negative: b - c < 0,
+      })),
+      total: { c1: fmtM(budget), c2: fmtM(committed), c3: fmtM(budget - committed) },
+    }
+  }
+  return {
+    kpis: [
+      { label: 'Contract Sum', value: fmtM(budget - changes), color: ink },
+      { label: 'Approved COs', value: `+${fmtM(changes)}`, color: tone.info.c },
+      { label: 'Revised Contract', value: fmtM(budget), color: ink },
+      { label: 'Invoiced to Date', value: fmtM(invoiced), color: ink },
+      { label: 'Balance to Finish', value: fmtM(budget - invoiced), color: ink },
+      { label: 'Retainage Held', value: fmtM(invoiced * 0.05), color: tone.warn.c },
+    ],
+    head: ['Division', 'Scheduled Value', 'Invoiced', '% Billed'],
+    rows: [...agg.entries()].map(([name, [b, , i]]) => ({
+      name,
+      c1: fmtM(b),
+      c2: fmtM(i),
+      c3: `${Math.round((i / b) * 100)}%`,
+    })),
+    total: { c1: fmtM(budget), c2: fmtM(invoiced), c3: `${Math.round((invoiced / budget) * 100)}%` },
   }
 }
 

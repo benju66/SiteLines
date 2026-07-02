@@ -28,8 +28,8 @@ unlocked ÷ effort)** while respecting cross-links between views.
 | 3 | Directory | ✅ Done |
 | 4 | Activity drawer (overlay) | ✅ Done |
 | 5 | Command palette (overlay) | ✅ Done |
-| 6 | Financial — Budget + Prime Contract | ⬜ Next |
-| 7 | Photos + Daily Log | ⬜ |
+| 6 | Financial — Budget + Prime Contract | ✅ Done |
+| 7 | Photos + Daily Log | ⬜ Next |
 | 8 | Overview (placeholder dashboard) | ⬜ |
 
 All not-yet-built views currently route to `PlaceholderView`

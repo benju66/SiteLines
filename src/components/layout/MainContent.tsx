@@ -4,6 +4,7 @@
 import { TOOLS } from '@/data/tools'
 import { useApp } from '@/state/AppContext'
 import { DirectoryView } from '@/components/views/DirectoryView'
+import { FinancialView } from '@/components/views/FinancialView'
 import { MyCourtView } from '@/components/views/MyCourtView'
 import { PlaceholderView } from '@/components/views/PlaceholderView'
 import { ToolRegisterView } from '@/components/views/ToolRegisterView'
@@ -20,6 +21,8 @@ export function MainContent() {
         <ToolRegisterView />
       ) : view === 'directory' ? (
         <DirectoryView />
+      ) : view === 'financial' ? (
+        <FinancialView />
       ) : (
         <PlaceholderView />
       )}
