@@ -149,6 +149,17 @@ swap the one private budget endpoint (task chip filed). **Next workstream: Phase
 - Details, per-table upsert keys, and hazards: research doc §5 + §7.
 
 ### Phase 2 — Supabase normalization views (SQL, server-side)
+
+**IN PROGRESS (2026-07-03):** `sync/views/sitelines_items.sql` drafted + verified
+(v1 = rfis/submittals/commitments; 421 OP III rows). Awaiting owner approval to
+apply. Deferred in v1: changeOrders (source: change_order_packages vs prime_change_orders?)
+and invoicing (needs an amount-display field; requisitions have no due_date).
+⚠️ **Phase 3 TERMINAL reconciliation (src/lib/ballInCourt.ts):** real OP III labels
+require adding **`'Closed - Draft'`** (so a closed RFI doesn't leak) and **`'Draft'`**
+(owner: draft submittals must NOT appear in My Court) to `TERMINAL`. Also note: OP III
+is a nearly-complete project — its live data is ~all terminal, so My Court is nearly
+empty; syncing McKenna (more active) would make the live app meaningfully populated.
+
 - **Scope:** SQL views/RPCs over `procore_*_master` producing `sitelines_items`,
   `sitelines_contacts`, `sitelines_financials`, `sitelines_activity` — for the
   **live-ready tools only** (RFIs, submittals, change orders, commitments,
