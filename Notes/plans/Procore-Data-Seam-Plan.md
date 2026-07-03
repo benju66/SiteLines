@@ -155,7 +155,8 @@ covering all 5 list tools — rfis, submittals, commitments, changeOrders
 (=prime_change_orders, owner PCCOs), invoicing (=requisitions; `amount` + status).
 681 OP III rows. Added an `amount` column for money-display tools. Known gap:
 commitments have no amount on the list endpoint (needs the commitment detail endpoint).
-Remaining Phase 2 views: `sitelines_contacts`, `sitelines_financials`, `sitelines_activity`.
+`sitelines_contacts` APPLIED — 331 rows (256 users w/ email + 75 vendor companies).
+Remaining Phase 2 views: `sitelines_financials`, `sitelines_activity`.
 ⚠️ **Phase 3 TERMINAL reconciliation (src/lib/ballInCourt.ts):** real OP III labels
 require adding **`'Closed - Draft'`** (so a closed RFI doesn't leak) and **`'Draft'`**
 (owner: draft submittals must NOT appear in My Court) to `TERMINAL`. Also note: OP III
