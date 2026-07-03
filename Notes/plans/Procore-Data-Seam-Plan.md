@@ -156,7 +156,14 @@ covering all 5 list tools — rfis, submittals, commitments, changeOrders
 681 OP III rows. Added an `amount` column for money-display tools. Known gap:
 commitments have no amount on the list endpoint (needs the commitment detail endpoint).
 `sitelines_contacts` APPLIED — 331 rows (256 users w/ email + 75 vendor companies).
-Remaining Phase 2 views: `sitelines_financials`, `sitelines_activity`.
+**`sitelines_financials` is BLOCKED:** the synced `budget_line_items` carry only
+`original_budget_amount` ($18.4M total, 124 cost codes) — no committed, no invoiced,
+and no clean division grouping. The contract's divisions[name,budget,committed,invoiced]
+need Procore's **Budget Views → detail_rows** (calculated columns), which is ALSO the
+public replacement for the private budget endpoint (the deferred task chip). So the
+Budget-Views pipeline enhancement is a PREREQUISITE for financials — do it first, then
+build the view. `sitelines_activity` needs a product decision (what events feed it;
+contract §7 says define with the owner) — can be a lightweight "recently updated" feed.
 ⚠️ **Phase 3 TERMINAL reconciliation (src/lib/ballInCourt.ts):** real OP III labels
 require adding **`'Closed - Draft'`** (so a closed RFI doesn't leak) and **`'Draft'`**
 (owner: draft submittals must NOT appear in My Court) to `TERMINAL`. Also note: OP III
