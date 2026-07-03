@@ -162,8 +162,11 @@ the private `/v1.1/budget_line_items` call was replaced by the public Budget Vie
 redundant columns table) — this cleared the Procore Integration Health private-endpoint
 flag AND unblocked financials (detail_rows carry Committed Costs / Commitments Invoiced
 inline + `root_cost_code` division). Financials aggregates the primary (non-profit) cost
-budget view. **Only `sitelines_activity` remains** — needs a product decision on what
-events feed it (contract §7); can be a lightweight "recently updated" feed.
+budget view. `sitelines_activity` APPLIED — v1 "recently updated" feed across court
+tools (ordered by updated_at, LIMIT 50). **PHASE 2 COMPLETE — all four sitelines_*
+views live** (items, contacts, financials, activity), all `security_invoker=true`.
+Next: **Phase 3** (wire the app via supabaseDataSource; reconcile TERMINAL with
+'Closed - Draft' + 'Draft'; browser-security key/RLS-policy decision).
 ⚠️ **Phase 3 TERMINAL reconciliation (src/lib/ballInCourt.ts):** real OP III labels
 require adding **`'Closed - Draft'`** (so a closed RFI doesn't leak) and **`'Draft'`**
 (owner: draft submittals must NOT appear in My Court) to `TERMINAL`. Also note: OP III
