@@ -17,6 +17,16 @@ dist-ssr/
 # secrets — never commit credentials
 .env
 .env.*
+sync/.env
+sync/.env.*
+# ...but DO track the example templates (they contain no real secrets)
+!.env.example
+!sync/.env.example
+
+# sync/ pipeline artifacts
+sync/.venv/
+sync/__pycache__/
+sync/Sandbox_Project_List.csv
 
 # editor / OS
 .DS_Store

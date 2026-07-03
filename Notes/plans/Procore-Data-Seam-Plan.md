@@ -98,6 +98,20 @@ These are the functions that turn raw view rows into full `Item`s; test them har
 
 ### Phase 1.5 — PREREQUISITE: sync-service compliance refactor + fresh Supabase
 
+**STATUS (2026-07-02): DONE.** Pipeline moved to `sync/` (creds in gitignored
+`sync/.env`, Procore app untouched). Compliance refactor landed + logic-tested:
+failure-vs-empty fix, `ACTIVE_PROJECT_IDS` allowlist (OP III = `3051002`),
+staging+UPSERT+scoped-purge, jitter, fail-loud, HTTP timeouts (a no-timeout hang was
+found + fixed on the first run). Fresh Supabase `sitelines-sync`
+(ref `jxesfirpghwpfmfjlfng`, us-east-2, FP-Analytics org, ~$10/mo); migrations
+`0001_init_procore_master.sql` + `0002_rescope_directory_to_project.sql` applied.
+**First real OP III sync succeeded** (exit 0): every one of the 20 project-scoped
+tables holds OP-III-only rows (verified: 0 non-OP-III rows). Directory (vendors/users)
+re-scoped company-wide → per-project (was over-pulling ~7,400 company contacts).
+**REMAINING (owner decisions):** (1) enable deny-all RLS now vs. Phase 3 (tables
+currently RLS-disabled); (2) commit `sync/`; (3) schedule the pipeline; (4) optional:
+swap the one private budget endpoint (task chip filed). **Next workstream: Phase 2.**
+
 **Situation update (2026-07-02, from the owner):**
 - The original Supabase project is **DELETED** — all `procore_*_master` tables
   are gone; the old `.env` Supabase creds are dead. A **new Supabase project
