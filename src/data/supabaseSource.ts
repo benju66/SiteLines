@@ -1,0 +1,150 @@
+// Live DataSource (Data Seam Phase 3). Reads the four Supabase normalization
+// views and maps them into the same SiteData shape the seed source produces, so
+// the UI is unchanged. Raw view rows are "partial" Items (id/num/title/who/mine/
+// raw_status_label/due_date/amount); this completes them into full Items using the
+// pure client-side derivation (urgency/date/tone) against the client's `now`.
+
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { TOOLS } from '@/data/tools'
+import { TERMINAL } from '@/lib/ballInCourt'
+import type { DataSource, ItemsByTool, SiteData, Snapshot } from '@/lib/dataSource'
+import { deriveUrgency, formatDueDate, formatMoney, statusTone, timeAgo } from '@/lib/derive'
+import type { ActivityEvent, FinancialSource, Item, Project, Status, ToolKey } from '@/types'
+
+// Postgres `numeric` comes back over the wire as a string (to preserve precision).
+const num = (v: number | string | null): number => (v == null ? 0 : Number(v))
+
+interface ItemRow {
+  id: string
+  tool: ToolKey
+  project: Project
+  num: string
+  title: string | null
+  who: string | null
+  mine: boolean
+  raw_status_label: string | null
+  due_date: string | null
+  amount: number | string | null
+  links: string[] | null
+}
+
+function toItem(r: ItemRow, today: Date): Item {
+  const label = r.raw_status_label
+  const isTerminal = label != null && TERMINAL.has(label)
+  const urgency = deriveUrgency(r.due_date, today, isTerminal)
+  const status: Status | null = label ? { label, tone: statusTone(label, urgency) } : null
+  // Money-display tools carry `amount`; everything else shows a derived due date.
+  const date = r.amount != null ? formatMoney(num(r.amount)) : formatDueDate(r.due_date, today)
+  return {
+    id: r.id,
+    tool: r.tool,
+    project: r.project,
+    num: r.num,
+    title: r.title ?? '',
+    who: r.who ?? '—',
+    mine: !!r.mine,
+    date,
+    urgency,
+    status,
+    links: r.links ?? undefined,
+  }
+}
+
+function emptyItemsByTool(): ItemsByTool {
+  const out = {} as ItemsByTool
+  for (const k of Object.keys(TOOLS) as ToolKey[]) out[k] = []
+  return out
+}
+
+interface ContactRow {
+  id: string
+  name: string
+  company: string
+  role: string
+  trade: string
+  email: string
+  phone: string
+  projects: Project[]
+  match: string | null
+}
+
+interface FinRow {
+  project: Project
+  division: string
+  budget: number | string
+  committed: number | string
+  invoiced: number | string
+  approved_changes: number | string
+  projected_over_under: number | string
+}
+
+const M = 1_000_000
+
+function toFinancials(rows: FinRow[]): FinancialSource {
+  // FinancialSource is keyed by every Project and holds $millions.
+  const divisions: FinancialSource['divisions'] = { mckenna: [], opiii: [] }
+  const approvedChanges: FinancialSource['approvedChanges'] = { mckenna: 0, opiii: 0 }
+  const projectedOverUnder: FinancialSource['projectedOverUnder'] = { mckenna: 0, opiii: 0 }
+  for (const r of rows) {
+    if (!r.project) continue
+    divisions[r.project].push([r.division, num(r.budget) / M, num(r.committed) / M, num(r.invoiced) / M])
+    approvedChanges[r.project] += num(r.approved_changes) / M
+    projectedOverUnder[r.project] += num(r.projected_over_under) / M
+  }
+  return { divisions, approvedChanges, projectedOverUnder }
+}
+
+interface ActivityRow {
+  project: Project
+  text: string
+  sub: string | null
+  raw_status_label: string | null
+  updated_at: string
+}
+
+function toActivity(r: ActivityRow, now: Date): ActivityEvent {
+  return {
+    project: r.project,
+    text: r.text,
+    sub: r.sub ?? '',
+    tone: r.raw_status_label ? statusTone(r.raw_status_label, 'track') : 'muted',
+    when: timeAgo(new Date(r.updated_at), now),
+  }
+}
+
+export function createSupabaseSource(client: SupabaseClient): DataSource {
+  return {
+    name: 'supabase',
+    async fetch(): Promise<Snapshot> {
+      const now = new Date()
+      const [items, contacts, financials, activity] = await Promise.all([
+        client.from('sitelines_items').select('*'),
+        client.from('sitelines_contacts').select('*'),
+        client.from('sitelines_financials').select('*'),
+        client.from('sitelines_activity').select('*'),
+      ])
+      for (const res of [items, contacts, financials, activity]) {
+        if (res.error) throw new Error(`Supabase read failed: ${res.error.message}`)
+      }
+
+      const itemsByTool = emptyItemsByTool()
+      for (const row of (items.data ?? []) as ItemRow[]) {
+        const it = toItem(row, now)
+        if (itemsByTool[it.tool]) itemsByTool[it.tool].push(it)
+      }
+
+      const data: SiteData = {
+        itemsByTool,
+        contacts: ((contacts.data ?? []) as ContactRow[]).map((c) => ({ ...c, match: c.match ?? undefined })),
+        financials: toFinancials((financials.data ?? []) as FinRow[]),
+        activity: ((activity.data ?? []) as ActivityRow[]).map((a) => toActivity(a, now)),
+        // Not synced from Procore yet (Phase 4) — these tools show their empty state.
+        photos: [],
+        dailyLogs: [],
+      }
+      // syncedAt = fetch time for now; a future sitelines_meta view can expose the
+      // pipeline's true last-sync timestamp (max synced_at) once it's readable.
+      return { data, syncedAt: now }
+    },
+  }
+}

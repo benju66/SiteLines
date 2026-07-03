@@ -184,6 +184,16 @@ empty; syncing McKenna (more active) would make the live app meaningfully popula
   project vs. the Procore UI; `TERMINAL` labels confirmed per tool.
 
 ### Phase 3 — Wire the app to Supabase (`supabaseDataSource`)
+
+**IN PROGRESS (2026-07-03):** `supabaseSource.ts` + `supabaseClient.ts` built (map the
+4 views → SiteData, complete Items via derive fns); `main.tsx` toggles seed↔live on
+`VITE_DATA_SOURCE`; `.env.local` holds URL + publishable key (gitignored). TERMINAL
+reconciled ('Closed - Draft' + 'Draft'); overview.test updated (drafts now excluded →
+20 open). typecheck+test(26)+build green; browser verified on seed. **BLOCKED on the
+⛔ security gate:** views are `security_invoker` over deny-all-RLS tables, so the anon
+key reads nothing until a read policy is added — awaiting owner's posture decision
+(anon+RLS read vs. Supabase Auth login). Also TODO: a `sitelines_meta` view exposing
+max(synced_at) for a true "last synced" (currently fetch-time).
 - **Scope:** Implement a `supabaseDataSource` using `supabase-js` reading the Phase 2
   views; fetch-on-load, real `lastSyncedAt`, working refresh button. Env toggle
   between `seed` and `live` sources.

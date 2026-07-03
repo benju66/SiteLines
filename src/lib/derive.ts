@@ -94,6 +94,14 @@ export function statusTone(rawLabel: string, urgency: Urgency): Tone {
   return 'muted'
 }
 
+const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+
+/** Money display for the tools that show a dollar amount instead of a due date
+ * (commitments, change orders, invoicing), e.g. `$186,400`. */
+export function formatMoney(amount: number): string {
+  return USD.format(amount)
+}
+
 /** Relative "synced Xm ago" label for the header indicator. */
 export function timeAgo(then: Date, now: Date): string {
   const s = Math.max(0, Math.floor((now.getTime() - then.getTime()) / 1000))

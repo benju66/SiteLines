@@ -9,6 +9,7 @@ import type { Item, ToolKey } from '@/types'
 
 export const TERMINAL = new Set([
   'Closed',
+  'Closed - Draft', // real Procore RFI label — a closed RFI; without this it leaks into My Court
   'Approved',
   'Current',
   'Superseded',
@@ -18,6 +19,9 @@ export const TERMINAL = new Set([
   'Executed',
   'Answered',
   'Scheduled',
+  // A draft isn't yet in anyone's court (pre-submission). Owner decision (2026-07-03):
+  // drafts — submittals especially — must not appear in My Court.
+  'Draft',
 ])
 
 export const COURT_TOOLS = new Set<ToolKey>([
