@@ -545,7 +545,10 @@ def run_pipeline() -> None:
     vendors_tbl = MasterTable('procore_vendors_master', ['id', 'project_id'], 'project')
     users_tbl = MasterTable('procore_users_master', ['id', 'project_id'], 'project')
 
-    budgets_tbl = MasterTable('procore_budgets_master', ['id', 'project_id'], 'project')
+    # Budget via the PUBLIC Budget Views API (replaces the private budget_line_items
+    # endpoint). detail_rows carry the calculated columns (committed/invoiced) financials needs.
+    budget_views_tbl = MasterTable('procore_budget_views_master', ['id', 'project_id'], 'project')
+    budget_detail_rows_tbl = MasterTable('procore_budget_detail_rows_master', ['id', 'budget_view_id', 'project_id'], 'project')
     budget_mods_tbl = MasterTable('procore_budget_modifications_master', ['id', 'project_id'], 'project')
     budget_meta_tbl = MasterTable('procore_budget_meta_master', ['project_id'], 'project')
     change_events_tbl = MasterTable('procore_change_events_master', ['id', 'project_id'], 'project')
@@ -567,7 +570,8 @@ def run_pipeline() -> None:
     company_tables = [projects_tbl, co_statuses_tbl]
     project_tables = [
         vendors_tbl, users_tbl,
-        budgets_tbl, budget_mods_tbl, budget_meta_tbl, change_events_tbl, ce_line_items_tbl,
+        budget_views_tbl, budget_detail_rows_tbl,
+        budget_mods_tbl, budget_meta_tbl, change_events_tbl, ce_line_items_tbl,
         co_packages_tbl, cors_tbl, commitments_tbl, ccos_tbl, prime_contracts_tbl, pay_apps_tbl,
         pccos_tbl, pcos_tbl, requisitions_tbl, direct_costs_tbl, rfis_tbl, submittals_tbl,
         submittal_approvers_tbl,
@@ -606,10 +610,33 @@ def run_pipeline() -> None:
         if pusers is not None:
             users_tbl.add(pusers, p_id, run_ts)
 
-        # Budget
-        bli = paginated_get(token, f'{BASE_API_URL}/rest/v1.1/budget_line_items?project_id={p_id}')
-        if bli is not None:
-            budgets_tbl.add(bli, p_id, run_ts)
+        # Budget via the PUBLIC Budget Views API. Each view's detail_rows carry the
+        # per-cost-code budget PLUS the calculated columns (Committed Costs, Commitments
+        # Invoiced, …) inline as named keys, and the division via root_cost_code. Only
+        # mark the table synced if EVERY view's detail_rows fetch succeeded, so one failed
+        # sub-fetch can't purge another view's rows.
+        bviews = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/budget_views?project_id={p_id}')
+        if bviews is not None:
+            budget_views_tbl.add(bviews, p_id, run_ts)
+            detail_rows_all: list = []
+            detail_ok = True
+            for bv in bviews:
+                bv_id = bv.get('id')
+                if not bv_id:
+                    continue
+                rows = paginated_get(
+                    token,
+                    f'{BASE_API_URL}/rest/v1.0/budget_views/{bv_id}/detail_rows?project_id={p_id}',
+                )
+                if rows is None:
+                    detail_ok = False
+                    break
+                for r in rows:
+                    if isinstance(r, dict):
+                        r['budget_view_id'] = bv_id
+                    detail_rows_all.append(r)
+            if detail_ok:
+                budget_detail_rows_tbl.add(detail_rows_all, p_id, run_ts)
 
         bmods = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/projects/{p_id}/budget_modifications')
         if bmods is not None:

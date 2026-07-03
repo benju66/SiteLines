@@ -155,15 +155,15 @@ covering all 5 list tools — rfis, submittals, commitments, changeOrders
 (=prime_change_orders, owner PCCOs), invoicing (=requisitions; `amount` + status).
 681 OP III rows. Added an `amount` column for money-display tools. Known gap:
 commitments have no amount on the list endpoint (needs the commitment detail endpoint).
-`sitelines_contacts` APPLIED — 331 rows (256 users w/ email + 75 vendor companies).
-**`sitelines_financials` is BLOCKED:** the synced `budget_line_items` carry only
-`original_budget_amount` ($18.4M total, 124 cost codes) — no committed, no invoiced,
-and no clean division grouping. The contract's divisions[name,budget,committed,invoiced]
-need Procore's **Budget Views → detail_rows** (calculated columns), which is ALSO the
-public replacement for the private budget endpoint (the deferred task chip). So the
-Budget-Views pipeline enhancement is a PREREQUISITE for financials — do it first, then
-build the view. `sitelines_activity` needs a product decision (what events feed it;
-contract §7 says define with the owner) — can be a lightweight "recently updated" feed.
+`sitelines_contacts` APPLIED — 331 rows. `sitelines_financials` APPLIED — per-division
+budget/committed/invoiced rollups (23 CSI divisions). **Budget Views enhancement DONE:**
+the private `/v1.1/budget_line_items` call was replaced by the public Budget Views API
+(migrations 0004 create budget_views + budget_detail_rows tables; 0005 drops the
+redundant columns table) — this cleared the Procore Integration Health private-endpoint
+flag AND unblocked financials (detail_rows carry Committed Costs / Commitments Invoiced
+inline + `root_cost_code` division). Financials aggregates the primary (non-profit) cost
+budget view. **Only `sitelines_activity` remains** — needs a product decision on what
+events feed it (contract §7); can be a lightweight "recently updated" feed.
 ⚠️ **Phase 3 TERMINAL reconciliation (src/lib/ballInCourt.ts):** real OP III labels
 require adding **`'Closed - Draft'`** (so a closed RFI doesn't leak) and **`'Draft'`**
 (owner: draft submittals must NOT appear in My Court) to `TERMINAL`. Also note: OP III
