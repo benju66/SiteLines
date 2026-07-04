@@ -10,5 +10,6 @@ export function createSupabaseClient(): SupabaseClient {
   if (!url || !key) {
     throw new Error('Missing VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY (see .env.local)')
   }
-  return createClient(url, key, { auth: { persistSession: false } })
+  // Persist the login session so the owner stays signed in across reloads.
+  return createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } })
 }

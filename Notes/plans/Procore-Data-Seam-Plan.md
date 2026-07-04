@@ -189,11 +189,15 @@ empty; syncing McKenna (more active) would make the live app meaningfully popula
 4 views → SiteData, complete Items via derive fns); `main.tsx` toggles seed↔live on
 `VITE_DATA_SOURCE`; `.env.local` holds URL + publishable key (gitignored). TERMINAL
 reconciled ('Closed - Draft' + 'Draft'); overview.test updated (drafts now excluded →
-20 open). typecheck+test(26)+build green; browser verified on seed. **BLOCKED on the
-⛔ security gate:** views are `security_invoker` over deny-all-RLS tables, so the anon
-key reads nothing until a read policy is added — awaiting owner's posture decision
-(anon+RLS read vs. Supabase Auth login). Also TODO: a `sitelines_meta` view exposing
-max(synced_at) for a true "last synced" (currently fetch-time).
+20 open). **Security gate resolved: owner chose Supabase Auth login.** Migration 0006
+adds `authenticated_read` SELECT policies on the master tables; `AuthGate` + `Login`
+gate the live tree; client persists the session. **VERIFIED LIVE end-to-end** (browser):
+login → OP III data renders — Budget shows $18.4M revised / $16.66M committed / $15.28M
+invoiced across 23 divisions; My Court correctly empty (historical project); Activity 50.
+typecheck+test(26)+build green. **PHASE 3 DONE** (`VITE_DATA_SOURCE=live`).
+Remaining polish: owner creates their own auth user (a test user exists); optional
+`sitelines_meta` view for a true last-synced time (currently fetch-time); Phase 4 adds
+the uncovered tools (punch/meetings/drawings/…, photos, daily log).
 - **Scope:** Implement a `supabaseDataSource` using `supabase-js` reading the Phase 2
   views; fetch-on-load, real `lastSyncedAt`, working refresh button. Env toggle
   between `seed` and `live` sources.
