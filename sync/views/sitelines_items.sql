@@ -162,4 +162,16 @@ SELECT
     'Current',
     NULL, NULL::numeric, NULL::text[]
 FROM procore_documents_master
-WHERE project_id = 3051002 AND raw->>'document_type' = 'file' AND COALESCE((raw->>'is_deleted')::boolean, false) = false;
+WHERE project_id = 3051002 AND raw->>'document_type' = 'file' AND COALESCE((raw->>'is_deleted')::boolean, false) = false
+
+UNION ALL
+-- Meetings (occurred -> 'Scheduled'/terminal; upcoming -> 'Agenda Due'/in court) -
+SELECT
+    'meetings:' || (raw->>'id'), 'meetings', 'opiii',
+    COALESCE('#' || NULLIF(raw->>'position', ''), 'MTG'), raw->>'title',
+    NULL, false,
+    CASE WHEN (raw->>'occurred')::boolean THEN 'Scheduled' ELSE 'Agenda Due' END,
+    NULLIF(raw->>'starts_at', ''),
+    NULL::numeric, NULL::text[]
+FROM procore_meetings_master
+WHERE project_id = 3051002;

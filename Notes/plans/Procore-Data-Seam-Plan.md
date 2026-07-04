@@ -218,10 +218,13 @@ out of My Court); new `sitelines_photos` + `sitelines_daily_logs`. Two bugs foun
 in the process: (1) item ids must key on the Procore **id**, not display numbers, which
 repeat (submittal revisions, invoices, change-event numbers) → dup React keys; (2) the
 app must **page past PostgREST's 1000-row cap** (`fetchAll` in supabaseSource) — 3014
-items were being truncated to 1000. Verified live: My Court 401, Punch 1074, Photos 300,
-Budget intact. **REMAINING:** Meetings returns rows without a top-level `id` (0 synced —
-needs a shape fix); Schedule is genuinely empty in OP III's Procore. Daily Log is sparse
-(1 blank weather log) — accurate to Procore.
+items were being truncated to 1000. **Meetings** fixed (0007 response is grouped —
+`{group_title, meetings:[…]}`; pipeline now flattens → 88; occurred→'Scheduled'/terminal,
+upcoming→'Agenda Due'/in-court). **Photos DROPPED** (migration 0008; owner call — ~5,900
+image-metadata rows is over-retrieval for a captions-only view + fastest-growing table;
+files were never stored). Verified live: My Court 413, Punch 1074, Meetings 88, Budget
+intact, Photos empty. **Genuinely empty in OP III's Procore (not bugs):** Schedule,
+Daily Log (sub-logs returned 0). **PHASE 4 DONE** for the tools that have data.
 - **Scope:** Add the Procore endpoints FP-Analytics doesn't pull yet (punch,
   meetings, drawings, specs, documents; then daily log, photos, schedule) →
   `procore_*_master`, and extend the Phase 2 views. Sub-split per tool group.

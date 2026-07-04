@@ -574,7 +574,6 @@ def run_pipeline() -> None:
     specs_tbl = MasterTable('procore_specification_sections_master', ['id', 'project_id'], 'project')
     documents_tbl = MasterTable('procore_documents_master', ['id', 'project_id'], 'project')
     schedule_tbl = MasterTable('procore_schedule_calendar_items_master', ['id', 'project_id'], 'project')
-    photos_tbl = MasterTable('procore_images_master', ['id', 'project_id'], 'project')
     weather_logs_tbl = MasterTable('procore_weather_logs_master', ['id', 'project_id'], 'project')
     manpower_logs_tbl = MasterTable('procore_manpower_logs_master', ['id', 'project_id'], 'project')
     notes_logs_tbl = MasterTable('procore_notes_logs_master', ['id', 'project_id'], 'project')
@@ -588,7 +587,7 @@ def run_pipeline() -> None:
         pccos_tbl, pcos_tbl, requisitions_tbl, direct_costs_tbl, rfis_tbl, submittals_tbl,
         submittal_approvers_tbl,
         punch_tbl, meetings_tbl, drawings_tbl, specs_tbl, documents_tbl, schedule_tbl,
-        photos_tbl, weather_logs_tbl, manpower_logs_tbl, notes_logs_tbl,
+        weather_logs_tbl, manpower_logs_tbl, notes_logs_tbl,
     ]
 
     # projects discovery already succeeded — record it.
@@ -775,9 +774,19 @@ def run_pipeline() -> None:
             flatten_ball_in_court_for_records(punch)  # punch items carry ball_in_court
             punch_tbl.add(punch, p_id, run_ts)
 
-        meetings = paginated_get(token, f'{BASE_API_URL}/rest/v1.1/projects/{p_id}/meetings')
-        if meetings is not None:
-            meetings_tbl.add(meetings, p_id, run_ts)
+        # Meetings come grouped by series ({group_title, meetings:[...]}); the meeting
+        # objects (with ids) are nested — flatten them out.
+        meeting_groups = paginated_get(token, f'{BASE_API_URL}/rest/v1.1/projects/{p_id}/meetings')
+        if meeting_groups is not None:
+            flat_meetings: list = []
+            for grp in meeting_groups:
+                if not isinstance(grp, dict):
+                    continue
+                for m in grp.get('meetings') or []:
+                    if isinstance(m, dict):
+                        m.setdefault('group_title', grp.get('group_title'))
+                        flat_meetings.append(m)
+            meetings_tbl.add(flat_meetings, p_id, run_ts)
 
         drawings = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/projects/{p_id}/drawing_revisions')
         if drawings is not None:
@@ -794,10 +803,6 @@ def run_pipeline() -> None:
         schedule = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/projects/{p_id}/schedule/calendar_items')
         if schedule is not None:
             schedule_tbl.add(schedule, p_id, run_ts)
-
-        photos = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/images?project_id={p_id}')
-        if photos is not None:
-            photos_tbl.add(photos, p_id, run_ts)
 
         # Daily log is spread across sub-log types; the view stitches them by date.
         weather = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/projects/{p_id}/weather_logs')

@@ -9,7 +9,7 @@ import { TOOLS } from '@/data/tools'
 import { TERMINAL } from '@/lib/ballInCourt'
 import type { DataSource, ItemsByTool, SiteData, Snapshot } from '@/lib/dataSource'
 import { deriveUrgency, formatDueDate, formatMoney, statusTone, timeAgo } from '@/lib/derive'
-import type { ActivityEvent, DailyLogEntry, FinancialSource, Item, Photo, Project, Status, ToolKey } from '@/types'
+import type { ActivityEvent, DailyLogEntry, FinancialSource, Item, Project, Status, ToolKey } from '@/types'
 
 // Postgres `numeric` comes back over the wire as a string (to preserve precision).
 const num = (v: number | string | null): number => (v == null ? 0 : Number(v))
@@ -131,12 +131,11 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
     name: 'supabase',
     async fetch(): Promise<Snapshot> {
       const now = new Date()
-      const [items, contacts, financials, activity, photos, dailyLogs] = await Promise.all([
+      const [items, contacts, financials, activity, dailyLogs] = await Promise.all([
         fetchAll<ItemRow>(client, 'sitelines_items'),
         fetchAll<ContactRow>(client, 'sitelines_contacts'),
         fetchAll<FinRow>(client, 'sitelines_financials'),
         fetchAll<ActivityRow>(client, 'sitelines_activity'),
-        fetchAll<Photo>(client, 'sitelines_photos'),
         fetchAll<DailyLogEntry>(client, 'sitelines_daily_logs'),
       ])
 
@@ -151,7 +150,9 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
         contacts: contacts.map((c) => ({ ...c, match: c.match ?? undefined })),
         financials: toFinancials(financials),
         activity: activity.map((a) => toActivity(a, now)),
-        photos: photos.map((p) => ({ ...p, mine: !!p.mine })),
+        // Photos intentionally not synced (metadata for ~6k images is over-retrieval for a
+        // captions-only view, and grows fastest on active projects). Shows its empty state.
+        photos: [],
         dailyLogs: dailyLogs.map((d) => ({ ...d, crew: Number(d.crew), mine: !!d.mine })),
       }
       // syncedAt = fetch time for now; a future sitelines_meta view can expose the
