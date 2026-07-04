@@ -567,6 +567,18 @@ def run_pipeline() -> None:
     submittals_tbl = MasterTable('procore_submittals_master', ['id', 'project_id'], 'project')
     submittal_approvers_tbl = MasterTable('procore_submittal_approvers', ['approver_record_id', 'project_id'], 'project')
 
+    # Phase 4 coverage — the remaining court/list tools + daily log + photos.
+    punch_tbl = MasterTable('procore_punch_items_master', ['id', 'project_id'], 'project')
+    meetings_tbl = MasterTable('procore_meetings_master', ['id', 'project_id'], 'project')
+    drawings_tbl = MasterTable('procore_drawing_revisions_master', ['id', 'project_id'], 'project')
+    specs_tbl = MasterTable('procore_specification_sections_master', ['id', 'project_id'], 'project')
+    documents_tbl = MasterTable('procore_documents_master', ['id', 'project_id'], 'project')
+    schedule_tbl = MasterTable('procore_schedule_calendar_items_master', ['id', 'project_id'], 'project')
+    photos_tbl = MasterTable('procore_images_master', ['id', 'project_id'], 'project')
+    weather_logs_tbl = MasterTable('procore_weather_logs_master', ['id', 'project_id'], 'project')
+    manpower_logs_tbl = MasterTable('procore_manpower_logs_master', ['id', 'project_id'], 'project')
+    notes_logs_tbl = MasterTable('procore_notes_logs_master', ['id', 'project_id'], 'project')
+
     company_tables = [projects_tbl, co_statuses_tbl]
     project_tables = [
         vendors_tbl, users_tbl,
@@ -575,6 +587,8 @@ def run_pipeline() -> None:
         co_packages_tbl, cors_tbl, commitments_tbl, ccos_tbl, prime_contracts_tbl, pay_apps_tbl,
         pccos_tbl, pcos_tbl, requisitions_tbl, direct_costs_tbl, rfis_tbl, submittals_tbl,
         submittal_approvers_tbl,
+        punch_tbl, meetings_tbl, drawings_tbl, specs_tbl, documents_tbl, schedule_tbl,
+        photos_tbl, weather_logs_tbl, manpower_logs_tbl, notes_logs_tbl,
     ]
 
     # projects discovery already succeeded — record it.
@@ -754,6 +768,49 @@ def run_pipeline() -> None:
             accumulate_submittal_approvers(subs, appr_rows, p_id)
             submittals_tbl.add(subs, p_id, run_ts)
             submittal_approvers_tbl.add(appr_rows, p_id, run_ts)
+
+        # --- Phase 4 coverage: remaining tools ---
+        punch = paginated_get(token, f'{BASE_API_URL}/rest/v1.1/punch_items?project_id={p_id}')
+        if punch is not None:
+            flatten_ball_in_court_for_records(punch)  # punch items carry ball_in_court
+            punch_tbl.add(punch, p_id, run_ts)
+
+        meetings = paginated_get(token, f'{BASE_API_URL}/rest/v1.1/projects/{p_id}/meetings')
+        if meetings is not None:
+            meetings_tbl.add(meetings, p_id, run_ts)
+
+        drawings = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/projects/{p_id}/drawing_revisions')
+        if drawings is not None:
+            drawings_tbl.add(drawings, p_id, run_ts)
+
+        specs = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/specification_sections?project_id={p_id}')
+        if specs is not None:
+            specs_tbl.add(specs, p_id, run_ts)
+
+        documents = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/projects/{p_id}/documents')
+        if documents is not None:
+            documents_tbl.add(documents, p_id, run_ts)
+
+        schedule = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/projects/{p_id}/schedule/calendar_items')
+        if schedule is not None:
+            schedule_tbl.add(schedule, p_id, run_ts)
+
+        photos = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/images?project_id={p_id}')
+        if photos is not None:
+            photos_tbl.add(photos, p_id, run_ts)
+
+        # Daily log is spread across sub-log types; the view stitches them by date.
+        weather = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/projects/{p_id}/weather_logs')
+        if weather is not None:
+            weather_logs_tbl.add(weather, p_id, run_ts)
+
+        manpower = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/projects/{p_id}/manpower_logs')
+        if manpower is not None:
+            manpower_logs_tbl.add(manpower, p_id, run_ts)
+
+        notes = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/projects/{p_id}/notes_logs')
+        if notes is not None:
+            notes_logs_tbl.add(notes, p_id, run_ts)
 
     # -- Write everything: staging → UPSERT → scoped purge, one txn per table --
     logging.info('Connecting to Supabase and writing masters...')

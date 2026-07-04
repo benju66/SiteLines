@@ -208,6 +208,20 @@ the uncovered tools (punch/meetings/drawings/…, photos, daily log).
   stale states behave against the real DB; typecheck + build + live click-through.
 
 ### Phase 4 — Extend pipeline + views for the remaining court tools
+
+**MOSTLY DONE (2026-07-03/04):** pipeline pulls punch (1074), drawings (1100 revs→346
+current), specs (189), documents (660), photos/images (5879→300 in view), + daily-log
+sub-logs (weather/manpower/notes) and schedule/meetings. Migration 0007 = 10 new master
+tables (+RLS). Views: punch/drawings/specs/documents added to `sitelines_items`
+(reference tools get terminal labels 'Current'/'Issued' so they fill registers but stay
+out of My Court); new `sitelines_photos` + `sitelines_daily_logs`. Two bugs found+fixed
+in the process: (1) item ids must key on the Procore **id**, not display numbers, which
+repeat (submittal revisions, invoices, change-event numbers) → dup React keys; (2) the
+app must **page past PostgREST's 1000-row cap** (`fetchAll` in supabaseSource) — 3014
+items were being truncated to 1000. Verified live: My Court 401, Punch 1074, Photos 300,
+Budget intact. **REMAINING:** Meetings returns rows without a top-level `id` (0 synced —
+needs a shape fix); Schedule is genuinely empty in OP III's Procore. Daily Log is sparse
+(1 blank weather log) — accurate to Procore.
 - **Scope:** Add the Procore endpoints FP-Analytics doesn't pull yet (punch,
   meetings, drawings, specs, documents; then daily log, photos, schedule) →
   `procore_*_master`, and extend the Phase 2 views. Sub-split per tool group.

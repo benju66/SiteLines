@@ -22,7 +22,7 @@ CREATE OR REPLACE VIEW sitelines_items WITH (security_invoker = true) AS
 
 -- RFIs -----------------------------------------------------------------------
 SELECT
-    'rfis:#' || (raw->>'full_number')                             AS id,
+    'rfis:' || (raw->>'id')                                       AS id,   -- id, not number (numbers can repeat)
     'rfis'                                                        AS tool,
     'opiii'                                                       AS project,
     '#' || (raw->>'full_number')                                 AS num,
@@ -40,7 +40,7 @@ WHERE project_id = 3051002
 UNION ALL
 -- Submittals -----------------------------------------------------------------
 SELECT
-    'submittals:' || (raw->>'formatted_number'),
+    'submittals:' || (raw->>'id'),              -- id: submittal revisions share formatted_number
     'submittals', 'opiii',
     raw->>'formatted_number',
     raw->>'title',
@@ -73,7 +73,7 @@ WHERE project_id = 3051002
 UNION ALL
 -- Change Events (already synced; initcap normalizes 'open'/'Closed') ----------
 SELECT
-    'changeEvents:CE #' || (raw->>'number'),
+    'changeEvents:' || (raw->>'id'),            -- id: change-event numbers repeat, ids don't
     'changeEvents', 'opiii',
     'CE #' || (raw->>'number'),
     raw->>'title',
@@ -105,7 +105,7 @@ WHERE project_id = 3051002
 UNION ALL
 -- Invoicing (subcontractor requisitions — amount + status) -------------------
 SELECT
-    'invoicing:' || COALESCE(NULLIF(raw->>'invoice_number', ''), raw->>'number'),
+    'invoicing:' || (raw->>'id'),               -- id: invoice_number is not unique
     'invoicing', 'opiii',
     COALESCE(NULLIF(raw->>'invoice_number', ''), raw->>'number'),
     NULLIF(raw->>'contract_name', ''),
@@ -116,4 +116,50 @@ SELECT
     NULLIF(raw->>'total_claimed_amount', '')::numeric,
     NULL::text[]
 FROM procore_requisitions_master
-WHERE project_id = 3051002;
+WHERE project_id = 3051002
+
+UNION ALL
+-- Punch (real court tool — ball_in_court + Open/Overdue/Closed) ---------------
+SELECT
+    'punch:' || (raw->>'id'), 'punch', 'opiii',
+    '#' || (raw->>'position'), raw->>'name',
+    CASE WHEN raw->>'ball_in_court' ILIKE '%Ben Urness%' THEN 'You' ELSE NULLIF(raw->>'ball_in_court', '') END,
+    COALESCE(raw->>'ball_in_court', '') ILIKE '%Ben Urness%',
+    raw->>'status',
+    NULLIF(raw->>'due_date', ''),
+    NULL::numeric, NULL::text[]
+FROM procore_punch_items_master
+WHERE project_id = 3051002
+
+UNION ALL
+-- Drawings (reference: current sheets only; 'Current' keeps them out of My Court)
+SELECT
+    'drawings:' || (raw->>'id'), 'drawings', 'opiii',
+    raw->>'number', raw->>'title',
+    NULL, false,
+    'Current',
+    NULL, NULL::numeric, NULL::text[]
+FROM procore_drawing_revisions_master
+WHERE project_id = 3051002 AND (raw->>'current')::boolean
+
+UNION ALL
+-- Specifications (reference: 'Issued' keeps them out of My Court) -------------
+SELECT
+    'specs:' || (raw->>'id'), 'specs', 'opiii',
+    raw->>'number', raw->>'description',
+    NULL, false,
+    'Issued',
+    NULL, NULL::numeric, NULL::text[]
+FROM procore_specification_sections_master
+WHERE project_id = 3051002
+
+UNION ALL
+-- Documents (files only; 'Current' keeps them out of My Court) ----------------
+SELECT
+    'documents:' || (raw->>'id'), 'documents', 'opiii',
+    'DOC', raw->>'name',
+    NULL, false,
+    'Current',
+    NULL, NULL::numeric, NULL::text[]
+FROM procore_documents_master
+WHERE project_id = 3051002 AND raw->>'document_type' = 'file' AND COALESCE((raw->>'is_deleted')::boolean, false) = false;

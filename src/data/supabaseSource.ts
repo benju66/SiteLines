@@ -9,7 +9,7 @@ import { TOOLS } from '@/data/tools'
 import { TERMINAL } from '@/lib/ballInCourt'
 import type { DataSource, ItemsByTool, SiteData, Snapshot } from '@/lib/dataSource'
 import { deriveUrgency, formatDueDate, formatMoney, statusTone, timeAgo } from '@/lib/derive'
-import type { ActivityEvent, FinancialSource, Item, Project, Status, ToolKey } from '@/types'
+import type { ActivityEvent, DailyLogEntry, FinancialSource, Item, Photo, Project, Status, ToolKey } from '@/types'
 
 // Postgres `numeric` comes back over the wire as a string (to preserve precision).
 const num = (v: number | string | null): number => (v == null ? 0 : Number(v))
@@ -112,35 +112,47 @@ function toActivity(r: ActivityRow, now: Date): ActivityEvent {
   }
 }
 
+const PAGE = 1000
+
+/** Read a whole view, paging past PostgREST's 1000-row response cap. */
+async function fetchAll<T>(client: SupabaseClient, table: string): Promise<T[]> {
+  const rows: T[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await client.from(table).select('*').range(from, from + PAGE - 1)
+    if (error) throw new Error(`Supabase read failed (${table}): ${error.message}`)
+    rows.push(...((data ?? []) as T[]))
+    if (!data || data.length < PAGE) break
+  }
+  return rows
+}
+
 export function createSupabaseSource(client: SupabaseClient): DataSource {
   return {
     name: 'supabase',
     async fetch(): Promise<Snapshot> {
       const now = new Date()
-      const [items, contacts, financials, activity] = await Promise.all([
-        client.from('sitelines_items').select('*'),
-        client.from('sitelines_contacts').select('*'),
-        client.from('sitelines_financials').select('*'),
-        client.from('sitelines_activity').select('*'),
+      const [items, contacts, financials, activity, photos, dailyLogs] = await Promise.all([
+        fetchAll<ItemRow>(client, 'sitelines_items'),
+        fetchAll<ContactRow>(client, 'sitelines_contacts'),
+        fetchAll<FinRow>(client, 'sitelines_financials'),
+        fetchAll<ActivityRow>(client, 'sitelines_activity'),
+        fetchAll<Photo>(client, 'sitelines_photos'),
+        fetchAll<DailyLogEntry>(client, 'sitelines_daily_logs'),
       ])
-      for (const res of [items, contacts, financials, activity]) {
-        if (res.error) throw new Error(`Supabase read failed: ${res.error.message}`)
-      }
 
       const itemsByTool = emptyItemsByTool()
-      for (const row of (items.data ?? []) as ItemRow[]) {
+      for (const row of items) {
         const it = toItem(row, now)
         if (itemsByTool[it.tool]) itemsByTool[it.tool].push(it)
       }
 
       const data: SiteData = {
         itemsByTool,
-        contacts: ((contacts.data ?? []) as ContactRow[]).map((c) => ({ ...c, match: c.match ?? undefined })),
-        financials: toFinancials((financials.data ?? []) as FinRow[]),
-        activity: ((activity.data ?? []) as ActivityRow[]).map((a) => toActivity(a, now)),
-        // Not synced from Procore yet (Phase 4) — these tools show their empty state.
-        photos: [],
-        dailyLogs: [],
+        contacts: contacts.map((c) => ({ ...c, match: c.match ?? undefined })),
+        financials: toFinancials(financials),
+        activity: activity.map((a) => toActivity(a, now)),
+        photos: photos.map((p) => ({ ...p, mine: !!p.mine })),
+        dailyLogs: dailyLogs.map((d) => ({ ...d, crew: Number(d.crew), mine: !!d.mine })),
       }
       // syncedAt = fetch time for now; a future sitelines_meta view can expose the
       // pipeline's true last-sync timestamp (max synced_at) once it's readable.
