@@ -71,6 +71,22 @@ FROM procore_commitments_master
 WHERE project_id = 3051002
 
 UNION ALL
+-- Change Events (already synced; initcap normalizes 'open'/'Closed') ----------
+SELECT
+    'changeEvents:CE #' || (raw->>'number'),
+    'changeEvents', 'opiii',
+    'CE #' || (raw->>'number'),
+    raw->>'title',
+    NULL,                                       -- change events carry no ball-in-court
+    false,
+    initcap(raw->>'status'),
+    NULL,
+    NULL::numeric,
+    NULL::text[]
+FROM procore_change_events_master
+WHERE project_id = 3051002
+
+UNION ALL
 -- Change Orders (owner-facing prime change orders / PCCOs) --------------------
 SELECT
     'changeOrders:CO #' || (raw->>'number'),
