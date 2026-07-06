@@ -439,6 +439,62 @@ def enrich_rfis_with_detail(token: str, rfis, project_id) -> bool:
     return True
 
 
+def _latest_final_attachments(distributions) -> list:
+    """The reviewed submittal(s) from the most recent completed distribution.
+
+    Procore's `distributed_submittals[]` records each time a reviewed submittal was
+    distributed back; each carries `final_attachments[]` (the stamped/reviewed doc).
+    We keep only {name, url} from the latest distribution that actually carries
+    final_attachments — minimum-necessary (drops recipient PII in distributed_to).
+    Returns [] when the submittal has never been distributed (no final yet).
+    """
+    if not isinstance(distributions, list):
+        return []
+    with_finals = [
+        d for d in distributions
+        if isinstance(d, dict) and isinstance(d.get('final_attachments'), list) and d.get('final_attachments')
+    ]
+    if not with_finals:
+        return []
+    latest = max(with_finals, key=lambda d: d.get('sent_at') or '')
+    out = []
+    for att in latest.get('final_attachments') or []:
+        if isinstance(att, dict) and att.get('url'):
+            out.append({'name': att.get('name') or att.get('filename'), 'url': att.get('url')})
+    return out
+
+
+def enrich_submittals_with_final(token: str, submittals, project_id) -> bool:
+    """Attach the final reviewed submittal to each submittal record, in place.
+
+    The reviewed/stamped submittal Procore distributes back to the contractor lives
+    in `distributed_submittals[].final_attachments[]`, which is only on the submittal
+    *detail* endpoint. We fetch each submittal's detail and store just the latest
+    final attachments as `final_reviewed_submittal` (a small {name, url} list), so
+    the drawer can show it separate from the originally-submitted attachments.
+
+    Returns True only if EVERY detail fetch succeeded (else the caller skips the
+    upsert so a partial fetch never purges — mirrors enrich_rfis_with_detail).
+    Jittered like paginated_get to respect the spike rate-limit window (research §7).
+    """
+    if not submittals:
+        return True
+    for sub in submittals:
+        if not isinstance(sub, dict):
+            continue
+        sub_id = sub.get('id')
+        if not sub_id:
+            continue
+        detail = get_json(
+            token, f'{BASE_API_URL}/rest/v1.1/projects/{project_id}/submittals/{sub_id}'
+        )
+        if detail is None:
+            return False
+        sub['final_reviewed_submittal'] = _latest_final_attachments(detail.get('distributed_submittals'))
+        time.sleep(random.uniform(0.5, 1.5))  # jitter between detail calls (research §7)
+    return True
+
+
 # --- 4. KEYED STAGING + UPSERT + SCOPED PURGE -----------------------------------
 
 class MasterTable:
@@ -804,14 +860,23 @@ def run_pipeline() -> None:
                     'upsert (no purge) so partial data cannot delete the thread.', p_id
                 )
 
-        # Submittals (+ flattened approvers share the parent's success)
+        # Submittals (+ flattened approvers share the parent's success). Each is
+        # enriched with the final reviewed submittal (distributed_submittals →
+        # final_attachments, detail-only); only upsert if every detail fetch
+        # succeeded, so a partial failure never triggers the scoped purge.
         subs = paginated_get(token, f'{BASE_API_URL}/rest/v1.1/projects/{p_id}/submittals')
         if subs is not None:
-            appr_rows: list = []
-            flatten_ball_in_court_for_records(subs)
-            accumulate_submittal_approvers(subs, appr_rows, p_id)
-            submittals_tbl.add(subs, p_id, run_ts)
-            submittal_approvers_tbl.add(appr_rows, p_id, run_ts)
+            if enrich_submittals_with_final(token, subs, p_id):
+                appr_rows: list = []
+                flatten_ball_in_court_for_records(subs)
+                accumulate_submittal_approvers(subs, appr_rows, p_id)
+                submittals_tbl.add(subs, p_id, run_ts)
+                submittal_approvers_tbl.add(appr_rows, p_id, run_ts)
+            else:
+                logging.warning(
+                    'Submittal detail enrichment incomplete for project %s — skipping '
+                    'submittal upsert (no purge) so partial data cannot delete rows.', p_id
+                )
 
         # --- Phase 4 coverage: remaining tools ---
         punch = paginated_get(token, f'{BASE_API_URL}/rest/v1.1/punch_items?project_id={p_id}')

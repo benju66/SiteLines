@@ -71,6 +71,7 @@ export interface ItemResponse {
   date: string | null // preformatted, e.g. "Jun 24, 2024"; null when undated
   text: string
   official: boolean
+  status?: string // decision label, e.g. a submittal approver's "Approved as Noted"
 }
 
 /** A downloadable file on a record. `url` is a pre-signed Procore link. */
@@ -95,6 +96,9 @@ export interface ItemDetail {
   closedDate?: string | null // preformatted, e.g. "May 12, 2026"; null when open
   procoreUrl?: string // deep link to open the record in Procore
   attachments: ItemAttachment[]
+  /** The final reviewed submittal (Procore's distributed, stamped doc), surfaced
+   *  separately from the originally-submitted attachments. Submittals only. */
+  finalSubmittal?: ItemAttachment[]
 }
 
 export interface Contact {

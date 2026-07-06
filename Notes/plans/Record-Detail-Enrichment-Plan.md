@@ -128,13 +128,43 @@ punch) not started.**
   renders. This phase is on the larger side — the ⛔ DDL gate is a clean pause point if
   the session runs long.
 
-### Phase 2 — Submittals + Punch (same pattern)
+### Phase 2 — Submittals ✅ SHIPPED (2026-07-06)
+Scope trimmed to **submittals only** (punch dropped — owner decision, 2026-07-06).
+Live on the `rfi-detail-enrichment` branch. The submittal drawer now shows the real
+**description** + the **approver-workflow thread** — each reviewer with a colored
+**decision tag** (Approved / Approved as Noted / For Record Only = green, Rejected /
+Revise and Resubmit = red, Pending / Submitted = grey), comment, and date — plus the
+**reviewers** (assignees), the **closed date** (`closed_at`), **attachments**
+(`associated_attachments`), and an **Open in Procore** link.
+
+Key difference from RFIs: **no per-record detail fetch and no re-sync** — a probe
+confirmed the submittal detail endpoint adds nothing (no link, no extra attachments).
+The approver workflow is already synced into `procore_submittal_approvers` (the pipeline
+extracts it from the list payload), so Phase 2 is a **view + app change only**:
+- View `sitelines_submittal_detail` (`security_invoker`) joins
+  `procore_submittals_master` + `procore_submittal_approvers`; responses carry a
+  `status` (the approver decision). The Procore link is **constructed**
+  (`/project/submittal_logs/<id>`) — Procore exposes no submittal link in the API.
+- App: shared text helpers extracted to `src/lib/detailText.ts` (reused by both
+  mappers); `mapSubmittalDetail` + tests; `getDetail` gains a submittals branch;
+  `ItemResponse.status` + a colored `ResponseTag` in the drawer.
+Verified: typecheck + 41 tests + build + live click-through (submittal "12 3530-4":
+8-reviewer thread with decision tags, 7 reviewers, closed date, 7 attachments).
+
+Follow-ups: (a) click-confirm the constructed Procore submittal link; (b) register the
+view in Supabase migration history via MCP `apply_migration` once the hosted MCP
+recovers (it was OOM/504 during this session; the view was applied via the pipeline's
+DB engine and is live + verified). **Punch not done (dropped from scope).**
+
+<details><summary>Original Phase 2 plan (superseded)</summary>
+
 - **Scope:** repeat the list→detail enrichment for submittals (`/submittals/{id}` —
   has the approver workflow + responses) and punch (`/punch_items/{id}` — has the
   item's responses/threads). Reuse the Phase 1 `ItemDetail` shape + drawer section;
   add per-tool mappers. Present any DDL and STOP.
 - **Exit criteria:** opening a submittal / punch item shows its real thread; the RFI
   path is unchanged; typecheck + build + click-through.
+</details>
 
 ## Hard guardrails (do not violate)
 - Ball-in-court rule stays centralized in `src/lib/ballInCourt.ts`; never duplicate

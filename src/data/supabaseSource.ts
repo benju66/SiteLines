@@ -10,6 +10,7 @@ import { TERMINAL } from '@/lib/ballInCourt'
 import type { DataSource, ItemsByTool, SiteData, Snapshot } from '@/lib/dataSource'
 import { deriveUrgency, formatDueDate, formatMoney, statusTone, timeAgo } from '@/lib/derive'
 import { mapRfiDetail, type RfiDetailRow } from '@/lib/mapRfiDetail'
+import { mapSubmittalDetail, type SubmittalDetailRow } from '@/lib/mapSubmittalDetail'
 import type { ActivityEvent, DailyLogEntry, FinancialSource, Item, ItemDetail, Project, Status, ToolKey } from '@/types'
 
 // Postgres `numeric` comes back over the wire as a string (to preserve precision).
@@ -161,16 +162,27 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
       return { data, syncedAt: now }
     },
     async getDetail(item: Item): Promise<ItemDetail | null> {
-      // Phase 1 enriches RFIs only; other tools have no detail view yet.
-      if (item.tool !== 'rfis') return null
-      const { data, error } = await client
-        .from('sitelines_rfi_detail')
-        .select('*')
-        .eq('id', item.id)
-        .maybeSingle()
-      if (error) throw new Error(`Supabase read failed (sitelines_rfi_detail): ${error.message}`)
-      if (!data) return null
-      return mapRfiDetail(data as RfiDetailRow)
+      // Enriched tools: RFIs (request + answers) and submittals (approver workflow).
+      // Everything else has no detail view yet → null (drawer falls back gracefully).
+      if (item.tool === 'rfis') {
+        const { data, error } = await client
+          .from('sitelines_rfi_detail')
+          .select('*')
+          .eq('id', item.id)
+          .maybeSingle()
+        if (error) throw new Error(`Supabase read failed (sitelines_rfi_detail): ${error.message}`)
+        return data ? mapRfiDetail(data as RfiDetailRow) : null
+      }
+      if (item.tool === 'submittals') {
+        const { data, error } = await client
+          .from('sitelines_submittal_detail')
+          .select('*')
+          .eq('id', item.id)
+          .maybeSingle()
+        if (error) throw new Error(`Supabase read failed (sitelines_submittal_detail): ${error.message}`)
+        return data ? mapSubmittalDetail(data as SubmittalDetailRow) : null
+      }
+      return null
     },
   }
 }

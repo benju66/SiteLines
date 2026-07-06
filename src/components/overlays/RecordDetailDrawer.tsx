@@ -11,7 +11,7 @@ import { resolveLinks } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useData, useSiteData } from '@/state/DataContext'
 import { mono, projectMeta, urgency as urgencyMap } from '@/theme/tokens'
-import type { ItemDetail } from '@/types'
+import type { ItemDetail, ItemResponse } from '@/types'
 import { CodeBadge, ProjectTag, StatusPill, YouPill } from '@/components/ui/primitives'
 import { Backdrop } from './Backdrop'
 
@@ -37,6 +37,32 @@ function MetaCell({ label, children }: { label: string; children: React.ReactNod
       <div style={{ marginTop: 4 }}>{children}</div>
     </div>
   )
+}
+
+// Tag on a response: a submittal approver's decision (colored by outcome), or the
+// RFI "Official" answer marker.
+function ResponseTag({ resp }: { resp: ItemResponse }) {
+  const base = {
+    fontSize: 8.5,
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '.4px',
+    borderRadius: 5,
+    padding: '2px 6px',
+  } as const
+  if (resp.status) {
+    const s = resp.status.toLowerCase()
+    const tone = /reject|revise|void/.test(s)
+      ? { color: '#b4462f', background: '#fbecea', border: '1px solid #f0cfc7' }
+      : /approv|for record|closed|complete/.test(s)
+        ? { color: '#1f7a4d', background: '#e7f4ec', border: '1px solid #bfe3cd' }
+        : { color: '#6b7480', background: '#f1f3f5', border: '1px solid #e2e6ea' }
+    return <span style={{ ...base, ...tone }}>{resp.status}</span>
+  }
+  if (resp.official) {
+    return <span style={{ ...base, color: '#1f7a4d', background: '#e7f4ec', border: '1px solid #bfe3cd' }}>Official</span>
+  }
+  return null
 }
 
 export function RecordDetailDrawer() {
@@ -191,6 +217,30 @@ export function RecordDetailDrawer() {
             </div>
           )}
 
+          {/* Final reviewed submittal — the stamped doc Procore distributed back.
+              Surfaced up top, distinct from the submitted Attachments below. */}
+          {thread?.finalSubmittal && thread.finalSubmittal.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ ...sectionLabel, margin: '0 0 8px', color: '#1f7a4d' }}>Final reviewed submittal</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {thread.finalSubmittal.map((a, i) => (
+                  <a
+                    key={i}
+                    href={a.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={a.name}
+                    style={{ display: 'flex', alignItems: 'center', gap: 9, background: '#eef8f1', border: '1px solid #bfe3cd', borderRadius: 9, padding: '10px 12px', textDecoration: 'none' }}
+                  >
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, borderRadius: '50%', background: '#1f7a4d', color: '#fff', fontSize: 11, fontWeight: 700, flex: 'none' }}>✓</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 620, color: '#1f5f3d', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                    <span style={{ fontFamily: mono, fontSize: 10, color: '#4a8b68', flex: 'none' }}>↓</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ ...sectionLabel, margin: '18px 0 7px' }}>Description</div>
           <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: '#3c434c', whiteSpace: 'pre-wrap' }}>{requestText}</p>
 
@@ -205,17 +255,13 @@ export function RecordDetailDrawer() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                   {thread.responses.map((resp, i) => (
                     <div key={i} style={{ background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 9, padding: '11px 13px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: resp.text ? 6 : 0 }}>
                         <span style={{ fontSize: 12.5, fontWeight: 620, color: 'var(--tx-primary)' }}>{resp.author}</span>
-                        {resp.official && (
-                          <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px', color: '#1f7a4d', background: '#e7f4ec', border: '1px solid #bfe3cd', borderRadius: 5, padding: '2px 6px' }}>
-                            Official
-                          </span>
-                        )}
+                        <ResponseTag resp={resp} />
                         <div style={{ flex: 1 }} />
                         {resp.date && <span style={{ fontFamily: mono, fontSize: 10, color: '#aab0b8' }}>{resp.date}</span>}
                       </div>
-                      <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: '#3c434c', whiteSpace: 'pre-wrap' }}>{resp.text}</p>
+                      {resp.text && <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: '#3c434c', whiteSpace: 'pre-wrap' }}>{resp.text}</p>}
                     </div>
                   ))}
                 </div>
