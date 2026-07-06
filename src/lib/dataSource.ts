@@ -4,7 +4,7 @@
 // a supabaseDataSource reading the normalization views — the UI never knows
 // the difference.
 
-import type { ActivityEvent, Contact, DailyLogEntry, FinancialSource, Item, Photo, ToolKey } from '@/types'
+import type { ActivityEvent, Contact, DailyLogEntry, FinancialSource, Item, ItemDetail, Photo, ToolKey } from '@/types'
 
 export type ItemsByTool = Record<ToolKey, Item[]>
 
@@ -28,4 +28,11 @@ export interface DataSource {
   name: string
   /** Fetch a full snapshot. Rejects on failure; the provider surfaces the error state. */
   fetch(): Promise<Snapshot>
+  /**
+   * Lazily fetch the detail thread for one record (the drawer calls this on open).
+   * Returns `null` when the source has no enriched detail for the item (e.g. a
+   * tool not yet enriched, or an RFI with no thread) — the drawer falls back to a
+   * generated summary. Rejects only on an actual read error.
+   */
+  getDetail(item: Item): Promise<ItemDetail | null>
 }

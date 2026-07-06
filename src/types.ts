@@ -61,6 +61,42 @@ export interface Item {
   links?: string[] // ids of related records in other tools
 }
 
+/**
+ * One response on a record's thread (an RFI answer, later a submittal/punch
+ * reply). `date` and `text` are preformatted display strings (like `Item.date`);
+ * `official` marks the answer of record.
+ */
+export interface ItemResponse {
+  author: string
+  date: string | null // preformatted, e.g. "Jun 24, 2024"; null when undated
+  text: string
+  official: boolean
+}
+
+/** A downloadable file on a record. `url` is a pre-signed Procore link. */
+export interface ItemAttachment {
+  name: string
+  url: string
+}
+
+/**
+ * The lazily-loaded detail thread behind a record (DATA_CONTRACT record detail).
+ * Fetched via `DataSource.getDetail(item)` when the drawer opens — the register
+ * `Item` stays light. Carries the RFI request + responses + surrounding metadata
+ * (all assignees, closed date, a deep link into Procore, and attachments).
+ * proposedSolution/instructions are contract-available but not yet surfaced.
+ */
+export interface ItemDetail {
+  request: string
+  proposedSolution?: string
+  instructions?: string
+  responses: ItemResponse[]
+  assignees?: string // full assignee list, comma-joined
+  closedDate?: string | null // preformatted, e.g. "May 12, 2026"; null when open
+  procoreUrl?: string // deep link to open the record in Procore
+  attachments: ItemAttachment[]
+}
+
 export interface Contact {
   id: string
   name: string

@@ -1,14 +1,17 @@
 // Record-Detail drawer (README "Overlays"): right drawer, 452px, opened by any
-// record row. Meta grid, description, cross-tool linked records (click swaps
-// the drawer to that record), ball-in-court history, attachment chips, and the
-// sticky Respond/Forward/Resolve footer.
+// record row. Meta grid, the real request, responses thread (RFIs — lazily
+// fetched via the data provider), cross-tool linked records (click swaps the
+// drawer to that record), ball-in-court history, and the sticky
+// Respond/Forward/Resolve footer.
 
+import { useEffect, useState } from 'react'
 import { TOOLS } from '@/data/tools'
 import { partyContact } from '@/lib/party'
 import { resolveLinks } from '@/selectors'
 import { useApp } from '@/state/AppContext'
-import { useSiteData } from '@/state/DataContext'
+import { useData, useSiteData } from '@/state/DataContext'
 import { mono, projectMeta, urgency as urgencyMap } from '@/theme/tokens'
+import type { ItemDetail } from '@/types'
 import { CodeBadge, ProjectTag, StatusPill, YouPill } from '@/components/ui/primitives'
 import { Backdrop } from './Backdrop'
 
@@ -39,7 +42,32 @@ function MetaCell({ label, children }: { label: string; children: React.ReactNod
 export function RecordDetailDrawer() {
   const { state, patch } = useApp()
   const { itemsByTool, contacts } = useSiteData()
+  const { getDetail } = useData()
   const detail = state.detail
+  const recordId = detail?.record.id ?? null
+
+  // Lazily load the record's request/response thread when the drawer opens (or
+  // when it swaps to a linked record). null = source has no enriched detail →
+  // fall back to the generated summary below.
+  const [thread, setThread] = useState<ItemDetail | null>(null)
+  useEffect(() => {
+    const rec = detail?.record
+    if (!rec) {
+      setThread(null)
+      return
+    }
+    let alive = true
+    setThread(null)
+    getDetail(rec)
+      .then((d) => alive && setThread(d))
+      .catch(() => alive && setThread(null))
+    return () => {
+      alive = false
+    }
+    // Keyed on recordId (stable per open), not the record object (new ref each render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordId, getDetail])
+
   if (!detail) return null
 
   const r = detail.record
@@ -51,17 +79,18 @@ export function RecordDetailDrawer() {
   const links = resolveLinks(itemsByTool, r)
   const close = () => patch({ detail: null })
 
-  // Generated prose + placeholder history/attachments, matching the prototype —
-  // real description, BIC history, and files come from Procore in production.
+  // The real request comes from Procore (thread.request); fall back to generated
+  // prose until it loads or when the source has no enriched detail. BIC history
+  // stays generated for now (Phase 1 surfaces request + responses only).
   const desc = `${toolMeta.label.replace(/s$/, '')} on ${p.full}. Currently ${statusLabel.toLowerCase()}; ${
     r.mine ? 'awaiting your action.' : `the ball is with ${r.who}.`
   }`
+  const requestText = thread?.request?.trim() ? thread.request : desc
   const history = [
     { text: r.mine ? 'Assigned to you for action' : `${r.who} currently holds the ball`, when: 'now', dot: u.dot },
     { text: `Ben Ostrander opened ${r.num}`, when: r.date, dot: '#c4c9cf' },
     { text: `Filed under ${p.full}`, when: '', dot: '#c4c9cf' },
   ]
-  const attachments = ['Reference set.pdf', 'Field photo.jpg']
 
   return (
     <Backdrop onClose={close}>
@@ -133,10 +162,93 @@ export function RecordDetailDrawer() {
             <MetaCell label="Tool">
               <span style={{ fontSize: 13, fontWeight: 540, color: '#3c434c' }}>{toolMeta.label}</span>
             </MetaCell>
+            {/* Enriched metadata (RFIs): all assignees + closed date. Rendered as a
+                pair so the grid stays rectangular. */}
+            {thread && (
+              <>
+                <MetaCell label="Assignees">
+                  <span style={{ fontSize: 13, fontWeight: 540, color: '#3c434c', lineHeight: 1.4 }}>{thread.assignees ?? '—'}</span>
+                </MetaCell>
+                <MetaCell label="Closed">
+                  <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 600, color: thread.closedDate ? '#3c434c' : 'var(--tx-faint)' }}>
+                    {thread.closedDate ?? '—'}
+                  </span>
+                </MetaCell>
+              </>
+            )}
           </div>
 
+          {thread?.procoreUrl && (
+            <div style={{ marginTop: 10, textAlign: 'right' }}>
+              <a
+                href={thread.procoreUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: 12, fontWeight: 600, color: '#2f5f8a', textDecoration: 'none' }}
+              >
+                Open in Procore ↗
+              </a>
+            </div>
+          )}
+
           <div style={{ ...sectionLabel, margin: '18px 0 7px' }}>Description</div>
-          <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: '#3c434c' }}>{desc}</p>
+          <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: '#3c434c', whiteSpace: 'pre-wrap' }}>{requestText}</p>
+
+          {/* Responses thread — present whenever the source has enriched detail
+              (RFIs). Shows "No responses yet." when the request is unanswered. */}
+          {thread && (
+            <>
+              <div style={{ ...sectionLabel, margin: '18px 0 9px' }}>
+                Responses{thread.responses.length > 0 ? ` (${thread.responses.length})` : ''}
+              </div>
+              {thread.responses.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                  {thread.responses.map((resp, i) => (
+                    <div key={i} style={{ background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 9, padding: '11px 13px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 620, color: 'var(--tx-primary)' }}>{resp.author}</span>
+                        {resp.official && (
+                          <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px', color: '#1f7a4d', background: '#e7f4ec', border: '1px solid #bfe3cd', borderRadius: 5, padding: '2px 6px' }}>
+                            Official
+                          </span>
+                        )}
+                        <div style={{ flex: 1 }} />
+                        {resp.date && <span style={{ fontFamily: mono, fontSize: 10, color: '#aab0b8' }}>{resp.date}</span>}
+                      </div>
+                      <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: '#3c434c', whiteSpace: 'pre-wrap' }}>{resp.text}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ margin: 0, fontSize: 12.5, color: 'var(--tx-faint)' }}>No responses yet.</p>
+              )}
+            </>
+          )}
+
+          {/* Real attachments (request + responses). Each opens/downloads the file
+              via its pre-signed Procore link; for a guaranteed-fresh copy the user
+              can "Open in Procore" above. */}
+          {thread && thread.attachments.length > 0 && (
+            <>
+              <div style={{ ...sectionLabel, margin: '18px 0 9px' }}>Attachments ({thread.attachments.length})</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {thread.attachments.map((a, i) => (
+                  <a
+                    key={i}
+                    href={a.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={a.name}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: '100%', fontFamily: mono, fontSize: 11, color: 'var(--tx-secondary-2)', background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 7, padding: '6px 10px', textDecoration: 'none' }}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: '#c4c9cf', flex: 'none' }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                    <span style={{ color: '#9aa0a8', flex: 'none' }}>↓</span>
+                  </a>
+                ))}
+              </div>
+            </>
+          )}
 
           {links.length > 0 && (
             <>
@@ -177,16 +289,6 @@ export function RecordDetailDrawer() {
                   {e.when && <div style={{ fontFamily: mono, fontSize: 10, color: '#aab0b8', marginTop: 2 }}>{e.when}</div>}
                 </div>
               </div>
-            ))}
-          </div>
-
-          <div style={{ ...sectionLabel, margin: '8px 0 9px' }}>Attachments</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {attachments.map((a) => (
-              <span key={a} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: mono, fontSize: 11, color: 'var(--tx-secondary-2)', background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 7, padding: '6px 10px' }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: '#c4c9cf' }} />
-                {a}
-              </span>
             ))}
           </div>
         </div>

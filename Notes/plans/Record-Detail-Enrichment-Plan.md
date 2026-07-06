@@ -97,7 +97,20 @@ REUSE, do not fork:
 
 ## Sub-phasing (ship + verify each)
 
-### Phase 1 — RFIs, end to end
+### Phase 1 — RFIs, end to end ✅ SHIPPED (2026-07-06)
+Live on the `rfi-detail-enrichment` branch. The drawer now shows each RFI's real
+**Request** + **Responses** (author · date · Official tag), plus — beyond the original
+v1 scope, at the owner's request — **all assignees**, the **closed date**
+(`time_resolved`), **attachment download links** (pre-signed Procore URLs; paired with
+the always-fresh "Open in Procore" deep link), and **Open in Procore ↗**. Pipeline:
+`enrich_rfis_with_detail()` fetches `/rfis/{id}` per RFI (gated so a partial failure
+never purges) and stops flattening `questions`. View: `sitelines_rfi_detail`
+(`security_invoker`). App: `ItemDetail` + `getDetail` on the DataSource, pure
+`mapRfiDetail` (unit-tested). Verified: typecheck + 38 tests + build + live click-through
+(OP III, logged in). Attachment note: signed URLs are freshest right after a sync; a
+click-time refresh (needs a small backend) is a future unlock. **Phase 2 (submittals +
+punch) not started.**
+
 - **Scope:** (a) `sync/procore_pipeline.py`: after the RFI list fetch, fetch each RFI's
   detail (`/rfis/{id}`), gated on the `is not None` failure pattern; store the detail
   (thread preserved) into `procore_rfis_master` — stop the questions-flattening for

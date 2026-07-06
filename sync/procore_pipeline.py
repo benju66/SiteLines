@@ -356,7 +356,15 @@ def flatten_ball_in_court_for_records(records) -> None:
 
 
 def clean_rfi_assignees_and_ball_in_court(rfis) -> None:
-    """Flatten assignees, ball_in_courts, and questions on raw RFI payloads."""
+    """Flatten assignees and ball_in_courts on raw RFI payloads.
+
+    NOTE: `questions` is intentionally left STRUCTURED (a JSONB array) — the
+    record-detail enrichment (enrich_rfis_with_detail) replaces each RFI's
+    `questions` with the detail endpoint's version, which carries the full
+    question→answer thread (`questions[].answers[]`). The sitelines_rfi_detail
+    view reads the request + responses out of that array, so flattening it to a
+    body-only string here would discard every response.
+    """
     if not rfis:
         return
     for rfi in rfis:
@@ -388,18 +396,47 @@ def clean_rfi_assignees_and_ball_in_court(rfis) -> None:
         else:
             rfi['ball_in_courts'] = None
 
-        questions = rfi.get('questions', [])
-        if isinstance(questions, str):
-            try:
-                questions = json.loads(questions)
-            except json.JSONDecodeError:
-                questions = []
-        if isinstance(questions, list) and questions:
-            bodies = [q.get('body') for q in questions if isinstance(q, dict) and q.get('body')]
-            cleaned = [clean_procore_text(b) for b in bodies]
-            rfi['questions'] = '\n\n'.join(cleaned) if cleaned else None
-        else:
-            rfi['questions'] = None
+
+def enrich_rfis_with_detail(token: str, rfis, project_id) -> bool:
+    """Merge each RFI's detail thread into its list record, in place.
+
+    The RFI *list* endpoint's `questions[]` carry only {body, id} — no answers.
+    The *detail* endpoint (`/rfis/{id}`) returns `questions[].answers[]` with each
+    answer's text, author, date, and `official` flag, plus narrative fields. For
+    every RFI we fetch its detail and copy the richer `questions` (and a couple of
+    narrative fields) onto the list record, so the stored `raw` holds the full
+    request→response thread.
+
+    Returns True only if EVERY detail fetch succeeded. On any failure returns
+    False so the caller skips the upsert — a partial fetch must never mark the
+    table synced (which would let the scoped purge delete rows). Mirrors the
+    payment-applications / change-order-requests loops.
+
+    Compliant, minimum-necessary enrichment: one extra GET per RFI already in
+    scope (not a bulk export), jittered like paginated_get to respect the spike
+    rate-limit window (research §7).
+    """
+    if not rfis:
+        return True
+    for rfi in rfis:
+        if not isinstance(rfi, dict):
+            continue
+        rfi_id = rfi.get('id')
+        if not rfi_id:
+            continue
+        detail = get_json(
+            token, f'{BASE_API_URL}/rest/v1.0/projects/{project_id}/rfis/{rfi_id}'
+        )
+        if detail is None:
+            return False
+        # Preserve the full question→answer thread from the detail payload.
+        rfi['questions'] = detail.get('questions')
+        # Carry the detail-only narrative fields the drawer can surface.
+        for field in ('proposed_solution', 'instructions'):
+            if field in detail:
+                rfi[field] = detail[field]
+        time.sleep(random.uniform(0.5, 1.5))  # jitter between detail calls (research §7)
+    return True
 
 
 # --- 4. KEYED STAGING + UPSERT + SCOPED PURGE -----------------------------------
@@ -753,11 +790,19 @@ def run_pipeline() -> None:
         if cors_ok:
             cors_tbl.add(cors_all, p_id, run_ts)
 
-        # RFIs
+        # RFIs — enrich each with its detail thread (questions[].answers[]) so the
+        # drawer can show the real request + responses. Only upsert if EVERY detail
+        # fetch succeeded, so a partial failure never triggers the scoped purge.
         rfis = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/projects/{p_id}/rfis')
         if rfis is not None:
-            clean_rfi_assignees_and_ball_in_court(rfis)
-            rfis_tbl.add(rfis, p_id, run_ts)
+            if enrich_rfis_with_detail(token, rfis, p_id):
+                clean_rfi_assignees_and_ball_in_court(rfis)
+                rfis_tbl.add(rfis, p_id, run_ts)
+            else:
+                logging.warning(
+                    'RFI detail enrichment incomplete for project %s — skipping RFI '
+                    'upsert (no purge) so partial data cannot delete the thread.', p_id
+                )
 
         # Submittals (+ flattened approvers share the parent's success)
         subs = paginated_get(token, f'{BASE_API_URL}/rest/v1.1/projects/{p_id}/submittals')
