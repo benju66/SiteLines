@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Drawing } from '@/types'
-import { compareDrawingNumber, groupByDiscipline } from './index'
+import type { Drawing, DrawingRevision } from '@/types'
+import { compareDrawingNumber, groupByDiscipline, sortRevisionsDesc } from './index'
 
 /** Minimal Drawing builder — only the fields the grouping selector reads. */
 function dwg(number: string, discipline: string, id = `drawings:${discipline}:${number}`): Drawing {
@@ -89,5 +89,29 @@ describe('groupByDiscipline', () => {
     const b = groupByDiscipline(input).map((g) => [g.discipline, g.sheets.map((s) => s.number)])
     expect(a).toEqual(b)
     expect(input.map((d) => d.number)).toEqual(drawings.map((d) => d.number)) // unmutated
+  })
+})
+
+describe('sortRevisionsDesc', () => {
+  const rev = (revision: string, current = false): DrawingRevision => ({
+    id: `drawings:${revision}`,
+    revision,
+    drawingDate: null,
+    current,
+    pngUrl: null,
+    pdfUrl: null,
+    procoreUrl: null,
+  })
+
+  it('orders revisions newest-first by numeric value (10 before 9, current leads)', () => {
+    const out = sortRevisionsDesc([rev('9'), rev('10'), rev('0'), rev('12', true), rev('2')])
+    expect(out.map((r) => r.revision)).toEqual(['12', '10', '9', '2', '0'])
+    expect(out[0].current).toBe(true)
+  })
+
+  it('does not mutate the input', () => {
+    const input = [rev('1'), rev('3'), rev('2')]
+    sortRevisionsDesc(input)
+    expect(input.map((r) => r.revision)).toEqual(['1', '3', '2'])
   })
 })

@@ -6,7 +6,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DataSource, SiteData } from '@/lib/dataSource'
-import type { Item, ItemDetail } from '@/types'
+import type { DrawingRevision, Item, ItemDetail } from '@/types'
 
 export type DataStatus = 'loading' | 'ready' | 'error'
 
@@ -19,6 +19,8 @@ interface DataContextValue {
   refresh: () => void
   /** Lazily fetch a record's detail thread (the drawer calls this on open). */
   getDetail: (item: Item) => Promise<ItemDetail | null>
+  /** Lazily fetch a drawing's revisions (the sheet viewer's picker, on open). */
+  getDrawingRevisions: (drawingId: string) => Promise<DrawingRevision[]>
 }
 
 const DataContext = createContext<DataContextValue | null>(null)
@@ -56,10 +58,11 @@ export function DataProvider({ source, children }: { source: DataSource; childre
 
   // Reads through the source, keeping components off the raw client (data seam).
   const getDetail = useCallback((item: Item) => source.getDetail(item), [source])
+  const getDrawingRevisions = useCallback((drawingId: string) => source.getDrawingRevisions(drawingId), [source])
 
   const value = useMemo(
-    () => ({ status, data, syncedAt, error, refresh, getDetail }),
-    [status, data, syncedAt, error, refresh, getDetail],
+    () => ({ status, data, syncedAt, error, refresh, getDetail, getDrawingRevisions }),
+    [status, data, syncedAt, error, refresh, getDetail, getDrawingRevisions],
   )
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }

@@ -3,7 +3,7 @@
 // exercise the loading/error states in dev (?slow / ?fail query params).
 
 import type { DataSource, Snapshot } from '@/lib/dataSource'
-import type { Item, ItemDetail, ItemResponse } from '@/types'
+import type { DrawingRevision, Item, ItemDetail, ItemResponse } from '@/types'
 import { ACTIVITY } from './activity'
 import { DAILY_LOGS } from './dailyLogs'
 import { DIRECTORY } from './directory'
@@ -37,6 +37,27 @@ export function createSeedSource(opts: { delayMs?: number; fail?: boolean } = {}
         assignees: item.mine ? undefined : item.who,
         attachments: [], // no real files in seed mode
       }
+    },
+    async getDrawingRevisions(drawingId: string): Promise<DrawingRevision[]> {
+      // Seed has no Procore history; synthesize a short deterministic chain
+      // (current + a couple prior issues) off the matching fixture sheet so the
+      // picker is exercised offline. Same placeholder image for each.
+      const d = DRAWINGS.find((x) => x.drawingId === drawingId)
+      if (!d) return []
+      const top = Number(d.revision) || 1
+      const count = Math.min(top, 3)
+      return Array.from({ length: count }, (_, i) => {
+        const n = top - i
+        return {
+          id: i === 0 ? d.id : `${d.id}#r${n}`,
+          revision: String(n),
+          drawingDate: i === 0 ? d.drawingDate : null,
+          current: i === 0,
+          pngUrl: d.pngUrl,
+          pdfUrl: d.pdfUrl,
+          procoreUrl: null,
+        }
+      })
     },
   }
 }

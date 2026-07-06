@@ -88,6 +88,7 @@ function OpenPdf({ url }: { url: string | null }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
       className="sl-linked-row"
       style={{
         display: 'inline-flex',
@@ -109,10 +110,20 @@ function OpenPdf({ url }: { url: string | null }) {
   )
 }
 
-function SheetRow({ sheet }: { sheet: Drawing }) {
+function SheetRow({ sheet, onOpen }: { sheet: Drawing; onOpen: (s: Drawing) => void }) {
   return (
     <div
       className="sl-hover-row"
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(sheet)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen(sheet)
+        }
+      }}
+      title="Open sheet"
       style={{
         display: 'grid',
         gridTemplateColumns: GRID,
@@ -120,6 +131,7 @@ function SheetRow({ sheet }: { sheet: Drawing }) {
         alignItems: 'center',
         padding: '10px 22px',
         borderBottom: '1px solid var(--bd-row)',
+        cursor: 'pointer',
       }}
     >
       <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 650, color: 'var(--tx-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -148,6 +160,8 @@ export function DrawingsView() {
   const { state, patch } = useApp()
   const { drawings } = useSiteData()
   const groups = groupByDiscipline(drawings)
+
+  const openViewer = (sheet: Drawing) => patch({ viewer: sheet })
 
   const toggle = (name: string) =>
     patch((s) => {
@@ -220,7 +234,7 @@ export function DrawingsView() {
                 {g.sheets.length}
               </span>
             </button>
-            {!collapsed && g.sheets.map((s) => <SheetRow key={s.id} sheet={s} />)}
+            {!collapsed && g.sheets.map((s) => <SheetRow key={s.id} sheet={s} onOpen={openViewer} />)}
           </section>
         )
       })}

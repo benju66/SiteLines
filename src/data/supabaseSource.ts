@@ -9,7 +9,7 @@ import { TOOLS } from '@/data/tools'
 import { TERMINAL } from '@/lib/ballInCourt'
 import type { DataSource, ItemsByTool, SiteData, Snapshot } from '@/lib/dataSource'
 import { deriveUrgency, formatDueDate, formatMoney, statusTone, timeAgo } from '@/lib/derive'
-import { mapDrawing, type DrawingRow } from '@/lib/mapDrawing'
+import { mapDrawing, mapDrawingRevision, type DrawingRow, type DrawingRevisionRow } from '@/lib/mapDrawing'
 import { mapRfiDetail, type RfiDetailRow } from '@/lib/mapRfiDetail'
 import { mapSubmittalDetail, type SubmittalDetailRow } from '@/lib/mapSubmittalDetail'
 import type { ActivityEvent, DailyLogEntry, FinancialSource, Item, ItemDetail, Project, Status, ToolKey } from '@/types'
@@ -186,6 +186,14 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
         return data ? mapSubmittalDetail(data as SubmittalDetailRow) : null
       }
       return null
+    },
+    async getDrawingRevisions(drawingId: string) {
+      const { data, error } = await client
+        .from('sitelines_drawing_revisions')
+        .select('*')
+        .eq('drawing_id', drawingId)
+      if (error) throw new Error(`Supabase read failed (sitelines_drawing_revisions): ${error.message}`)
+      return ((data ?? []) as DrawingRevisionRow[]).map(mapDrawingRevision)
     },
   }
 }

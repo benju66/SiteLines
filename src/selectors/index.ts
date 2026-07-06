@@ -11,7 +11,7 @@ import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { Contact, Drawing, FinancialSource, Item, Project, ToolKey } from '@/types'
+import type { Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -371,4 +371,20 @@ export function groupByDiscipline(drawings: Drawing[]): DisciplineGroup[] {
     return la < lb ? -1 : la > lb ? 1 : 0
   })
   return groups
+}
+
+/** Numeric revision value; malformed/blank sinks to the bottom of a desc sort. */
+const revValue = (r: DrawingRevision): number => {
+  const n = Number(r.revision)
+  return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY
+}
+
+/**
+ * A drawing's revisions newest-first (highest revision number first) for the
+ * viewer's picker — the current issue leads. Deterministic (id-tiebroken); pure.
+ */
+export function sortRevisionsDesc(revisions: DrawingRevision[]): DrawingRevision[] {
+  return [...revisions].sort(
+    (a, b) => revValue(b) - revValue(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  )
 }

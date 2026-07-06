@@ -4,7 +4,7 @@
 // http(s) only (safeUrl), reusing the shared detail-text helpers so drawings
 // clean display text identically to the record mappers.
 
-import type { Drawing } from '@/types'
+import type { Drawing, DrawingRevision } from '@/types'
 import { formatResponseDate, htmlToText, safeUrl } from './detailText'
 
 /** One row of the sitelines_drawings view (raw jsonb fields, still nullable). */
@@ -40,5 +40,30 @@ export function mapDrawing(row: DrawingRow): Drawing {
     thumbnailUrl: safeUrl(row.thumbnail_url) ?? null,
     pngUrl: safeUrl(row.png_url) ?? null,
     pdfUrl: safeUrl(row.pdf_url) ?? null,
+  }
+}
+
+/** One row of the sitelines_drawing_revisions view (all revisions, per drawing_id). */
+export interface DrawingRevisionRow {
+  id: string
+  drawing_id: string | null
+  revision: string | null
+  drawing_date: string | null // ISO date "YYYY-MM-DD"
+  current: boolean | null
+  png_url: string | null
+  pdf_url: string | null
+  procore_url: string | null
+}
+
+/** Map a drawing-revision view row to the DrawingRevision contract shape. */
+export function mapDrawingRevision(row: DrawingRevisionRow): DrawingRevision {
+  return {
+    id: row.id,
+    revision: (row.revision ?? '').trim(),
+    drawingDate: formatResponseDate(row.drawing_date),
+    current: !!row.current,
+    pngUrl: safeUrl(row.png_url) ?? null,
+    pdfUrl: safeUrl(row.pdf_url) ?? null,
+    procoreUrl: safeUrl(row.procore_url) ?? null,
   }
 }

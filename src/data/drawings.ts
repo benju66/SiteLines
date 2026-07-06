@@ -25,7 +25,9 @@ export const DRAWINGS: Drawing[] = [
   d('drawings:seed-m22', 'M2.2', 'Second Floor HVAC Plan', 'Mechanical', '3', 'Feb 12, 2026', 'Feb 14, 2026', { noPdf: true }),
 ]
 
-/** Compact fixture builder — a published sheet with placeholder (non-resolving) urls. */
+/** Compact fixture builder — a published sheet. `pngUrl` is a self-contained SVG
+ *  placeholder (data URI) so the in-app viewer renders a real, zoomable sheet in
+ *  seed mode; `pdfUrl` is a non-resolving placeholder (Open PDF is inert offline). */
 function d(
   id: string,
   number: string,
@@ -48,7 +50,22 @@ function d(
     set: '2026.03.04 Orchard Path III — ASI 012',
     status: 'published',
     thumbnailUrl: null,
-    pngUrl: opts.noPdf ? null : `https://example.com/seed/${number}.png`,
+    pngUrl: opts.noPdf ? null : placeholderSheet(number, title),
     pdfUrl: opts.noPdf ? null : `https://example.com/seed/${number}.pdf`,
   }
+}
+
+/** A landscape "sheet" SVG as a data URI — a title block + number, for seed viewing. */
+function placeholderSheet(number: string, title: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="850" viewBox="0 0 1100 850">
+    <rect width="1100" height="850" fill="#fbfbfc"/>
+    <rect x="24" y="24" width="1052" height="802" fill="none" stroke="#c4c9cf" stroke-width="2"/>
+    <rect x="40" y="40" width="1020" height="770" fill="none" stroke="#e2e5e9" stroke-width="1"/>
+    <text x="60" y="120" font-family="monospace" font-size="64" font-weight="700" fill="#1a1d21">${number}</text>
+    <text x="60" y="170" font-family="sans-serif" font-size="28" fill="#5b626c">${title}</text>
+    <rect x="740" y="700" width="320" height="90" fill="none" stroke="#c4c9cf" stroke-width="1.5"/>
+    <text x="760" y="735" font-family="sans-serif" font-size="16" fill="#9298a1">SEED PLACEHOLDER SHEET</text>
+    <text x="760" y="765" font-family="monospace" font-size="18" fill="#5b626c">${number}</text>
+  </svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }

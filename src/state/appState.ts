@@ -2,7 +2,7 @@
 // derived from it via selectors — no view owns state. Ports cleanly to the
 // prototype's `state` object.
 
-import type { Item, ToolKey } from '@/types'
+import type { Drawing, Item, ToolKey } from '@/types'
 
 export type ProjectScope = 'all' | 'mckenna' | 'opiii'
 export type TypeFilter = 'all' | 'rfi' | 'submittal' | 'co' | 'punch'
@@ -16,6 +16,7 @@ export interface AppState {
   court: CourtToggle // per-tool Ball-in-Court toggle
   savedView: SavedView // quick filter
   detail: { tool: ToolKey; record: Item } | null // open record drawer
+  viewer: Drawing | null // open drawing-sheet viewer overlay (the clicked current sheet)
   activity: boolean // activity drawer
   palette: boolean // command palette
   query: string // palette search text
@@ -30,6 +31,7 @@ export const initialState: AppState = {
   court: 'all',
   savedView: 'all',
   detail: null,
+  viewer: null,
   activity: false,
   palette: false,
   query: '',

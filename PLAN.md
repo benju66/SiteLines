@@ -52,8 +52,8 @@ deliberate backend/licensing investments with their own go/no-go.
 | Phase | Surface | Status |
 |-------|---------|--------|
 | 1 | Drawing log — discipline-grouped, collapsible, 7 columns + Open PDF ↗ ([`sitelines_drawings`](sync/views/sitelines_drawings.sql) view · [DrawingsView](src/components/views/DrawingsView.tsx) · [groupByDiscipline](src/selectors/index.ts)) | ✅ Done (2026-07-06) |
-| 2 | In-app sheet viewer + revision picker | ⬜ Next |
-| 3 | PDF proxy (edge function) — kills URL expiry + CORS | ⛔ Gated |
+| 2 | In-app sheet viewer + revision picker — zoom/pan PNG overlay, lazy revisions ([`sitelines_drawing_revisions`](sync/views/sitelines_drawing_revisions.sql) view · [DrawingViewerOverlay](src/components/overlays/DrawingViewerOverlay.tsx) · [sortRevisionsDesc](src/selectors/index.ts)) | ✅ Done (2026-07-06) |
+| 3 | PDF proxy (edge function) — kills URL expiry + CORS | ⛔ Gated (next) |
 | 4 | Markup & measure engine | ⛔ Gated (optional) |
 
 ### Parallel workstream: Procore Data Seam

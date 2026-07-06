@@ -124,6 +124,23 @@ export interface Drawing {
   pdfUrl: string | null
 }
 
+/**
+ * One historical issue of a drawing sheet (Drawings Phase 2 — the viewer's
+ * revision picker). Fetched lazily by `drawingId` via
+ * `DataSource.getDrawingRevisions`, so the log snapshot stays light. `current`
+ * marks the issue that appears in the log; `pngUrl` is the image the viewer
+ * renders (pre-signed Procore link).
+ */
+export interface DrawingRevision {
+  id: string // this revision's item id, e.g. "drawings:<revId>"
+  revision: string // revision_number, e.g. "12"
+  drawingDate: string | null // preformatted display date
+  current: boolean
+  pngUrl: string | null
+  pdfUrl: string | null
+  procoreUrl: string | null // constructed deep link to the sheet in Procore
+}
+
 export interface Contact {
   id: string
   name: string

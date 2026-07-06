@@ -4,7 +4,7 @@
 // a supabaseDataSource reading the normalization views — the UI never knows
 // the difference.
 
-import type { ActivityEvent, Contact, DailyLogEntry, Drawing, FinancialSource, Item, ItemDetail, Photo, ToolKey } from '@/types'
+import type { ActivityEvent, Contact, DailyLogEntry, Drawing, DrawingRevision, FinancialSource, Item, ItemDetail, Photo, ToolKey } from '@/types'
 
 export type ItemsByTool = Record<ToolKey, Item[]>
 
@@ -36,4 +36,10 @@ export interface DataSource {
    * generated summary. Rejects only on an actual read error.
    */
   getDetail(item: Item): Promise<ItemDetail | null>
+  /**
+   * Lazily fetch every revision of a drawing (the viewer's revision picker calls
+   * this on open, keyed by `Drawing.drawingId`). Returned newest-first is not
+   * required — the caller orders them. Empty array when the drawing has none.
+   */
+  getDrawingRevisions(drawingId: string): Promise<DrawingRevision[]>
 }
