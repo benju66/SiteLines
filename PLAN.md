@@ -49,6 +49,13 @@ proxy and an optional Bluebeam-style markup engine — its own plan:
 need no re-sync (drawing PDFs/PNGs/thumbnails are already synced); Phases 3–4 are
 deliberate backend/licensing investments with their own go/no-go.
 
+| Phase | Surface | Status |
+|-------|---------|--------|
+| 1 | Drawing log — discipline-grouped, collapsible, 7 columns + Open PDF ↗ ([`sitelines_drawings`](sync/views/sitelines_drawings.sql) view · [DrawingsView](src/components/views/DrawingsView.tsx) · [groupByDiscipline](src/selectors/index.ts)) | ✅ Done (2026-07-06) |
+| 2 | In-app sheet viewer + revision picker | ⬜ Next |
+| 3 | PDF proxy (edge function) — kills URL expiry + CORS | ⛔ Gated |
+| 4 | Markup & measure engine | ⛔ Gated (optional) |
+
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**
 with its own plan: [Notes/plans/Procore-Data-Seam-Plan.md](Notes/plans/Procore-Data-Seam-Plan.md).

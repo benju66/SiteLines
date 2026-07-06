@@ -4,6 +4,7 @@ import { TOOLS } from '@/data/tools'
 import { useApp } from '@/state/AppContext'
 import { DailyLogView } from '@/components/views/DailyLogView'
 import { DirectoryView } from '@/components/views/DirectoryView'
+import { DrawingsView } from '@/components/views/DrawingsView'
 import { FinancialView } from '@/components/views/FinancialView'
 import { MyCourtView } from '@/components/views/MyCourtView'
 import { OverviewView } from '@/components/views/OverviewView'
@@ -20,6 +21,7 @@ const VIEWS: Record<ViewType, ComponentType> = {
   photos: PhotosView,
   dailyLog: DailyLogView,
   overview: OverviewView,
+  drawings: DrawingsView,
 }
 
 export function MainContent() {

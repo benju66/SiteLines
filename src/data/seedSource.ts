@@ -7,6 +7,7 @@ import type { Item, ItemDetail, ItemResponse } from '@/types'
 import { ACTIVITY } from './activity'
 import { DAILY_LOGS } from './dailyLogs'
 import { DIRECTORY } from './directory'
+import { DRAWINGS } from './drawings'
 import { FINANCIALS } from './financials'
 import { PHOTOS } from './photos'
 import { DATA } from './records'
@@ -19,7 +20,7 @@ export function createSeedSource(opts: { delayMs?: number; fail?: boolean } = {}
       if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs))
       if (fail) throw new Error('Simulated sync failure (seed source, ?fail)')
       return {
-        data: { itemsByTool: DATA, contacts: DIRECTORY, activity: ACTIVITY, financials: FINANCIALS, photos: PHOTOS, dailyLogs: DAILY_LOGS },
+        data: { itemsByTool: DATA, contacts: DIRECTORY, activity: ACTIVITY, financials: FINANCIALS, photos: PHOTOS, dailyLogs: DAILY_LOGS, drawings: DRAWINGS },
         syncedAt: new Date(),
       }
     },

@@ -14,7 +14,7 @@ export const TOOLS: Record<ToolKey, ToolMeta> = {
   directory: { label: 'Directory', code: 'DIR', view: 'directory', desc: 'Project contacts — owner, design team, subs, and agencies.' },
   rfis: { label: 'RFIs', code: 'RFI', view: 'list', group: 0, whoLabel: 'Waiting on', rightLabel: 'Age', desc: 'Requests for information.' },
   submittals: { label: 'Submittals', code: 'SUB', view: 'list', group: 0, whoLabel: 'Waiting on', rightLabel: 'Status', desc: 'Shop drawings, product data, samples.' },
-  drawings: { label: 'Drawings', code: 'DWG', view: 'list', group: 0, whoLabel: 'Revision', rightLabel: 'Issued', desc: 'Current drawing set and revisions.' },
+  drawings: { label: 'Drawings', code: 'DWG', view: 'drawings', group: 0, desc: 'Current drawing set, grouped by discipline.' },
   specs: { label: 'Specifications', code: 'SPEC', view: 'list', group: 0, whoLabel: 'Revision', rightLabel: 'Issued', desc: 'Project specification sections.' },
   changeEvents: { label: 'Change Events', code: 'CE', view: 'list', group: 0, whoLabel: 'Owner', rightLabel: 'Status', desc: 'Potential changes being tracked and priced.' },
   punch: { label: 'Punch List', code: 'PUN', view: 'list', group: 0, whoLabel: 'Assigned', rightLabel: 'Status', desc: 'Deficiencies to close out.' },

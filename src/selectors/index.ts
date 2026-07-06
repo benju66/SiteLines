@@ -11,7 +11,7 @@ import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { Contact, FinancialSource, Item, Project, ToolKey } from '@/types'
+import type { Contact, Drawing, FinancialSource, Item, Project, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -117,6 +117,10 @@ export function headerMeta(data: SiteData, state: AppState) {
   } else if (view === 'dailyLog') {
     const n = mediaInScope(data.dailyLogs, state).length
     count = `${n} ${n === 1 ? 'entry' : 'entries'}`
+  } else if (view === 'drawings') {
+    // Drawings are single-project reference data (not project-scoped in the slice).
+    const n = data.drawings.length
+    count = `${n} ${n === 1 ? 'sheet' : 'sheets'}`
   }
   return {
     isHome,
@@ -298,4 +302,73 @@ export function homeRows(items: ItemsByTool, state: AppState): Item[] {
     rows = rows.filter((r) => r.tool === tool)
   }
   return rows.filter((r) => matchesSavedView(r, state.savedView)).sort(byUrgency)
+}
+
+// ---- Drawings log (discipline-grouped) ----
+
+export interface DisciplineGroup {
+  discipline: string
+  sheets: Drawing[]
+}
+
+/**
+ * Split a drawing number into alternating alpha / numeric tokens for a
+ * natural (human) sort — numeric runs are compared as numbers, so "A2.10"
+ * follows "A2.9" and "S-11" precedes "S-101" (both wrong lexicographically).
+ */
+function numberTokens(s: string): (string | number)[] {
+  return s
+    .split(/(\d+)/)
+    .filter((t) => t !== '')
+    .map((t) => (/^\d+$/.test(t) ? Number(t) : t.toLowerCase()))
+}
+
+/** Natural/human comparison of two drawing numbers. Total order (deterministic). */
+export function compareDrawingNumber(a: string, b: string): number {
+  const ta = numberTokens(a)
+  const tb = numberTokens(b)
+  const n = Math.min(ta.length, tb.length)
+  for (let i = 0; i < n; i++) {
+    const x = ta[i]
+    const y = tb[i]
+    const xNum = typeof x === 'number'
+    const yNum = typeof y === 'number'
+    if (xNum && yNum) {
+      if (x !== y) return (x as number) - (y as number)
+    } else if (xNum !== yNum) {
+      return xNum ? -1 : 1 // a numeric run sorts before an alpha run at the same position
+    } else if (x !== y) {
+      return (x as string) < (y as string) ? -1 : 1
+    }
+  }
+  return ta.length - tb.length
+}
+
+/**
+ * Group current sheets by discipline for the drawing log. Deterministic:
+ * disciplines ordered by sheet count (desc) then name (alpha, case-insensitive);
+ * sheets within a group ordered by natural number sort, id-tiebroken. Pure — the
+ * view reads this via the provider; no clock, no state.
+ */
+export function groupByDiscipline(drawings: Drawing[]): DisciplineGroup[] {
+  const buckets = new Map<string, Drawing[]>()
+  for (const d of drawings) {
+    const key = d.discipline || 'Uncategorized'
+    const arr = buckets.get(key)
+    if (arr) arr.push(d)
+    else buckets.set(key, [d])
+  }
+  const groups: DisciplineGroup[] = [...buckets.entries()].map(([discipline, sheets]) => ({
+    discipline,
+    sheets: [...sheets].sort(
+      (a, b) => compareDrawingNumber(a.number, b.number) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+    ),
+  }))
+  groups.sort((a, b) => {
+    if (a.sheets.length !== b.sheets.length) return b.sheets.length - a.sheets.length
+    const la = a.discipline.toLowerCase()
+    const lb = b.discipline.toLowerCase()
+    return la < lb ? -1 : la > lb ? 1 : 0
+  })
+  return groups
 }

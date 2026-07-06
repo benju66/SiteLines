@@ -9,6 +9,7 @@ import { TOOLS } from '@/data/tools'
 import { TERMINAL } from '@/lib/ballInCourt'
 import type { DataSource, ItemsByTool, SiteData, Snapshot } from '@/lib/dataSource'
 import { deriveUrgency, formatDueDate, formatMoney, statusTone, timeAgo } from '@/lib/derive'
+import { mapDrawing, type DrawingRow } from '@/lib/mapDrawing'
 import { mapRfiDetail, type RfiDetailRow } from '@/lib/mapRfiDetail'
 import { mapSubmittalDetail, type SubmittalDetailRow } from '@/lib/mapSubmittalDetail'
 import type { ActivityEvent, DailyLogEntry, FinancialSource, Item, ItemDetail, Project, Status, ToolKey } from '@/types'
@@ -133,12 +134,13 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
     name: 'supabase',
     async fetch(): Promise<Snapshot> {
       const now = new Date()
-      const [items, contacts, financials, activity, dailyLogs] = await Promise.all([
+      const [items, contacts, financials, activity, dailyLogs, drawings] = await Promise.all([
         fetchAll<ItemRow>(client, 'sitelines_items'),
         fetchAll<ContactRow>(client, 'sitelines_contacts'),
         fetchAll<FinRow>(client, 'sitelines_financials'),
         fetchAll<ActivityRow>(client, 'sitelines_activity'),
         fetchAll<DailyLogEntry>(client, 'sitelines_daily_logs'),
+        fetchAll<DrawingRow>(client, 'sitelines_drawings'),
       ])
 
       const itemsByTool = emptyItemsByTool()
@@ -156,6 +158,7 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
         // captions-only view, and grows fastest on active projects). Shows its empty state.
         photos: [],
         dailyLogs: dailyLogs.map((d) => ({ ...d, crew: Number(d.crew), mine: !!d.mine })),
+        drawings: drawings.map(mapDrawing),
       }
       // syncedAt = fetch time for now; a future sitelines_meta view can expose the
       // pipeline's true last-sync timestamp (max synced_at) once it's readable.

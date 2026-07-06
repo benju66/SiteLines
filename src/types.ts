@@ -14,6 +14,7 @@ export type ViewType =
   | 'financial'
   | 'photos'
   | 'dailyLog'
+  | 'drawings'
 
 /** Stable tool keys used for nav, records, and the ball-in-court rule. */
 export type ToolKey =
@@ -99,6 +100,28 @@ export interface ItemDetail {
   /** The final reviewed submittal (Procore's distributed, stamped doc), surfaced
    *  separately from the originally-submitted attachments. Submittals only. */
   finalSubmittal?: ItemAttachment[]
+}
+
+/**
+ * A current drawing sheet (Drawings workstream, Phase 1). Reference data — NOT a
+ * court `Item` and never enters My Court. Grouped by `discipline` in the drawing
+ * log; `drawingId` groups a sheet's historical revisions (the Phase 2 picker).
+ * Dates are preformatted display strings; urls are pre-signed Procore links.
+ */
+export interface Drawing {
+  id: string // item id of the current revision, e.g. "drawings:<revId>"
+  drawingId: string // parent drawing id — groups a sheet's revisions
+  number: string // "A1.1"
+  title: string
+  discipline: string // "Architectural" (from discipline.name; "" → "Uncategorized")
+  revision: string // revision_number, e.g. "5"
+  drawingDate: string | null // preformatted display date
+  receivedDate: string | null // preformatted display date
+  set: string | null // drawing_set.name
+  status: string // "published"
+  thumbnailUrl: string | null
+  pngUrl: string | null
+  pdfUrl: string | null
 }
 
 export interface Contact {

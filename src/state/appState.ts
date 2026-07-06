@@ -20,6 +20,7 @@ export interface AppState {
   palette: boolean // command palette
   query: string // palette search text
   dirFocus: string | null // contact id to highlight in Directory
+  collapsedDisciplines: Set<string> // discipline names collapsed in the Drawings log (default: all expanded)
 }
 
 export const initialState: AppState = {
@@ -33,4 +34,5 @@ export const initialState: AppState = {
   palette: false,
   query: '',
   dirFocus: null,
+  collapsedDisciplines: new Set(),
 }

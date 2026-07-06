@@ -4,7 +4,7 @@
 // a supabaseDataSource reading the normalization views — the UI never knows
 // the difference.
 
-import type { ActivityEvent, Contact, DailyLogEntry, FinancialSource, Item, ItemDetail, Photo, ToolKey } from '@/types'
+import type { ActivityEvent, Contact, DailyLogEntry, Drawing, FinancialSource, Item, ItemDetail, Photo, ToolKey } from '@/types'
 
 export type ItemsByTool = Record<ToolKey, Item[]>
 
@@ -16,6 +16,7 @@ export interface SiteData {
   financials: FinancialSource
   photos: Photo[]
   dailyLogs: DailyLogEntry[]
+  drawings: Drawing[] // current drawing sheets (reference; grouped by discipline in the log)
 }
 
 export interface Snapshot {
