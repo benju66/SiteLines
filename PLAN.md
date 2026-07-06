@@ -41,6 +41,14 @@ Supabase views → live wiring → pipeline coverage).
 All not-yet-built views currently route to `PlaceholderView`
 ([MainContent.tsx](src/components/layout/MainContent.tsx)), so nav is fully functional throughout.
 
+### Parallel workstream: Drawings (log + in-app viewer + later markup)
+Turning Drawings into a Procore-style **drawing log** (discipline-grouped, 7 columns),
+an **in-app zoomable sheet viewer** with a revision picker, then (later, gated) a PDF
+proxy and an optional Bluebeam-style markup engine — its own plan:
+[Notes/plans/Drawings-Viewer-Plan.md](Notes/plans/Drawings-Viewer-Plan.md). Phases 1–2
+need no re-sync (drawing PDFs/PNGs/thumbnails are already synced); Phases 3–4 are
+deliberate backend/licensing investments with their own go/no-go.
+
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**
 with its own plan: [Notes/plans/Procore-Data-Seam-Plan.md](Notes/plans/Procore-Data-Seam-Plan.md).
