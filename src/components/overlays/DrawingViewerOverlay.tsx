@@ -3,9 +3,11 @@
 // guardrail) — that renders a sheet IN THE APP as a zoomable/pannable image, no
 // download. A revision dropdown (loaded lazily via the data provider, keyed by
 // drawingId) flips between historical issues; "Open PDF" / "Open in Procore"
-// stay as secondary link-outs. Image load failure (a stale signed URL) degrades
-// to an "Open in Procore" fallback. v1 renders the PNG (embeds cross-origin with
-// no proxy); a backend proxy that kills URL expiry is the gated Phase 3.
+// stay as secondary link-outs. The viewer renders the PNG (embeds cross-origin
+// with no proxy). Image load failure (a stale signed URL) triggers a lazy
+// refresh-on-error (Phase 3): getSheetUrls() re-mints a fresh URL server-side
+// and the image retries once, degrading to an "Open in Procore" fallback only if
+// that also fails.
 
 import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
@@ -30,11 +32,18 @@ export function DrawingViewerOverlay() {
 type Transform = { zoom: number; x: number; y: number }
 
 function ViewerPanel({ drawing, onClose }: { drawing: Drawing; onClose: () => void }) {
-  const { getDrawingRevisions } = useData()
+  const { getDrawingRevisions, getSheetUrls } = useData()
   const [revisions, setRevisions] = useState<DrawingRevision[] | null>(null) // null = still loading
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [t, setT] = useState<Transform>({ zoom: 1, x: 0, y: 0 })
   const [imgError, setImgError] = useState(false)
+  // Phase 3 lazy refresh-on-error: a fresh server-minted URL, a reload nonce that
+  // forces the <img> to re-request even when the re-minted URL is byte-identical
+  // (Procore's storage URL is stable — re-fetching it still yields a fresh signed
+  // redirect), and a per-revision guard so we re-mint at most once.
+  const [fresh, setFresh] = useState<{ pngUrl: string | null; pdfUrl: string | null } | null>(null)
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const refreshTried = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const drag = useRef<{ mx: number; my: number; x: number; y: number } | null>(null)
 
@@ -69,11 +78,44 @@ function ViewerPanel({ drawing, onClose }: { drawing: Drawing; onClose: () => vo
   const list = revisions && revisions.length > 0 ? revisions : [pseudo]
   const selected: DrawingRevision = list.find((r) => r.id === selectedId) ?? list[0] ?? pseudo
 
-  // Reset view + image-error whenever the shown revision changes.
+  // Reset view + image-error + any refreshed URL whenever the shown revision
+  // changes (each revision gets its own one-shot re-mint).
   useEffect(() => {
     setT({ zoom: 1, x: 0, y: 0 })
     setImgError(false)
+    setFresh(null)
+    setReloadNonce(0)
+    refreshTried.current = false
   }, [selected.id])
+
+  // The URL actually shown: a freshly re-minted one once we've recovered from a
+  // stale link, otherwise the synced URL from the snapshot.
+  const pngSrc = fresh?.pngUrl ?? selected.pngUrl
+  const pdfHref = fresh?.pdfUrl ?? selected.pdfUrl
+
+  // Lazy refresh-on-staleness: the shown URL failed (likely an expired signed
+  // link). Re-mint a fresh one and force the <img> to reload exactly once —
+  // bumping reloadNonce recovers even when the minted URL is unchanged (a stale
+  // S3 redirect behind a still-valid storage URL), while a genuinely-expired
+  // storage URL comes back different and swaps in. `refreshTried` bounds this to
+  // one attempt; a second failure falls back to the "Open in Procore" link-outs.
+  const onImgError = () => {
+    if (refreshTried.current) {
+      setImgError(true)
+      return
+    }
+    refreshTried.current = true
+    getSheetUrls(selected.id)
+      .then((urls) => {
+        if (!urls.pngUrl) {
+          setImgError(true)
+          return
+        }
+        setFresh(urls)
+        setReloadNonce((n) => n + 1)
+      })
+      .catch(() => setImgError(true))
+  }
 
   // Cursor-anchored wheel zoom. Native, non-passive so preventDefault sticks
   // (React's onWheel is passive). Pure functional update — StrictMode-safe.
@@ -183,8 +225,8 @@ function ViewerPanel({ drawing, onClose }: { drawing: Drawing; onClose: () => vo
             <ZoomBtn label="+" title="Zoom in" onClick={() => zoomBy(1.3)} />
           </div>
 
-          {selected.pdfUrl && (
-            <a href={selected.pdfUrl} target="_blank" rel="noopener noreferrer" className="sl-linked-row" style={linkBtn}>
+          {pdfHref && (
+            <a href={pdfHref} target="_blank" rel="noopener noreferrer" className="sl-linked-row" style={linkBtn}>
               Open PDF <span aria-hidden style={{ fontSize: 10 }}>↗</span>
             </a>
           )}
@@ -217,12 +259,13 @@ function ViewerPanel({ drawing, onClose }: { drawing: Drawing; onClose: () => vo
             cursor: t.zoom > 1 ? (drag.current ? 'grabbing' : 'grab') : 'default',
           }}
         >
-          {selected.pngUrl && !imgError ? (
+          {pngSrc && !imgError ? (
             <img
-              src={selected.pngUrl}
+              key={`${selected.id}:${reloadNonce}`}
+              src={pngSrc}
               alt={`${drawing.number} — ${drawing.title}`}
               draggable={false}
-              onError={() => setImgError(true)}
+              onError={onImgError}
               style={{
                 maxWidth: '100%',
                 maxHeight: '100%',
@@ -243,8 +286,8 @@ function ViewerPanel({ drawing, onClose }: { drawing: Drawing; onClose: () => vo
                     Open in Procore <span aria-hidden style={{ fontSize: 10 }}>↗</span>
                   </a>
                 )}
-                {selected.pdfUrl && (
-                  <a href={selected.pdfUrl} target="_blank" rel="noopener noreferrer" className="sl-linked-row" style={linkBtn}>
+                {pdfHref && (
+                  <a href={pdfHref} target="_blank" rel="noopener noreferrer" className="sl-linked-row" style={linkBtn}>
                     Open PDF <span aria-hidden style={{ fontSize: 10 }}>↗</span>
                   </a>
                 )}

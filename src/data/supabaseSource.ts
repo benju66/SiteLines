@@ -195,5 +195,20 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
       if (error) throw new Error(`Supabase read failed (sitelines_drawing_revisions): ${error.message}`)
       return ((data ?? []) as DrawingRevisionRow[]).map(mapDrawingRevision)
     },
+    async getSheetUrls(id: string) {
+      // Invoke the `drawing-file` edge function (verify_jwt) with the caller's
+      // session; supabase-js attaches the logged-in user's bearer token so the
+      // gateway admits it. The function mints a fresh Procore URL server-side and
+      // returns { pngUrl, pdfUrl } as JSON — no image bytes flow through it, and
+      // the Procore secret stays server-side (never in this bundle).
+      const { data, error } = await client.functions.invoke('drawing-file', { body: { id } })
+      if (error) throw new Error(`Edge function drawing-file failed: ${error.message}`)
+      const png = (data as { pngUrl?: unknown } | null)?.pngUrl
+      const pdf = (data as { pdfUrl?: unknown } | null)?.pdfUrl
+      return {
+        pngUrl: typeof png === 'string' ? png : null,
+        pdfUrl: typeof pdf === 'string' ? pdf : null,
+      }
+    },
   }
 }

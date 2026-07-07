@@ -42,4 +42,14 @@ export interface DataSource {
    * required — the caller orders them. Empty array when the drawing has none.
    */
   getDrawingRevisions(drawingId: string): Promise<DrawingRevision[]>
+  /**
+   * Re-mint a fresh, non-expired sheet URL for one drawing revision (Drawings
+   * Phase 3). The synced `png_url`/`pdf_url` carry a `sig=` token that eventually
+   * expires; the viewer calls this from its image `onError` to recover. `id` is
+   * the revision's seam id (`Drawing`/`DrawingRevision.id`, "drawings:<revId>").
+   * The live source proxies to a Supabase Edge Function that mints the URL
+   * server-side (the Procore secret never reaches the browser); seed returns the
+   * fixture URL. Either field is null when unavailable. Rejects on read error.
+   */
+  getSheetUrls(id: string): Promise<{ pngUrl: string | null; pdfUrl: string | null }>
 }

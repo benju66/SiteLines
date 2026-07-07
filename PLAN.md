@@ -53,7 +53,7 @@ deliberate backend/licensing investments with their own go/no-go.
 |-------|---------|--------|
 | 1 | Drawing log — discipline-grouped, collapsible, 7 columns + Open PDF ↗ ([`sitelines_drawings`](sync/views/sitelines_drawings.sql) view · [DrawingsView](src/components/views/DrawingsView.tsx) · [groupByDiscipline](src/selectors/index.ts)) | ✅ Done (2026-07-06) |
 | 2 | In-app sheet viewer + revision picker — zoom/pan PNG overlay, lazy revisions ([`sitelines_drawing_revisions`](sync/views/sitelines_drawing_revisions.sql) view · [DrawingViewerOverlay](src/components/overlays/DrawingViewerOverlay.tsx) · [sortRevisionsDesc](src/selectors/index.ts)) | ✅ Done (2026-07-06) |
-| 3 | Fresh-URL edge function — kills sheet-image expiry (server-side Procore token) | 📋 Design locked — ready to build in a fresh session ([kickoff](Notes/kickoffs/2026-07-06%20-%20Drawings%20Phase%203%20Kickoff.md)); owner sets Procore secret in Supabase first |
+| 3 | Fresh-URL edge function — kills sheet-image expiry: server-side Procore token mint → fresh `{pngUrl,pdfUrl}` ([`drawing-file`](supabase/functions/drawing-file/index.ts) edge fn on `sitelines-sync`, `verify_jwt` + `authenticated`-role gated · `getSheetUrls` seam · [DrawingViewerOverlay](src/components/overlays/DrawingViewerOverlay.tsx) lazy refresh-on-error) | ✅ Done (2026-07-07) |
 | 4 | Markup & measure engine | ⛔ Gated (optional) |
 
 ### Parallel workstream: Procore Data Seam

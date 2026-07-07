@@ -59,5 +59,13 @@ export function createSeedSource(opts: { delayMs?: number; fail?: boolean } = {}
         }
       })
     },
+    async getSheetUrls(id: string): Promise<{ pngUrl: string | null; pdfUrl: string | null }> {
+      // Seed has no backend; return the fixture sheet's URLs so the seam matches
+      // live shape. The seed SVG placeholders never error, so the viewer's
+      // onError (the only caller) doesn't fire offline — this is here for parity.
+      const base = id.split('#')[0] // drop any synthesized "#rN" revision suffix
+      const d = DRAWINGS.find((x) => x.id === base)
+      return { pngUrl: d?.pngUrl ?? null, pdfUrl: d?.pdfUrl ?? null }
+    },
   }
 }

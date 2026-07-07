@@ -21,6 +21,8 @@ interface DataContextValue {
   getDetail: (item: Item) => Promise<ItemDetail | null>
   /** Lazily fetch a drawing's revisions (the sheet viewer's picker, on open). */
   getDrawingRevisions: (drawingId: string) => Promise<DrawingRevision[]>
+  /** Re-mint a fresh sheet URL for a revision (the viewer's onError recovery). */
+  getSheetUrls: (id: string) => Promise<{ pngUrl: string | null; pdfUrl: string | null }>
 }
 
 const DataContext = createContext<DataContextValue | null>(null)
@@ -59,10 +61,11 @@ export function DataProvider({ source, children }: { source: DataSource; childre
   // Reads through the source, keeping components off the raw client (data seam).
   const getDetail = useCallback((item: Item) => source.getDetail(item), [source])
   const getDrawingRevisions = useCallback((drawingId: string) => source.getDrawingRevisions(drawingId), [source])
+  const getSheetUrls = useCallback((id: string) => source.getSheetUrls(id), [source])
 
   const value = useMemo(
-    () => ({ status, data, syncedAt, error, refresh, getDetail, getDrawingRevisions }),
-    [status, data, syncedAt, error, refresh, getDetail, getDrawingRevisions],
+    () => ({ status, data, syncedAt, error, refresh, getDetail, getDrawingRevisions, getSheetUrls }),
+    [status, data, syncedAt, error, refresh, getDetail, getDrawingRevisions, getSheetUrls],
   )
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }
