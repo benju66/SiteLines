@@ -1,13 +1,13 @@
 # Kickoff — Drawings, Phase 3: the fresh-URL edge function (kills sheet-image expiry)
 
 ## ▶ Launch prompt (paste this to start a fresh session)
-> **⚙️ Run with: Opus 4.8 · effort xhigh** — first backend piece + server-side Procore secret handling + a ⛔⛔ design gate; correctness in the auth/proxy path. (`/model claude-opus-4-8` first.)
+> **⚙️ Run with: Opus 4.8 · effort xhigh** — first backend build; server-side Procore secret + correctness in the auth/proxy path. (`/model claude-opus-4-8` first.)
 >
-> Plan-then-build **Phase 3 of the Drawings workstream** (a Supabase **edge function** that re-mints a fresh Procore sheet-image URL server-side, so drawing sheets never go stale and the Procore token stays off the browser). Read these in full, then follow them:
+> Build **Phase 3 of the Drawings workstream** (a Supabase **edge function** that re-mints a fresh Procore sheet-image URL server-side, so drawing sheets never go stale and the Procore token stays off the browser). The design is **locked** (in the plan + this kickoff) — build to it, do NOT re-litigate it. Read these in full, then follow them:
 > - `Notes/kickoffs/2026-07-06 - Drawings Phase 3 Kickoff.md` (this file)
 > - `Notes/plans/Drawings-Viewer-Plan.md` (Phase 3) + `PLAN.md` + `Notes/research/Procore-API-Integration-Research.md` (§1 auth, §4 compliance) + `design_handoff_sitelines/README.md`
 >
-> ⛔⛔ **This is a double-gated backend phase. Do NOT write or deploy any function yet.** First confirm the 5 design decisions in the plan (delivery, wiring, token/secrets, caller auth, PDF.js) and **present the concrete design — where the Procore secret lives, how the function authenticates callers, and the cost — then STOP for my go/no-go.** Only build after I say "Approved." Never put the Procore client secret (or a Supabase service-role key) in the browser bundle. Reuse the existing DMSA app registration (`sync/.env`); do not create a new Procore app. Don't commit or push until I say "Approved."
+> ⛔ **Prerequisite:** the Procore secret must be set as **Supabase Edge Function secrets** (`PROCORE_CLIENT_ID`/`_SECRET`/`COMPANY_ID`) before you can verify — confirm with me it's set. Never put the Procore secret (or a Supabase service-role key) in the browser bundle. Reuse the existing DMSA app (`sync/.env`); no new Procore app, no re-sync. Verify with typecheck + build + a logged-in `:5173` check (a deliberately-expired URL still renders). Don't commit or push until I say "Approved."
 
 ---
 
@@ -22,17 +22,24 @@ sheet. Phase 3 adds a small **Supabase Edge Function** that re-mints a fresh `pd
 server-side on demand, so sheets never go stale **and** the Procore credential stays off the
 browser. It is a **robustness + security upgrade, not a new feature** — Phases 1–2 work today.
 
-## The ⛔⛔ gate (why this stops for the owner first)
-This is the **first backend piece** in Sitelines (everything else is browser + Postgres views)
-and it holds a **server-side Procore secret**. Before writing any code, the session must
-**present the design for a go/no-go**: where the Procore client secret lives, how the function
-authenticates callers, the per-view flow, and the (near-zero) cost. Build only after explicit
-"Approved."
+## Design is locked — this is a build session
+The owner approved the design on 2026-07-06; **do not re-litigate it.** Build to the locked
+decisions (full detail in `Notes/plans/Drawings-Viewer-Plan.md` → Phase 3):
+1. **Delivery:** a fresh-signed-URL **JSON** function (verify caller → mint Procore token →
+   GET the revision → return fresh `{ pngUrl, pdfUrl }`); the browser fetches the bytes from
+   Procore. **No** byte-streaming and **no** PDF.js this phase.
+2. **Wiring:** **lazy refresh-on-error** — the viewer shows the synced URL first and only calls
+   the function from its image `onError`, then retries once.
+3. **Secret:** reuse the DMSA app; the Procore client id/secret live **only** as Supabase Edge
+   Function secrets (server-side) — never in the bundle. Mint a token per invocation.
+4. **Caller auth:** `verify_jwt` — logged-in Sitelines users only.
+
+The one owner action left is provisioning the secret (below). This is the **first backend
+piece** in Sitelines, so keep the auth/proxy path correct and the secret server-side.
 
 ## Required reading (fresh — don't trust line numbers)
-- `Notes/plans/Drawings-Viewer-Plan.md` → **Phase 3** — the design of record: the 5 proposed
-  decisions (all with recommended defaults), the Procore-auth summary, cost, compliance, exit
-  criteria. This phase = that section.
+- `Notes/plans/Drawings-Viewer-Plan.md` → **Phase 3** — the design of record: the 5 **locked**
+  decisions, the Procore-auth summary, cost, compliance, exit criteria. This phase = that section.
 - `Notes/research/Procore-API-Integration-Research.md` → **§1 Authentication** (Client
   Credentials + DMSA; `POST login.procore.com/oauth/token`; 90-min token, no refresh;
   mandatory `Procore-Company-Id`) and **§4 Compliance** (per-view, authenticated,
@@ -49,7 +56,7 @@ authenticates callers, the per-view flow, and the (near-zero) cost. Build only a
 - Supabase Edge Functions basics (Deno; `verify_jwt`; `supabase secrets set`; deploy). The
   Supabase MCP has a `deploy_edge_function` tool; secrets are set out-of-band by the owner.
 
-## Scope (build — only after the ⛔⛔ design is approved)
+## Scope (build to the locked design)
 1. **Edge function** (e.g. `drawing-file`): `verify_jwt` on (authenticated callers only);
    input = a drawing-revision id (+ kind png/pdf); mints a Procore token (client-credentials,
    cached in-process or a Postgres row w/ TTL), GETs the revision, returns fresh
@@ -63,7 +70,8 @@ authenticates callers, the per-view flow, and the (near-zero) cost. Build only a
 4. **Do NOT** adopt PDF.js / byte-streaming this phase (deferred — decision 5).
 
 ## Guardrails / gates
-- ⛔⛔ Present the design + STOP before building; build only after "Approved."
+- ⛔ Confirm the Procore secret is set as Supabase Edge Function secrets before building/verifying
+  (owner action). The design is **locked** — build to it; don't commit/push until "Approved."
 - **Never** ship the Procore secret or a Supabase **service-role** key to the browser — the
   function uses its own server-side env; the browser only ever holds the publishable/anon key.
 - Reuse the existing DMSA app registration (`sync/.env`); **do not** create a new Procore app,

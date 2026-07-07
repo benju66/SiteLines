@@ -178,7 +178,8 @@ Every call needs the `Procore-Company-Id` header. Drawing revisions come from
 fresh `pdf_url`/`png_url`. So an edge function reproduces exactly what the sync
 does, but per-view.
 
-**Proposed design + decisions (confirm at the ⛔⛔ kickoff — all have a default):**
+**Locked design decisions (owner-approved 2026-07-06 — the build follows these; the
+option marked (Recommended) in each is the locked choice):**
 1. **Delivery — a fresh-signed-URL JSON function (Recommended)** vs. a byte-streaming
    proxy. The function verifies the caller, mints a Procore token, GETs the drawing
    revision, and returns fresh `{ pngUrl, pdfUrl }` as JSON; the viewer sets the
@@ -222,9 +223,11 @@ term). No bulk export, no new mirror.
   `GET /rest/v1.0/projects/{project_id}/drawing_revisions/{id}` returns a fresh
   `pdf_url`/`png_url` (vs. having to page the list); the Deno fetch + `Procore-Company-Id`
   header shape; that `verify_jwt` accepts the app's anon-key session token.
-- **Approval gates:** ⛔⛔ first backend function + server-side Procore token handling —
-  the kickoff **presents this design and STOPs** for the owner's go/no-go before any
-  build. Never ship the Procore secret (or a Supabase service-role key) to the browser.
+- **Approval gates:** the design above is **locked** (owner-approved) — the build
+  session does NOT re-litigate it. Standing gates only: the owner sets the Procore
+  secret as Supabase Edge Function secrets before the build; never ship the Procore
+  secret (or a Supabase service-role key) to the browser; don't commit/push until the
+  owner says "Approved."
 - **Exit criteria:** logged-in, a **deliberately expired** sheet URL still renders
   (the function re-mints it); the function **rejects an unauthenticated caller**; the
   Procore secret exists only as an edge-function secret (never in the bundle);
