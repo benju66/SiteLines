@@ -11,7 +11,7 @@ import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
+import type { BudgetLine, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -387,4 +387,147 @@ export function sortRevisionsDesc(revisions: DrawingRevision[]): DrawingRevision
   return [...revisions].sort(
     (a, b) => revValue(b) - revValue(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
   )
+}
+
+// ---- Budget cost-control drill-down (Budget Insights, Phase 1) ----
+
+/** % of budget bought out (committed / budget). 0 when budget is 0 or negative
+ *  — an unbudgeted or credit line has no meaningful buyout ratio (the view shows "—"). */
+export function boughtOut(budget: number, committed: number): number {
+  return budget > 0 ? committed / budget : 0
+}
+
+/** Uncommitted = budget − committed (scope still to buy; negative = over-committed). */
+export function uncommitted(budget: number, committed: number): number {
+  return budget - committed
+}
+
+/** A division and its budget lines, with subtotals, for the drill-down. */
+export interface BudgetDivisionGroup {
+  division: string
+  lines: BudgetLine[]
+  budget: number
+  committed: number
+  uncommitted: number
+  eac: number
+  projectedOverUnder: number
+}
+
+/**
+ * Group budget lines by division for the cost-control drill-down: each division
+ * holds its lines in natural cost-code order (a split cost code's Material line
+ * precedes its Subcontract line), with summed subtotals; divisions themselves in
+ * natural order (division 9 before 10, by leading cost-code number). Reuses
+ * `compareDrawingNumber` so "3-34100" follows "3-33000". Deterministic, pure — no
+ * clock, no mutation (the view reads it via the provider).
+ */
+export function budgetByDivision(lines: BudgetLine[]): BudgetDivisionGroup[] {
+  const buckets = new Map<string, BudgetLine[]>()
+  for (const l of lines) {
+    const arr = buckets.get(l.division)
+    if (arr) arr.push(l)
+    else buckets.set(l.division, [l])
+  }
+  const groups: BudgetDivisionGroup[] = [...buckets.entries()].map(([division, ls]) => {
+    let budget = 0
+    let committed = 0
+    let eac = 0
+    let projectedOverUnder = 0
+    for (const l of ls) {
+      budget += l.budget
+      committed += l.committed
+      eac += l.eac
+      projectedOverUnder += l.projectedOverUnder
+    }
+    const sorted = [...ls].sort(
+      (a, b) => compareDrawingNumber(a.costCode, b.costCode) || compareDrawingNumber(a.costType, b.costType),
+    )
+    return { division, lines: sorted, budget, committed, uncommitted: budget - committed, eac, projectedOverUnder }
+  })
+  groups.sort(
+    (a, b) => compareDrawingNumber(a.division, b.division) || (a.division < b.division ? -1 : a.division > b.division ? 1 : 0),
+  )
+  return groups
+}
+
+/** Grand totals across all budget lines (the drill-down's total row). */
+export function budgetTotals(lines: BudgetLine[]): { budget: number; committed: number; uncommitted: number; eac: number; projectedOverUnder: number } {
+  let budget = 0
+  let committed = 0
+  let eac = 0
+  let projectedOverUnder = 0
+  for (const l of lines) {
+    budget += l.budget
+    committed += l.committed
+    eac += l.eac
+    projectedOverUnder += l.projectedOverUnder
+  }
+  return { budget, committed, uncommitted: budget - committed, eac, projectedOverUnder }
+}
+
+/** A sortable numeric column of the drill-down (natural cost-code order is the default = no sort). */
+export type BudgetSortCol = 'budget' | 'committed' | 'pct' | 'uncommitted' | 'eac' | 'over'
+export interface BudgetSort {
+  col: BudgetSortCol
+  dir: 'asc' | 'desc'
+}
+
+function lineMetric(l: BudgetLine, col: BudgetSortCol): number {
+  switch (col) {
+    case 'budget':
+      return l.budget
+    case 'committed':
+      return l.committed
+    case 'pct':
+      return boughtOut(l.budget, l.committed)
+    case 'uncommitted':
+      return l.budget - l.committed
+    case 'eac':
+      return l.eac
+    case 'over':
+      return l.projectedOverUnder
+  }
+}
+
+function groupMetric(g: BudgetDivisionGroup, col: BudgetSortCol): number {
+  switch (col) {
+    case 'budget':
+      return g.budget
+    case 'committed':
+      return g.committed
+    case 'pct':
+      return boughtOut(g.budget, g.committed)
+    case 'uncommitted':
+      return g.uncommitted
+    case 'eac':
+      return g.eac
+    case 'over':
+      return g.projectedOverUnder
+  }
+}
+
+/**
+ * Sort the drill-down by a numeric column: divisions by their subtotal, and each
+ * division's lines by the same field. `null` keeps the natural cost-code order.
+ * Ties fall back to the natural sort so the order stays deterministic. Pure — the
+ * groups (and their line arrays) are copied, never mutated.
+ */
+export function sortedBudgetGroups(groups: BudgetDivisionGroup[], sort: BudgetSort | null): BudgetDivisionGroup[] {
+  if (!sort) return groups
+  const sign = sort.dir === 'asc' ? 1 : -1
+  const out = groups.map((g) => ({
+    ...g,
+    lines: [...g.lines].sort(
+      (a, b) =>
+        (lineMetric(a, sort.col) - lineMetric(b, sort.col)) * sign ||
+        compareDrawingNumber(a.costCode, b.costCode) ||
+        compareDrawingNumber(a.costType, b.costType),
+    ),
+  }))
+  out.sort(
+    (a, b) =>
+      (groupMetric(a, sort.col) - groupMetric(b, sort.col)) * sign ||
+      compareDrawingNumber(a.division, b.division),
+  )
+  return out
 }

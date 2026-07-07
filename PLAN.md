@@ -56,6 +56,22 @@ deliberate backend/licensing investments with their own go/no-go.
 | 3 | Fresh-URL edge function — kills sheet-image expiry: server-side Procore token mint → fresh `{pngUrl,pdfUrl}` ([`drawing-file`](supabase/functions/drawing-file/index.ts) edge fn on `sitelines-sync`, `verify_jwt` + `authenticated`-role gated · `getSheetUrls` seam · [DrawingViewerOverlay](src/components/overlays/DrawingViewerOverlay.tsx) lazy refresh-on-error) | ✅ Done (2026-07-07) |
 | 4 | Markup & measure engine ("Bluebeam-like") | 🗄️ Backlogged (owner, 2026-07-07) — revisit only if in-app takeoff/measure is needed |
 
+### Parallel workstream: Budget Insights (cost-control analytics)
+Deepen **Budget** from a thin snapshot into a real cost-control surface on the
+already-synced budget data — its own plan:
+[Notes/plans/Budget-Insights-Plan.md](Notes/plans/Budget-Insights-Plan.md). v1 (owner,
+2026-07-07) = cost-code drill-down + a risk lens + cost-type mix, built from
+`procore_budget_detail_rows_master` (OP III; 23 divisions → 115 cost codes) — no
+re-sync. Hand-rolled SVG (no chart lib); portfolio (McKenna) and trends-over-time are
+deferred (need a sync change). The "next Procore tool to enrich" after RFIs + submittals.
+
+| Phase | Surface | Status |
+|-------|---------|--------|
+| 1 | Cost-code drill-down (A) — `sitelines_budget_lines` view + `BudgetLine` seam + own [`BudgetView`](src/components/views/BudgetView.tsx): expandable division→cost-code table (Budget · Committed · % bought out · Uncommitted · Projected/EAC · Over/Under). Fast-follows: collapsible KPIs, drag-resizable columns, click-to-sort, over-budget filter, over-committed (amber) cue — all hand-rolled | ✅ Done (2026-07-07) — view applied; ties to `sitelines_financials` to the penny |
+| 2 | Risk radar + cost-type mix (B+C) — over-budget exposure ranking + Labor/Material/Subcontract mix (on Phase 1 data) | 📋 Planned |
+| 3 | Pending-change exposure (D) — cross-tool forecast (budget pending + change events/COs) | 📋 Planned ⛔ new view |
+| 4–5 | Actuals & billing (E) · Trends over time (F, needs snapshot capture) · Portfolio (G, needs McKenna sync) | 🗄️ Deferred |
+
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**
 with its own plan: [Notes/plans/Procore-Data-Seam-Plan.md](Notes/plans/Procore-Data-Seam-Plan.md).

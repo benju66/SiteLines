@@ -12,6 +12,7 @@ export type ViewType =
   | 'directory'
   | 'list'
   | 'financial'
+  | 'budget'
   | 'photos'
   | 'dailyLog'
   | 'drawings'
@@ -179,6 +180,28 @@ export interface ActivityEvent {
   sub: string
   tone: Tone
   when: string // relative time, e.g. "2h ago"
+}
+
+/**
+ * One budget line (Budget Insights, Phase 1) — a WBS row of a project's primary
+ * cost budget, at the grain Procore stores: cost code × cost type. Reference
+ * data — NOT a court `Item` and never enters My Court (like `Drawing`). Raw
+ * DOLLARS; the selector layer groups by division, subtotals, and computes the
+ * `%`/derived values (never stored — DATA_CONTRACT §6). A cost code that splits
+ * across cost types appears as more than one line (e.g. a Material line + a
+ * Subcontract line), so 115 cost codes surface as 124 lines for OP III.
+ */
+export interface BudgetLine {
+  project: Project // 'opiii' for v1 (only OP III is synced for budget)
+  division: string // root_cost_code, e.g. "9 - Division 09 - Finishes"
+  costCode: string // "9-92116.000 - Gypsum Board Assemblies"
+  costType: string // category: "Labor" | "Material" | "Subcontract"
+  budget: number // "Revised Budget"
+  committed: number // "Committed Costs"
+  jtdCosts: number | null // "Job to Date Costs" (null in the budget view; actuals live separately — Phase 4)
+  eac: number // "Estimated Cost at Completion"
+  pendingCos: number // "Pending COs" (feeds Phase 3)
+  projectedOverUnder: number // "Projected over Under" (negative = over budget)
 }
 
 /**

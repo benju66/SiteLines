@@ -114,3 +114,34 @@ button {
 .sl-palette-row:hover {
   background: var(--fill-1);
 }
+
+/* Budget drill-down (Budget Insights): division hover + resizable-column handle */
+.sl-budget-divhead:hover {
+  background: var(--fill-3);
+}
+.sl-budget-rz {
+  position: absolute;
+  top: -9px;
+  bottom: -9px;
+  right: -7px;
+  width: 13px;
+  cursor: col-resize;
+  z-index: 3;
+  touch-action: none;
+}
+.sl-budget-rz::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  right: 6px;
+  width: 1px;
+  background: var(--bd-1);
+}
+.sl-budget-rz:hover::after,
+.sl-budget-rz.is-drag::after {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}

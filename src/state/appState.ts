@@ -22,6 +22,8 @@ export interface AppState {
   query: string // palette search text
   dirFocus: string | null // contact id to highlight in Directory
   collapsedDisciplines: Set<string> // discipline names collapsed in the Drawings log (default: all expanded)
+  expandedBudgetDivisions: Set<string> // division names expanded in the Budget drill-down (default: all collapsed → rollup first)
+  budgetKpisCollapsed: boolean // Budget "Key figures" cards collapsed to a one-line summary
 }
 
 export const initialState: AppState = {
@@ -37,4 +39,6 @@ export const initialState: AppState = {
   query: '',
   dirFocus: null,
   collapsedDisciplines: new Set(),
+  expandedBudgetDivisions: new Set(),
+  budgetKpisCollapsed: false,
 }

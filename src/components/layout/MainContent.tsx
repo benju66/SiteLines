@@ -4,6 +4,7 @@ import { TOOLS } from '@/data/tools'
 import { useApp } from '@/state/AppContext'
 import { DailyLogView } from '@/components/views/DailyLogView'
 import { DirectoryView } from '@/components/views/DirectoryView'
+import { BudgetView } from '@/components/views/BudgetView'
 import { DrawingsView } from '@/components/views/DrawingsView'
 import { FinancialView } from '@/components/views/FinancialView'
 import { MyCourtView } from '@/components/views/MyCourtView'
@@ -18,6 +19,7 @@ const VIEWS: Record<ViewType, ComponentType> = {
   list: ToolRegisterView,
   directory: DirectoryView,
   financial: FinancialView,
+  budget: BudgetView,
   photos: PhotosView,
   dailyLog: DailyLogView,
   overview: OverviewView,
