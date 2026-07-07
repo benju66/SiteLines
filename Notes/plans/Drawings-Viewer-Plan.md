@@ -162,17 +162,73 @@ REUSE, do not fork:
 - **Exit criteria:** typecheck + build; open a sheet → zoom/pan works; switching
   revision swaps the sheet + date; Open PDF works; Esc/backdrop closes; seed renders.
 
-### Phase 3 — PDF proxy (edge function) — kills expiry + CORS  ⛔ backend
-- **Scope:** a Supabase **edge function** that, given a drawing-revision id, fetches
-  the current signed `pdf_url`/`png_url` from Procore **server-side** (or re-signs)
-  and streams the bytes to the app. The viewer loads through the proxy → URLs never
-  go stale and the Procore token stays server-side. Optionally swap the viewer to a
-  true PDF render (PDF.js) now that bytes are same-origin.
-- **Approval gates:** ⛔⛔ introduces a backend function + server-side Procore token
-  handling — present the design (where the token lives, auth on the function, cost)
-  and STOP. Don't ship service-role secrets to the browser.
-- **Exit criteria:** viewer loads via the proxy; a deliberately stale URL still
-  renders; function requires an authenticated caller.
+### Phase 3 — Fresh-URL edge function — kills sheet-image expiry  ⛔⛔ backend
+The first backend piece. Today the viewer loads Procore's pre-signed image URLs
+captured at sync time — valid through the working day, but they eventually expire
+(the `sig=` token), and the browser carries a Procore-issued token. A small
+**Supabase Edge Function** re-mints a fresh URL server-side on demand, so sheets
+never go stale and the Procore credential stays off the browser.
+
+**How Procore auth works (settled — from `Notes/research/Procore-API-Integration-Research.md`
+§1 and `sync/procore_pipeline.py`):** OAuth2 **Client Credentials + DMSA**. `POST
+https://login.procore.com/oauth/token` (`grant_type=client_credentials` +
+client_id/secret) → a bearer token, **90-min TTL, no refresh** (request a new one).
+Every call needs the `Procore-Company-Id` header. Drawing revisions come from
+`GET /rest/v1.0/projects/{project_id}/drawing_revisions` — the response carries
+fresh `pdf_url`/`png_url`. So an edge function reproduces exactly what the sync
+does, but per-view.
+
+**Proposed design + decisions (confirm at the ⛔⛔ kickoff — all have a default):**
+1. **Delivery — a fresh-signed-URL JSON function (Recommended)** vs. a byte-streaming
+   proxy. The function verifies the caller, mints a Procore token, GETs the drawing
+   revision, and returns fresh `{ pngUrl, pdfUrl }` as JSON; the viewer sets the
+   `<img src>` to that fresh URL (the browser fetches the bytes straight from Procore
+   storage — the PNG already embeds cross-origin, verified in Phase 2). Kills expiry,
+   **zero image bytes through the function**, and sidesteps the fact that an `<img>`
+   tag can't send an `Authorization` header. *Byte-streaming* (the function fetches
+   and streams the bytes, making them same-origin) is only needed for PDF.js and adds
+   egress + latency — **deferred** with PDF.js (decision 4).
+2. **Wiring — lazy refresh-on-staleness (Recommended)** vs. always-fresh. The viewer
+   shows the synced URL first (fast, no function call); only on the image `onError`
+   does it call the function for a fresh URL and retry. Minimizes invocations to
+   *only* genuinely-stale sheets (most of the day, the synced URL just works). Add a
+   `getSheetUrls(revisionId): Promise<{ pngUrl, pdfUrl }>` on the `DataSource`
+   (supabase impl calls the function with the caller's auth header; seed returns the
+   fixture URL) surfaced via `DataContext`; the overlay calls it inside its existing
+   `onError` fallback before showing the "Open in Procore" message.
+3. **Token + secrets (Recommended):** reuse the existing DMSA app registration —
+   `PROCORE_CLIENT_ID`/`_SECRET`/`COMPANY_ID` from `sync/.env`; **do NOT create a new
+   Procore app.** Store them as **Supabase Edge Function secrets** (server-side env),
+   never in the browser bundle. Mint a token per invocation (90-min TTL); optional
+   later optimization — cache the token in a Postgres row with expiry.
+4. **Caller auth (Recommended):** require the app's **Supabase Auth JWT** (`verify_jwt`)
+   so only logged-in Sitelines users can call the function — mirrors the app's login
+   gate; the DMSA's permitted-projects list is the platform-level backstop.
+5. **True PDF render (PDF.js) — defer (Recommended).** Keep the zoomable PNG. PDF.js
+   needs same-origin bytes (the byte-streaming variant) + a ~1 MB lib; fold it into
+   Phase 4 (markup needs the PDF anyway) or a small Phase 3b if wanted on its own.
+
+**Cost:** Supabase Edge Functions free tier ≈ 500K invocations/mo; fresh-URL delivery
+transfers **no image bytes**, and lazy refresh only fires on a stale sheet — so cost
+is negligible for a single-user app. (Byte-streaming would add egress = image size
+per view.)
+
+**Compliance (aligned with the research doc):** per-view, authenticated, pass-through;
+the function **stores nothing new** and mints the URL on demand — if anything it
+*improves* retention posture (the pre-signed URLs need not be persisted at all long
+term). No bulk export, no new mirror.
+
+- **⚠️ Verify during build:** the single-revision endpoint
+  `GET /rest/v1.0/projects/{project_id}/drawing_revisions/{id}` returns a fresh
+  `pdf_url`/`png_url` (vs. having to page the list); the Deno fetch + `Procore-Company-Id`
+  header shape; that `verify_jwt` accepts the app's anon-key session token.
+- **Approval gates:** ⛔⛔ first backend function + server-side Procore token handling —
+  the kickoff **presents this design and STOPs** for the owner's go/no-go before any
+  build. Never ship the Procore secret (or a Supabase service-role key) to the browser.
+- **Exit criteria:** logged-in, a **deliberately expired** sheet URL still renders
+  (the function re-mints it); the function **rejects an unauthenticated caller**; the
+  Procore secret exists only as an edge-function secret (never in the bundle);
+  typecheck + build green; seed mode unaffected (no function call).
 
 ### Phase 4 — Markup & measure engine  ⛔⛔ licensing + product decision (optional)
 - **Scope:** integrate a commercial web viewer SDK (**Apryse/PDFTron WebViewer** is
