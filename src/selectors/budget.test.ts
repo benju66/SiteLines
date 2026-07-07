@@ -10,6 +10,7 @@ function bl(
   committed: number,
   projectedOverUnder = 0,
   costType = 'Subcontract',
+  erpJtd = 0,
 ): BudgetLine {
   return {
     project: 'opiii',
@@ -19,8 +20,11 @@ function bl(
     budget,
     committed,
     jtdCosts: null,
+    erpJtd,
+    directCosts: 0,
     eac: budget - projectedOverUnder,
     pendingCos: 0,
+    pendingCostChanges: 0,
     projectedOverUnder,
   }
 }
@@ -97,17 +101,17 @@ describe('budgetByDivision', () => {
 })
 
 describe('budgetTotals', () => {
-  it('sums budget / committed / eac and derives uncommitted + over-under across all lines', () => {
+  it('sums budget / committed / eac / erpJtd and derives uncommitted + over-under across all lines', () => {
     const lines = [
-      bl('1 - Division 01', '1-1', 100, 60, -10), // eac 110
-      bl('1 - Division 01', '1-2', 200, 150, 25), // eac 175
-      bl('2 - Division 02', '2-1', 50, 50, 0), // eac 50
+      bl('1 - Division 01', '1-1', 100, 60, -10, 'Subcontract', 40), // eac 110, jtd 40
+      bl('1 - Division 01', '1-2', 200, 150, 25, 'Subcontract', 100), // eac 175, jtd 100
+      bl('2 - Division 02', '2-1', 50, 50, 0, 'Subcontract', 30), // eac 50, jtd 30
     ]
-    expect(budgetTotals(lines)).toEqual({ budget: 350, committed: 260, uncommitted: 90, eac: 335, projectedOverUnder: 15 })
+    expect(budgetTotals(lines)).toEqual({ budget: 350, committed: 260, uncommitted: 90, erpJtd: 170, eac: 335, projectedOverUnder: 15 })
   })
 
   it('is empty-safe (all zeros)', () => {
-    expect(budgetTotals([])).toEqual({ budget: 0, committed: 0, uncommitted: 0, eac: 0, projectedOverUnder: 0 })
+    expect(budgetTotals([])).toEqual({ budget: 0, committed: 0, uncommitted: 0, erpJtd: 0, eac: 0, projectedOverUnder: 0 })
   })
 })
 

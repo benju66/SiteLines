@@ -198,9 +198,12 @@ export interface BudgetLine {
   costType: string // category: "Labor" | "Material" | "Subcontract"
   budget: number // "Revised Budget"
   committed: number // "Committed Costs"
-  jtdCosts: number | null // "Job to Date Costs" (null in the budget view; actuals live separately — Phase 4)
+  jtdCosts: number | null // "Job to Date Costs" (empty in this budget view — use erpJtd for actuals)
+  erpJtd: number // "ERP Job to Date Cost" — actual cost to date (= Commitments Invoiced + Direct Costs)
+  directCosts: number // "Direct Costs" — actuals billed outside commitments
   eac: number // "Estimated Cost at Completion"
-  pendingCos: number // "Pending COs" (feeds Phase 3)
+  pendingCos: number // "Pending COs" (all $0 today — feeds Phase 3)
+  pendingCostChanges: number // "Pending Cost Changes" (sparse today — feeds Phase 3)
   projectedOverUnder: number // "Projected over Under" (negative = over budget)
 }
 

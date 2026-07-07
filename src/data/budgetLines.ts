@@ -23,7 +23,9 @@ export const BUDGET_LINES: BudgetLine[] = [
 ]
 
 /** Compact fixture builder — EAC derived so it's consistent with over/under
- *  (Projected over Under = Revised Budget − EAC). No pending COs in seed. */
+ *  (Projected over Under = Revised Budget − EAC); erpJtd (actual spent) defaults
+ *  to ~85% of EAC so the Job-to-Date / Forecast-to-Complete columns render. No
+ *  pending COs / cost changes in seed. */
 function bl(
   division: string,
   costCode: string,
@@ -31,7 +33,9 @@ function bl(
   budget: number,
   committed: number,
   projectedOverUnder: number,
+  erpJtd?: number,
 ): BudgetLine {
+  const eac = budget - projectedOverUnder
   return {
     project: 'opiii',
     division,
@@ -40,8 +44,11 @@ function bl(
     budget,
     committed,
     jtdCosts: null,
-    eac: budget - projectedOverUnder,
+    erpJtd: erpJtd ?? Math.round(eac * 0.85),
+    directCosts: 0,
+    eac,
     pendingCos: 0,
+    pendingCostChanges: 0,
     projectedOverUnder,
   }
 }

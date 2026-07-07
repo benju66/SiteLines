@@ -38,7 +38,6 @@ function CardFrame({ children }: { children: ReactNode }) {
       <div
         style={{
           width: '100%',
-          maxWidth: 1440,
           height: '100%',
           background: 'var(--card)',
           border: '1px solid var(--bd-card)',

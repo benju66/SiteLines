@@ -67,10 +67,11 @@ deferred (need a sync change). The "next Procore tool to enrich" after RFIs + su
 
 | Phase | Surface | Status |
 |-------|---------|--------|
-| 1 | Cost-code drill-down (A) — `sitelines_budget_lines` view + `BudgetLine` seam + own [`BudgetView`](src/components/views/BudgetView.tsx): expandable division→cost-code table (Budget · Committed · % bought out · Uncommitted · Projected/EAC · Over/Under). Fast-follows: collapsible KPIs, drag-resizable columns, click-to-sort, over-budget filter, over-committed (amber) cue — all hand-rolled | ✅ Done (2026-07-07) — view applied; ties to `sitelines_financials` to the penny |
+| 1 | Cost-code drill-down (A) — `sitelines_budget_lines` view + `BudgetLine` seam + own [`BudgetView`](src/components/views/BudgetView.tsx): expandable division→cost-code table (Budget · Committed · % bought out · Uncommitted · Job-to-Date · Forecast · Projected/EAC · Over/Under). Fast-follows: collapsible KPIs + risk/mix, drag-resizable columns, click-to-sort, over-budget filter, over-committed (amber) cue — all hand-rolled | ✅ Done (2026-07-07) — view applied; ties to `sitelines_financials` to the penny |
 | 2 | Risk radar + cost-type mix (B+C) — collapsible "Risk & cost-type mix" section on `BudgetView`: over-budget exposure ranking (worst-first + total) + largest-uncommitted + hand-rolled SVG Labor/Material/Subcontract bars (`overBudget`/`costTypeMix`/`buyoutGaps` selectors). No new seam | ✅ Done (2026-07-07) — exposure/mix tie to `sitelines_budget_lines` |
-| 3 | Pending-change exposure (D) — cross-tool forecast (budget pending + change events/COs) | 📋 Planned ⛔ new view |
-| 4–5 | Actuals & billing (E) · Trends over time (F, needs snapshot capture) · Portfolio (G, needs McKenna sync) | 🗄️ Deferred |
+| 1.5 | Actuals columns + wider shell — view gains `erp_jtd` (actual spent) · `direct_costs` · `pending_cost_changes`; table adds **Job-to-Date** (% spent) + **Forecast to Complete** (EAC − spent). App goes full-screen (drops 1440px cap) with a collapsible icon-rail sidebar (pin toggle + hover-peek) | ✅ Done (2026-07-07) — JTD $16.5M / forecast $1.75M tie to Procore |
+| 3 | Pending-change exposure (D) — cross-tool forecast (budget pending + change events/COs) | 📋 Planned ⛔ new view · `pending_cos`/`pending_cost_changes` already in the seam ($0 today) |
+| 4–5 | Actuals & billing (E, ERP JTD now surfaced — requisitions/billing still deferred) · Trends over time (F, needs snapshot capture) · Portfolio (G, needs McKenna sync) | 🗄️ Deferred |
 
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**

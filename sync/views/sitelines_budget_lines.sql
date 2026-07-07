@@ -26,11 +26,20 @@
 --   category             <- category           ("Labor" | "Material" | "Subcontract")
 --   budget               <- "Revised Budget"
 --   committed            <- "Committed Costs"
---   jtd_costs            <- "Job to Date Costs" (NULL in this view — actuals live
---                           in procore_direct_costs_master; kept nullable)
+--   jtd_costs            <- "Job to Date Costs" (NULL in this view — the plain field
+--                           is empty here; use erp_jtd for actuals. Kept for contract stability)
+--   erp_jtd              <- "ERP Job to Date Cost" — ACTUAL cost to date ($16.5M / 100 codes;
+--                           reconciles: Commitments Invoiced + Direct Costs). Forecast to
+--                           Complete (= eac − erp_jtd) and % spent are derived in the selector.
+--   direct_costs         <- "Direct Costs" (actuals billed outside commitments)
 --   eac                  <- "Estimated Cost at Completion"
---   pending_cos          <- "Pending COs"        (feeds Phase 3)
+--   pending_cos          <- "Pending COs"        (all $0 today — feeds Phase 3)
+--   pending_cost_changes <- "Pending Cost Changes" (sparse today — feeds Phase 3)
 --   projected_over_under <- "Projected over Under" (NEGATIVE = over budget)
+--
+-- 2026-07-07 addition: erp_jtd + direct_costs + pending_cost_changes are ADDITIVE
+-- (new columns only; every existing column is byte-identical, so the roll-up still
+-- ties to sitelines_financials). No re-sync.
 --
 -- security_invoker=true respects deny-all RLS; procore_budget_detail_rows_master
 -- and procore_budget_views_master already grant SELECT to `authenticated`
@@ -55,7 +64,11 @@ SELECT
     NULLIF(d.raw->>'Job to Date Costs','')::numeric                          AS jtd_costs,
     COALESCE(NULLIF(d.raw->>'Estimated Cost at Completion','')::numeric, 0)  AS eac,
     COALESCE(NULLIF(d.raw->>'Pending COs','')::numeric, 0)                  AS pending_cos,
-    COALESCE(NULLIF(d.raw->>'Projected over Under','')::numeric, 0)         AS projected_over_under
+    COALESCE(NULLIF(d.raw->>'Projected over Under','')::numeric, 0)         AS projected_over_under,
+    -- appended 2026-07-07 (CREATE OR REPLACE only appends; order is irrelevant to the client):
+    COALESCE(NULLIF(d.raw->>'ERP Job to Date Cost','')::numeric, 0)          AS erp_jtd,
+    COALESCE(NULLIF(d.raw->>'Direct Costs','')::numeric, 0)                  AS direct_costs,
+    COALESCE(NULLIF(d.raw->>'Pending Cost Changes','')::numeric, 0)         AS pending_cost_changes
 FROM procore_budget_detail_rows_master d
 JOIN primary_view pv
   ON pv.project_id = d.project_id AND pv.budget_view_id = d.budget_view_id

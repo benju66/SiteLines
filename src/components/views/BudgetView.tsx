@@ -28,11 +28,13 @@ const COLS: { label: string; sort: BudgetSortCol | null }[] = [
   { label: 'Committed', sort: 'committed' },
   { label: '% Bought Out', sort: 'pct' },
   { label: 'Uncommitted', sort: 'uncommitted' },
+  { label: 'Job-to-Date', sort: 'jtd' },
+  { label: 'Forecast', sort: 'forecast' },
   { label: 'Projected', sort: 'eac' },
   { label: 'Over / Under', sort: 'over' },
 ]
-const DEFAULT_WIDTHS = [332, 116, 116, 112, 116, 116, 120]
-const MIN_WIDTHS = [180, 72, 72, 72, 72, 72, 72]
+const DEFAULT_WIDTHS = [300, 110, 110, 106, 110, 132, 118, 110, 116]
+const MIN_WIDTHS = [168, 72, 72, 72, 72, 88, 72, 72, 72]
 const GRID_FALLBACK = DEFAULT_WIDTHS.map((w) => `${w}px`).join(' ')
 
 // Over/Under's most useful first click is ascending (most-negative = worst first);
@@ -68,6 +70,18 @@ function PctCell({ budget, committed, strong = false }: { budget: number; commit
   const color = overCommitted ? tone.warn.c : strong ? 'var(--tx-primary)' : 'var(--tx-secondary)'
   const text = budget > 0 ? `${Math.round(boughtOut(budget, committed) * 100)}%` : '—'
   return <span style={{ ...numBase, color, fontSize: strong ? 12.5 : 12, fontWeight: strong ? 700 : overCommitted ? 600 : 400 }}>{text}</span>
+}
+
+/** Job-to-Date actual cost (erpJtd) with the % spent (jtd / EAC) riding along, muted. */
+function JtdCell({ jtd, eac, strong = false }: { jtd: number; eac: number; strong?: boolean }) {
+  const pct = eac > 0 ? Math.round((jtd / eac) * 100) : null
+  const color = strong ? 'var(--tx-primary)' : jtd === 0 ? 'var(--tx-faint-2)' : 'var(--tx-secondary)'
+  return (
+    <span style={{ ...numBase, color, fontSize: strong ? 12.5 : 12, fontWeight: strong ? 700 : 400 }}>
+      {formatMoney(jtd)}
+      {pct !== null && <span style={{ color: 'var(--tx-faint)', fontWeight: 400 }}> · {pct}%</span>}
+    </span>
+  )
 }
 
 /** Split "1-10320.000 - Sr Project Manager" into [code, description]. */
@@ -292,6 +306,8 @@ export function BudgetView() {
                     <Money v={totals.committed} strong />
                     <PctCell budget={totals.budget} committed={totals.committed} strong />
                     <Money v={totals.uncommitted} strong />
+                    <JtdCell jtd={totals.erpJtd} eac={totals.eac} strong />
+                    <Money v={totals.eac - totals.erpJtd} strong />
                     <Money v={totals.eac} strong />
                     <Money v={totals.projectedOverUnder} over strong />
                   </div>
@@ -310,7 +326,7 @@ export function BudgetView() {
               <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: tone.warn.c, verticalAlign: -1, marginRight: 5 }} />
               % Bought Out amber when over-committed (committed &gt; budget)
             </span>
-            <span>Projected = estimated cost at completion (EAC)</span>
+            <span>Job-to-Date = actual spent (% of EAC) · Forecast = cost to complete (EAC − spent) · Projected = EAC</span>
           </div>
         </>
       )}
@@ -356,6 +372,8 @@ function DivisionSection({ group, expanded, onToggle }: { group: BudgetDivisionG
         <Money v={group.committed} strong />
         <PctCell budget={group.budget} committed={group.committed} strong />
         <Money v={group.uncommitted} strong />
+        <JtdCell jtd={group.erpJtd} eac={group.eac} strong />
+        <Money v={group.eac - group.erpJtd} strong />
         <Money v={group.eac} strong />
         <Money v={group.projectedOverUnder} over strong />
       </div>
@@ -377,6 +395,8 @@ function LineRow({ line }: { line: BudgetLine }) {
       <Money v={line.committed} />
       <PctCell budget={line.budget} committed={line.committed} />
       <Money v={line.budget - line.committed} />
+      <JtdCell jtd={line.erpJtd} eac={line.eac} />
+      <Money v={line.eac - line.erpJtd} />
       <Money v={line.eac} />
       <Money v={line.projectedOverUnder} over />
     </div>

@@ -409,6 +409,7 @@ export interface BudgetDivisionGroup {
   budget: number
   committed: number
   uncommitted: number
+  erpJtd: number
   eac: number
   projectedOverUnder: number
 }
@@ -431,18 +432,20 @@ export function budgetByDivision(lines: BudgetLine[]): BudgetDivisionGroup[] {
   const groups: BudgetDivisionGroup[] = [...buckets.entries()].map(([division, ls]) => {
     let budget = 0
     let committed = 0
+    let erpJtd = 0
     let eac = 0
     let projectedOverUnder = 0
     for (const l of ls) {
       budget += l.budget
       committed += l.committed
+      erpJtd += l.erpJtd
       eac += l.eac
       projectedOverUnder += l.projectedOverUnder
     }
     const sorted = [...ls].sort(
       (a, b) => compareDrawingNumber(a.costCode, b.costCode) || compareDrawingNumber(a.costType, b.costType),
     )
-    return { division, lines: sorted, budget, committed, uncommitted: budget - committed, eac, projectedOverUnder }
+    return { division, lines: sorted, budget, committed, uncommitted: budget - committed, erpJtd, eac, projectedOverUnder }
   })
   groups.sort(
     (a, b) => compareDrawingNumber(a.division, b.division) || (a.division < b.division ? -1 : a.division > b.division ? 1 : 0),
@@ -451,22 +454,24 @@ export function budgetByDivision(lines: BudgetLine[]): BudgetDivisionGroup[] {
 }
 
 /** Grand totals across all budget lines (the drill-down's total row). */
-export function budgetTotals(lines: BudgetLine[]): { budget: number; committed: number; uncommitted: number; eac: number; projectedOverUnder: number } {
+export function budgetTotals(lines: BudgetLine[]): { budget: number; committed: number; uncommitted: number; erpJtd: number; eac: number; projectedOverUnder: number } {
   let budget = 0
   let committed = 0
+  let erpJtd = 0
   let eac = 0
   let projectedOverUnder = 0
   for (const l of lines) {
     budget += l.budget
     committed += l.committed
+    erpJtd += l.erpJtd
     eac += l.eac
     projectedOverUnder += l.projectedOverUnder
   }
-  return { budget, committed, uncommitted: budget - committed, eac, projectedOverUnder }
+  return { budget, committed, uncommitted: budget - committed, erpJtd, eac, projectedOverUnder }
 }
 
 /** A sortable numeric column of the drill-down (natural cost-code order is the default = no sort). */
-export type BudgetSortCol = 'budget' | 'committed' | 'pct' | 'uncommitted' | 'eac' | 'over'
+export type BudgetSortCol = 'budget' | 'committed' | 'pct' | 'uncommitted' | 'jtd' | 'forecast' | 'eac' | 'over'
 export interface BudgetSort {
   col: BudgetSortCol
   dir: 'asc' | 'desc'
@@ -482,6 +487,10 @@ function lineMetric(l: BudgetLine, col: BudgetSortCol): number {
       return boughtOut(l.budget, l.committed)
     case 'uncommitted':
       return l.budget - l.committed
+    case 'jtd':
+      return l.erpJtd
+    case 'forecast':
+      return l.eac - l.erpJtd
     case 'eac':
       return l.eac
     case 'over':
@@ -499,6 +508,10 @@ function groupMetric(g: BudgetDivisionGroup, col: BudgetSortCol): number {
       return boughtOut(g.budget, g.committed)
     case 'uncommitted':
       return g.uncommitted
+    case 'jtd':
+      return g.erpJtd
+    case 'forecast':
+      return g.eac - g.erpJtd
     case 'eac':
       return g.eac
     case 'over':

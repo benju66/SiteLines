@@ -16,8 +16,11 @@ export interface BudgetLineRow {
   budget: number | string | null
   committed: number | string | null
   jtd_costs: number | string | null
+  erp_jtd: number | string | null
+  direct_costs: number | string | null
   eac: number | string | null
   pending_cos: number | string | null
+  pending_cost_changes: number | string | null
   projected_over_under: number | string | null
 }
 
@@ -33,8 +36,11 @@ export function mapBudgetLine(row: BudgetLineRow): BudgetLine {
     budget: num(row.budget),
     committed: num(row.committed),
     jtdCosts: row.jtd_costs == null ? null : Number(row.jtd_costs),
+    erpJtd: num(row.erp_jtd),
+    directCosts: num(row.direct_costs),
     eac: num(row.eac),
     pendingCos: num(row.pending_cos),
+    pendingCostChanges: num(row.pending_cost_changes),
     projectedOverUnder: num(row.projected_over_under),
   }
 }
