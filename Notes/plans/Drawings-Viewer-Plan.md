@@ -234,6 +234,18 @@ term). No bulk export, no new mirror.
   typecheck + build green; seed mode unaffected (no function call).
 
 ### Phase 4 — Markup & measure engine  ⛔⛔ licensing + product decision (optional)
+- **STATUS — 🗄️ Backlogged (owner decision, 2026-07-07).** Not being built now;
+  markup lives in Procore via the Open-in-Procore link (verified working). Revisit
+  only if in-app takeoff/measure becomes a real need. When it does, the choice is a
+  three-way (see the SDK-vs-open-source discussion that prompted this):
+  1. **Commercial SDK** (Apryse/PDFTron or PSPDFKit/Nutrient) — paid recurring
+     license, low build effort, full CAD-grade measurement.
+  2. **Open source + build** — PDF.js (Apache-2.0, free) renders + does basic markup
+     (draw/highlight/text), but has **no** scale-calibrated measurement/takeoff, so
+     we'd build that geometry ourselves: "good enough" for coordination markup, not
+     CAD-grade; also pulls in the deferred byte-streaming proxy (PDF.js needs
+     same-origin bytes). Verify PDF.js's current annotation tools before committing.
+  3. **Lean on Procore** (status quo) — $0, no build, markup happens in Procore.
 - **Scope:** integrate a commercial web viewer SDK (**Apryse/PDFTron WebViewer** is
   the construction-grade default; PSPDFKit/Nutrient the alternative) for annotations,
   **measurement + scale calibration**, area/polygon, and **custom tool sets** (≈ a
