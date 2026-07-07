@@ -16,9 +16,11 @@
 --   • current       — the issue shown in the log (the default-selected revision)
 --   • png_url       — the sheet image the viewer renders (pre-signed; every
 --                     revision has one). pdf_url is the link-out.
---   • procore_url   — CONSTRUCTED deep link to the sheet in Procore (the graceful
---                     fallback when a signed image URL has expired). Format is
---                     the drawing-area/drawing path; confirm it resolves.
+--   • procore_url   — CONSTRUCTED deep link to THIS revision in Procore's drawing
+--                     log (the graceful fallback when a signed image URL has
+--                     expired). Path: /drawing_areas/<area>/drawing_log/
+--                     view_fullscreen/<revision id>. Uses the revision's own id
+--                     (raw->>'id'), so it opens the exact issue shown in the picker.
 --
 -- security_invoker=true → reads procore_drawing_revisions_master as the querying
 -- role (authenticated_read, migration 0007). No re-sync — data is already synced.
@@ -34,6 +36,6 @@ SELECT
     NULLIF(raw->>'png_url', '')            AS png_url,
     NULLIF(raw->>'pdf_url', '')            AS pdf_url,
     'https://app.procore.com/' || project_id || '/project/drawing_areas/'
-        || (raw #>> '{drawing_area,id}') || '/drawings/' || (raw->>'drawing_id')  AS procore_url
+        || (raw #>> '{drawing_area,id}') || '/drawing_log/view_fullscreen/' || (raw->>'id')  AS procore_url
 FROM procore_drawing_revisions_master
 WHERE project_id = 3051002;
