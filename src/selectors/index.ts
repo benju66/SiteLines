@@ -11,7 +11,7 @@ import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { BudgetLine, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
+import type { BudgetLine, BudgetPending, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -614,4 +614,61 @@ export function costTypeMix(lines: BudgetLine[]): CostTypeSlice[] {
   const known = COST_TYPE_ORDER.filter((t) => map.has(t)).map((t) => map.get(t) as CostTypeSlice)
   const others = [...map.values()].filter((s) => !COST_TYPE_ORDER.includes(s.costType)).sort((a, b) => b.budget - a.budget)
   return [...known, ...others]
+}
+
+// ---- Pending-change forecast (Budget Insights, Phase 3) ----
+
+/** One division's projected budget once its open change events land. */
+export interface BudgetForecastDivision {
+  division: string
+  revised: number // today's revised budget for the division (0 for 'Unassigned')
+  pending: number // Σ pending-change amount (negative = de-scope credit)
+  projected: number // revised + pending
+  openEvents: number
+  costCodes: BudgetPending[] // the pending cost codes in this division, biggest-impact first
+}
+
+export interface BudgetForecast {
+  divisions: BudgetForecastDivision[] // only divisions with pending changes, biggest impact first
+  total: { revised: number; pending: number; projected: number }
+}
+
+/**
+ * Project the budget after pending (open) change events land: for each division
+ * that has pending changes, revised budget → pending → projected (revised +
+ * pending); plus job totals (total revised across ALL lines, total pending). The
+ * 'Unassigned' bucket (changes with no cost code yet) surfaces with revised 0.
+ * Deterministic, pure — divisions and their cost codes copied, never mutated.
+ */
+export function budgetForecast(lines: BudgetLine[], pending: BudgetPending[]): BudgetForecast {
+  const revisedByDiv = new Map<string, number>()
+  let totalRevised = 0
+  for (const l of lines) {
+    revisedByDiv.set(l.division, (revisedByDiv.get(l.division) ?? 0) + l.budget)
+    totalRevised += l.budget
+  }
+
+  const byDiv = new Map<string, { pending: number; openEvents: number; costCodes: BudgetPending[] }>()
+  let totalPending = 0
+  for (const p of pending) {
+    const e = byDiv.get(p.division) ?? { pending: 0, openEvents: 0, costCodes: [] }
+    e.pending += p.pendingAmount
+    e.openEvents += p.openEvents
+    e.costCodes.push(p)
+    byDiv.set(p.division, e)
+    totalPending += p.pendingAmount
+  }
+
+  const divisions: BudgetForecastDivision[] = [...byDiv.entries()].map(([division, e]) => {
+    const revised = revisedByDiv.get(division) ?? 0
+    const costCodes = [...e.costCodes].sort(
+      (a, b) => Math.abs(b.pendingAmount) - Math.abs(a.pendingAmount) || compareDrawingNumber(a.costCode, b.costCode),
+    )
+    return { division, revised, pending: e.pending, projected: revised + e.pending, openEvents: e.openEvents, costCodes }
+  })
+  divisions.sort(
+    (a, b) => Math.abs(b.pending) - Math.abs(a.pending) || compareDrawingNumber(a.division, b.division),
+  )
+
+  return { divisions, total: { revised: totalRevised, pending: totalPending, projected: totalRevised + totalPending } }
 }

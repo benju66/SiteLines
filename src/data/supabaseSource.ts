@@ -9,7 +9,7 @@ import { TOOLS } from '@/data/tools'
 import { TERMINAL } from '@/lib/ballInCourt'
 import type { DataSource, ItemsByTool, SiteData, Snapshot } from '@/lib/dataSource'
 import { deriveUrgency, formatDueDate, formatMoney, statusTone, timeAgo } from '@/lib/derive'
-import { mapBudgetLine, type BudgetLineRow } from '@/lib/mapBudgetLine'
+import { mapBudgetLine, mapBudgetPending, type BudgetLineRow, type BudgetPendingRow } from '@/lib/mapBudgetLine'
 import { mapDrawing, mapDrawingRevision, type DrawingRow, type DrawingRevisionRow } from '@/lib/mapDrawing'
 import { mapRfiDetail, type RfiDetailRow } from '@/lib/mapRfiDetail'
 import { mapSubmittalDetail, type SubmittalDetailRow } from '@/lib/mapSubmittalDetail'
@@ -135,7 +135,7 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
     name: 'supabase',
     async fetch(): Promise<Snapshot> {
       const now = new Date()
-      const [items, contacts, financials, activity, dailyLogs, drawings, budgetLines] = await Promise.all([
+      const [items, contacts, financials, activity, dailyLogs, drawings, budgetLines, budgetPending] = await Promise.all([
         fetchAll<ItemRow>(client, 'sitelines_items'),
         fetchAll<ContactRow>(client, 'sitelines_contacts'),
         fetchAll<FinRow>(client, 'sitelines_financials'),
@@ -143,6 +143,7 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
         fetchAll<DailyLogEntry>(client, 'sitelines_daily_logs'),
         fetchAll<DrawingRow>(client, 'sitelines_drawings'),
         fetchAll<BudgetLineRow>(client, 'sitelines_budget_lines'),
+        fetchAll<BudgetPendingRow>(client, 'sitelines_budget_pending'),
       ])
 
       const itemsByTool = emptyItemsByTool()
@@ -162,6 +163,7 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
         dailyLogs: dailyLogs.map((d) => ({ ...d, crew: Number(d.crew), mine: !!d.mine })),
         drawings: drawings.map(mapDrawing),
         budgetLines: budgetLines.map(mapBudgetLine),
+        budgetPending: budgetPending.map(mapBudgetPending),
       }
       // syncedAt = fetch time for now; a future sitelines_meta view can expose the
       // pipeline's true last-sync timestamp (max synced_at) once it's readable.

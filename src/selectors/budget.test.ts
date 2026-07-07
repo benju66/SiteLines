@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { BudgetLine } from '@/types'
-import { boughtOut, budgetByDivision, budgetTotals, buyoutGaps, costTypeMix, overBudget, sortedBudgetGroups, uncommitted } from './index'
+import type { BudgetLine, BudgetPending } from '@/types'
+import { boughtOut, budgetByDivision, budgetForecast, budgetTotals, buyoutGaps, costTypeMix, overBudget, sortedBudgetGroups, uncommitted } from './index'
 
 /** Minimal BudgetLine builder — only the fields the selectors read. */
 function bl(
@@ -229,5 +229,54 @@ describe('costTypeMix', () => {
 
   it('is empty-safe', () => {
     expect(costTypeMix([])).toEqual([])
+  })
+})
+
+describe('budgetForecast', () => {
+  const lines = [
+    bl('3 - Division 03 - Concrete', '3-33000.000', 1000, 900),
+    bl('9 - Division 09 - Finishes', '9-92116.000', 500, 400),
+    bl('7 - Division 07 - Thermal', '7-72100.000', 300, 200),
+  ]
+  const bp = (division: string, costCode: string, pendingAmount: number, openEvents = 1): BudgetPending => ({ project: 'opiii', division, costCode, pendingAmount, openEvents })
+  const pending = [
+    bp('3 - Division 03 - Concrete', '3-33000.000 - Cast in Place Concrete', 11000),
+    bp('9 - Division 09 - Finishes', '9-99000.000 - Painting', 6540),
+    bp('7 - Division 07 - Thermal', '7-72100.000 - Insulation', -11000), // de-scope credit
+    bp('Unassigned', 'Unassigned', 5000, 4),
+  ]
+
+  it('orders divisions by pending magnitude, natural tiebreak (Concrete=+11k before Thermal=-11k)', () => {
+    expect(budgetForecast(lines, pending).divisions.map((d) => d.division)).toEqual([
+      '3 - Division 03 - Concrete', // 11,000
+      '7 - Division 07 - Thermal', // -11,000 (same magnitude, natural tiebreak by division)
+      '9 - Division 09 - Finishes', // 6,540
+      'Unassigned', // 5,000
+    ])
+  })
+
+  it('projects revised + pending per division (credit reduces; Unassigned revised 0)', () => {
+    const f = budgetForecast(lines, pending)
+    const concrete = f.divisions.find((d) => d.division.startsWith('3 -'))!
+    expect(concrete.revised).toBe(1000)
+    expect(concrete.projected).toBe(12000)
+    const thermal = f.divisions.find((d) => d.division.startsWith('7 -'))!
+    expect(thermal.projected).toBe(300 - 11000)
+    const un = f.divisions.find((d) => d.division === 'Unassigned')!
+    expect(un.revised).toBe(0)
+    expect(un.projected).toBe(5000)
+    expect(un.openEvents).toBe(4)
+  })
+
+  it('totals: revised across ALL lines, pending across all, projected = sum', () => {
+    const f = budgetForecast(lines, pending)
+    expect(f.total).toEqual({ revised: 1800, pending: 11540, projected: 13340 })
+  })
+
+  it('is empty-safe and does not mutate inputs', () => {
+    expect(budgetForecast([], [])).toEqual({ divisions: [], total: { revised: 0, pending: 0, projected: 0 } })
+    const snapshot = pending.map((p) => ({ ...p }))
+    budgetForecast(lines, pending)
+    expect(pending).toEqual(snapshot)
   })
 })

@@ -208,6 +208,22 @@ export interface BudgetLine {
 }
 
 /**
+ * Pending-change exposure for one cost code (Budget Insights, Phase 3). Reference
+ * data — the cost impact of OPEN change events (not yet approved into the budget),
+ * attributed to a budget division. `pendingAmount` is raw dollars (negative = a
+ * de-scope credit); the selector adds it to the division's revised budget to
+ * project the budget after pending changes land. `division`/`costCode` are
+ * `'Unassigned'` when a change-event line has no cost code yet.
+ */
+export interface BudgetPending {
+  project: Project
+  division: string // budget root_cost_code, or 'Unassigned'
+  costCode: string // budget cost_code, or the change-event cost-code name, or 'Unassigned'
+  pendingAmount: number // Σ estimated_cost_amount of the cost code's open change-event line items
+  openEvents: number // count of open change events touching the cost code
+}
+
+/**
  * Financial rollup source (DATA_CONTRACT §6). Division rows are
  * [name, budget, committed, invoiced] in $millions; KPIs and % are computed in
  * the selector layer, not stored.

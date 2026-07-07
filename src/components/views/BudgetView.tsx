@@ -13,8 +13,8 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { formatMoney } from '@/lib/derive'
-import { boughtOut, budgetByDivision, budgetTotals, buyoutGaps, costTypeMix, financialView, overBudget, scoped, sortedBudgetGroups } from '@/selectors'
-import type { BudgetDivisionGroup, BudgetSort, BudgetSortCol, CostTypeSlice, OverBudgetResult } from '@/selectors'
+import { boughtOut, budgetByDivision, budgetForecast, budgetTotals, buyoutGaps, costTypeMix, financialView, overBudget, scoped, sortedBudgetGroups } from '@/selectors'
+import type { BudgetDivisionGroup, BudgetForecast, BudgetSort, BudgetSortCol, CostTypeSlice, OverBudgetResult } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useSiteData } from '@/state/DataContext'
 import { mono, projectMeta, tone } from '@/theme/tokens'
@@ -98,7 +98,7 @@ function divName(s: string): string {
 
 export function BudgetView() {
   const { state, patch } = useApp()
-  const { financials, budgetLines } = useSiteData()
+  const { financials, budgetLines, budgetPending } = useSiteData()
 
   const [sort, setSort] = useState<BudgetSort | null>(null)
   const [overBudgetOnly, setOverBudgetOnly] = useState(false)
@@ -117,6 +117,8 @@ export function BudgetView() {
   const risk = overBudget(lines)
   const gaps = buyoutGaps(lines, 4)
   const mix = costTypeMix(lines)
+  // Phase 3 — pending-change forecast (revised → pending → projected).
+  const forecast = budgetForecast(lines, scoped(budgetPending, state.project))
 
   // Resizable columns — widths in a ref + a CSS var written straight to the DOM so
   // a drag doesn't re-render every row (the var cascades to all .row children).
@@ -160,6 +162,7 @@ export function BudgetView() {
 
   const toggleKpis = () => patch((s) => ({ budgetKpisCollapsed: !s.budgetKpisCollapsed }))
   const toggleAnalysis = () => patch((s) => ({ budgetAnalysisCollapsed: !s.budgetAnalysisCollapsed }))
+  const toggleForecast = () => patch((s) => ({ budgetForecastCollapsed: !s.budgetForecastCollapsed }))
   const toggleDiv = (name: string) =>
     patch((s) => {
       const next = new Set(s.expandedBudgetDivisions)
@@ -172,6 +175,7 @@ export function BudgetView() {
 
   const kpisCollapsed = state.budgetKpisCollapsed
   const analysisCollapsed = state.budgetAnalysisCollapsed
+  const forecastCollapsed = state.budgetForecastCollapsed
   const isExpanded = (division: string) => overBudgetOnly || state.expandedBudgetDivisions.has(division)
 
   return (
@@ -228,6 +232,27 @@ export function BudgetView() {
               <RiskPanel risk={risk} gaps={gaps} />
               <MixPanel mix={mix} />
             </div>
+          )}
+
+          {/* pending-change forecast (Phase 3) — collapsible; only when there's a pending pipeline */}
+          {forecast.divisions.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={toggleForecast}
+                aria-expanded={!forecastCollapsed}
+                style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', background: 'none', border: 'none', padding: '2px 2px 12px', marginTop: 16, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
+              >
+                <span aria-hidden style={{ display: 'inline-block', width: 9, fontSize: 10, color: 'var(--tx-faint)', transform: forecastCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .12s ease' }}>▸</span>
+                <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--tx-tertiary)', fontWeight: 600 }}>Pending changes</span>
+                {forecastCollapsed && (
+                  <span style={{ fontFamily: mono, fontSize: 11.5, color: 'var(--tx-faint)', marginLeft: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {signedMoney(forecast.total.pending)} pending · projected {formatMoney(forecast.total.projected)}
+                  </span>
+                )}
+              </button>
+              {!forecastCollapsed && <ForecastPanel forecast={forecast} />}
+            </>
           )}
 
           {/* toolbar */}
@@ -491,6 +516,64 @@ function MixPanel({ mix }: { mix: CostTypeSlice[] }) {
       <div style={{ marginTop: 12, display: 'flex', gap: 14, fontSize: 10, color: 'var(--tx-faint)' }}>
         <span><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: 'var(--bd-3)', verticalAlign: -1, marginRight: 5 }} />Budget</span>
         <span><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: teal, verticalAlign: -1, marginRight: 5 }} />Committed</span>
+      </div>
+    </div>
+  )
+}
+
+/** Money with an explicit + on positive amounts (a pending change reads as +add / −credit). */
+function signedMoney(n: number): string {
+  return (n > 0 ? '+' : '') + formatMoney(n)
+}
+
+/** Pending-change forecast — job-level pending → projected headline, then the
+ *  affected divisions with revised → pending → projected. */
+function ForecastPanel({ forecast }: { forecast: BudgetForecast }) {
+  const fGrid = 'minmax(0,1.7fr) 130px 120px 130px'
+  const pendColor = (v: number) => (v > 0 ? tone.warn.c : v < 0 ? tone.ok.c : 'var(--tx-faint-2)')
+  const statLabel: CSSProperties = { fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--tx-tertiary-2)', fontWeight: 600 }
+  const statVal: CSSProperties = { fontFamily: mono, fontSize: 20, fontWeight: 680, marginTop: 3 }
+  return (
+    <div style={panelCard}>
+      {/* headline: pending → projected (job level) */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 18, flexWrap: 'wrap', marginBottom: 14 }}>
+        <div>
+          <div style={statLabel}>Pending exposure</div>
+          <div style={{ ...statVal, color: pendColor(forecast.total.pending) }}>{signedMoney(forecast.total.pending)}</div>
+        </div>
+        <span aria-hidden style={{ fontSize: 16, color: 'var(--tx-faint)', paddingBottom: 3 }}>→</span>
+        <div>
+          <div style={statLabel}>Projected budget</div>
+          <div style={statVal}>{formatMoney(forecast.total.projected)}</div>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--tx-faint)', paddingBottom: 4 }}>
+          from {formatMoney(forecast.total.revised)} revised · {forecast.divisions.length} {forecast.divisions.length === 1 ? 'division' : 'divisions'} affected
+        </div>
+      </div>
+
+      {/* per-division: revised → pending → projected */}
+      <div style={{ border: '1px solid var(--bd-2)', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: fGrid, gap: 12, padding: '8px 14px', background: 'var(--fill-1)', borderBottom: '1px solid var(--bd-2)', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--tx-faint)', fontWeight: 600 }}>
+          <span>Division</span>
+          <span style={{ textAlign: 'right' }}>Revised</span>
+          <span style={{ textAlign: 'right' }}>Pending</span>
+          <span style={{ textAlign: 'right' }}>Projected</span>
+        </div>
+        {forecast.divisions.map((d) => (
+          <div key={d.division} style={{ display: 'grid', gridTemplateColumns: fGrid, gap: 12, padding: '8px 14px', borderBottom: '1px solid var(--bd-row)', alignItems: 'center' }}>
+            <span style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 7 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 530, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{divName(d.division)}</span>
+              <span style={{ fontSize: 10, color: 'var(--tx-faint)', flex: 'none' }}>{d.openEvents} open</span>
+            </span>
+            <span style={{ ...numBase, color: 'var(--tx-secondary)' }}>{d.revised > 0 ? formatMoney(d.revised) : '—'}</span>
+            <span style={{ ...numBase, color: pendColor(d.pending), fontWeight: 600 }}>{signedMoney(d.pending)}</span>
+            <span style={{ ...numBase, color: 'var(--tx-primary)', fontWeight: 600 }}>{formatMoney(d.projected)}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 10, fontSize: 11, color: 'var(--tx-faint)', lineHeight: 1.5 }}>
+        Projected = revised budget + the cost of <span style={{ fontWeight: 600, color: 'var(--tx-tertiary)' }}>open</span> change events (not yet approved). Negative = a de-scope credit · “Unassigned” = changes with no cost code yet.
       </div>
     </div>
   )

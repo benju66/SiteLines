@@ -5,7 +5,7 @@
 // coerced with a guarded `num()`, mirroring supabaseSource. `jtd_costs` is kept
 // nullable (it's null in the budget view — actuals live in direct costs).
 
-import type { BudgetLine, Project } from '@/types'
+import type { BudgetLine, BudgetPending, Project } from '@/types'
 
 /** One row of the sitelines_budget_lines view (numerics arrive as strings). */
 export interface BudgetLineRow {
@@ -42,5 +42,25 @@ export function mapBudgetLine(row: BudgetLineRow): BudgetLine {
     pendingCos: num(row.pending_cos),
     pendingCostChanges: num(row.pending_cost_changes),
     projectedOverUnder: num(row.projected_over_under),
+  }
+}
+
+/** One row of the sitelines_budget_pending view (numerics arrive as strings). */
+export interface BudgetPendingRow {
+  project: string | null
+  division: string | null
+  cost_code: string | null
+  pending_amount: number | string | null
+  open_events: number | string | null
+}
+
+/** Map a budget-pending view row to the BudgetPending contract shape. */
+export function mapBudgetPending(row: BudgetPendingRow): BudgetPending {
+  return {
+    project: (row.project ?? 'opiii') as Project,
+    division: (row.division ?? '').trim() || 'Unassigned',
+    costCode: (row.cost_code ?? '').trim() || 'Unassigned',
+    pendingAmount: num(row.pending_amount),
+    openEvents: num(row.open_events),
   }
 }

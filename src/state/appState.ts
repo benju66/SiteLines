@@ -25,6 +25,7 @@ export interface AppState {
   expandedBudgetDivisions: Set<string> // division names expanded in the Budget drill-down (default: all collapsed → rollup first)
   budgetKpisCollapsed: boolean // Budget "Key figures" cards collapsed to a one-line summary
   budgetAnalysisCollapsed: boolean // Budget "Risk & cost-type mix" panels collapsed to a one-line summary
+  budgetForecastCollapsed: boolean // Budget "Pending changes" forecast collapsed to a one-line summary
   sidebarCollapsed: boolean // sidebar pinned to a 64px icon rail (hover peeks it open)
 }
 
@@ -44,5 +45,6 @@ export const initialState: AppState = {
   expandedBudgetDivisions: new Set(),
   budgetKpisCollapsed: false,
   budgetAnalysisCollapsed: false,
+  budgetForecastCollapsed: false,
   sidebarCollapsed: false,
 }

@@ -4,7 +4,7 @@
 // a supabaseDataSource reading the normalization views — the UI never knows
 // the difference.
 
-import type { ActivityEvent, BudgetLine, Contact, DailyLogEntry, Drawing, DrawingRevision, FinancialSource, Item, ItemDetail, Photo, ToolKey } from '@/types'
+import type { ActivityEvent, BudgetLine, BudgetPending, Contact, DailyLogEntry, Drawing, DrawingRevision, FinancialSource, Item, ItemDetail, Photo, ToolKey } from '@/types'
 
 export type ItemsByTool = Record<ToolKey, Item[]>
 
@@ -18,6 +18,7 @@ export interface SiteData {
   dailyLogs: DailyLogEntry[]
   drawings: Drawing[] // current drawing sheets (reference; grouped by discipline in the log)
   budgetLines: BudgetLine[] // primary-cost-budget lines (reference; the Budget cost-control drill-down)
+  budgetPending: BudgetPending[] // pending-change exposure per cost code (reference; the Budget forecast section)
 }
 
 export interface Snapshot {
