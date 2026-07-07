@@ -68,7 +68,7 @@ deferred (need a sync change). The "next Procore tool to enrich" after RFIs + su
 | Phase | Surface | Status |
 |-------|---------|--------|
 | 1 | Cost-code drill-down (A) — `sitelines_budget_lines` view + `BudgetLine` seam + own [`BudgetView`](src/components/views/BudgetView.tsx): expandable division→cost-code table (Budget · Committed · % bought out · Uncommitted · Projected/EAC · Over/Under). Fast-follows: collapsible KPIs, drag-resizable columns, click-to-sort, over-budget filter, over-committed (amber) cue — all hand-rolled | ✅ Done (2026-07-07) — view applied; ties to `sitelines_financials` to the penny |
-| 2 | Risk radar + cost-type mix (B+C) — over-budget exposure ranking + Labor/Material/Subcontract mix (on Phase 1 data) | 📋 Planned |
+| 2 | Risk radar + cost-type mix (B+C) — collapsible "Risk & cost-type mix" section on `BudgetView`: over-budget exposure ranking (worst-first + total) + largest-uncommitted + hand-rolled SVG Labor/Material/Subcontract bars (`overBudget`/`costTypeMix`/`buyoutGaps` selectors). No new seam | ✅ Done (2026-07-07) — exposure/mix tie to `sitelines_budget_lines` |
 | 3 | Pending-change exposure (D) — cross-tool forecast (budget pending + change events/COs) | 📋 Planned ⛔ new view |
 | 4–5 | Actuals & billing (E) · Trends over time (F, needs snapshot capture) · Portfolio (G, needs McKenna sync) | 🗄️ Deferred |
 

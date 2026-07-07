@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BudgetLine } from '@/types'
-import { boughtOut, budgetByDivision, budgetTotals, sortedBudgetGroups, uncommitted } from './index'
+import { boughtOut, budgetByDivision, budgetTotals, buyoutGaps, costTypeMix, overBudget, sortedBudgetGroups, uncommitted } from './index'
 
 /** Minimal BudgetLine builder — only the fields the selectors read. */
 function bl(
@@ -154,5 +154,76 @@ describe('sortedBudgetGroups', () => {
     sortedBudgetGroups(groups, { col: 'over', dir: 'asc' })
     const after = groups.map((g) => [g.division, g.lines.map((l) => l.costCode)])
     expect(after).toEqual(before)
+  })
+})
+
+describe('overBudget', () => {
+  const lines = [
+    bl('9 - Division 09 - Finishes', '9-99000.000 - Painting', 234627, 275934, -41307),
+    bl('7 - Division 07 - Thermal', '7-72100.000 - Insulation', 0, 0, -82953, 'Material'),
+    bl('3 - Division 03 - Concrete', '3-34100.000 - Precast', 849377, 849366, 100), // under budget
+    bl('6 - Division 06 - Wood', '6-62200.000 - Millwork', 178364, 203593, -25229, 'Material'),
+  ]
+
+  it('keeps only over-budget lines, worst (most negative) first', () => {
+    const { lines: ranked } = overBudget(lines)
+    expect(ranked.map((l) => l.costCode)).toEqual([
+      '7-72100.000 - Insulation', // -82,953
+      '9-99000.000 - Painting', // -41,307
+      '6-62200.000 - Millwork', // -25,229
+    ])
+  })
+
+  it('sums total exposure as negative dollars', () => {
+    expect(overBudget(lines).totalExposure).toBe(-82953 - 41307 - 25229)
+  })
+
+  it('is empty-safe (no over-budget lines → empty list, 0 exposure)', () => {
+    const under = [bl('1 - Division 01', '1-1', 100, 50, 25)]
+    expect(overBudget(under)).toEqual({ lines: [], totalExposure: 0 })
+  })
+})
+
+describe('buyoutGaps', () => {
+  const lines = [
+    bl('1 - Division 01', '1-10320.000 - PM', 303966, 0, 0, 'Labor'), // Labor — excluded
+    bl('5 - Division 05', '5-51200.000 - Steel', 147010, 122550, 0, 'Subcontract'), // gap 24,460
+    bl('7 - Division 07', '7-72100.000 - Insulation', 301685, 223242, 0, 'Subcontract'), // gap 78,443
+    bl('9 - Division 09', '9-92116.000 - Gypsum', 1002072, 1005303, 0, 'Subcontract'), // over-committed → no gap
+  ]
+
+  it('ranks the largest uncommitted bought-out scope, excluding Labor and fully-committed lines', () => {
+    const gaps = buyoutGaps(lines)
+    expect(gaps.map((l) => l.costCode)).toEqual([
+      '7-72100.000 - Insulation', // 78,443
+      '5-51200.000 - Steel', // 24,460
+    ])
+  })
+
+  it('respects the limit', () => {
+    expect(buyoutGaps(lines, 1).map((l) => l.costCode)).toEqual(['7-72100.000 - Insulation'])
+  })
+})
+
+describe('costTypeMix', () => {
+  const lines = [
+    bl('x', 'x-1', 100, 80, 0, 'Subcontract'),
+    bl('x', 'x-2', 200, 150, 0, 'Labor'),
+    bl('x', 'x-3', 50, 40, 0, 'Material'),
+    bl('x', 'x-4', 30, 20, 0, 'Subcontract'),
+  ]
+
+  it('sums budget & committed per cost type', () => {
+    const mix = costTypeMix(lines)
+    const sub = mix.find((s) => s.costType === 'Subcontract')!
+    expect(sub).toEqual({ costType: 'Subcontract', budget: 130, committed: 100 })
+  })
+
+  it('orders Labor, Material, Subcontract canonically', () => {
+    expect(costTypeMix(lines).map((s) => s.costType)).toEqual(['Labor', 'Material', 'Subcontract'])
+  })
+
+  it('is empty-safe', () => {
+    expect(costTypeMix([])).toEqual([])
   })
 })

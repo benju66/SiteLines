@@ -24,6 +24,7 @@ export interface AppState {
   collapsedDisciplines: Set<string> // discipline names collapsed in the Drawings log (default: all expanded)
   expandedBudgetDivisions: Set<string> // division names expanded in the Budget drill-down (default: all collapsed → rollup first)
   budgetKpisCollapsed: boolean // Budget "Key figures" cards collapsed to a one-line summary
+  budgetAnalysisCollapsed: boolean // Budget "Risk & cost-type mix" panels collapsed to a one-line summary
 }
 
 export const initialState: AppState = {
@@ -41,4 +42,5 @@ export const initialState: AppState = {
   collapsedDisciplines: new Set(),
   expandedBudgetDivisions: new Set(),
   budgetKpisCollapsed: false,
+  budgetAnalysisCollapsed: false,
 }

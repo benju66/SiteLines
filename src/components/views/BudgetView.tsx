@@ -13,11 +13,11 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { formatMoney } from '@/lib/derive'
-import { boughtOut, budgetByDivision, budgetTotals, financialView, scoped, sortedBudgetGroups } from '@/selectors'
-import type { BudgetDivisionGroup, BudgetSort, BudgetSortCol } from '@/selectors'
+import { boughtOut, budgetByDivision, budgetTotals, buyoutGaps, costTypeMix, financialView, overBudget, scoped, sortedBudgetGroups } from '@/selectors'
+import type { BudgetDivisionGroup, BudgetSort, BudgetSortCol, CostTypeSlice, OverBudgetResult } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useSiteData } from '@/state/DataContext'
-import { mono, tone } from '@/theme/tokens'
+import { mono, projectMeta, tone } from '@/theme/tokens'
 import type { BudgetLine } from '@/types'
 
 // Seven columns. Widths are resizable; these defaults are mirrored in the CSS-var
@@ -99,6 +99,11 @@ export function BudgetView() {
   const groups = sortedBudgetGroups(budgetByDivision(shownLines), sort)
   const totals = budgetTotals(shownLines)
 
+  // Phase 2 analysis — always over the full scoped lines (independent of the table's filter).
+  const risk = overBudget(lines)
+  const gaps = buyoutGaps(lines, 4)
+  const mix = costTypeMix(lines)
+
   // Resizable columns — widths in a ref + a CSS var written straight to the DOM so
   // a drag doesn't re-render every row (the var cascades to all .row children).
   const innerRef = useRef<HTMLDivElement>(null)
@@ -140,6 +145,7 @@ export function BudgetView() {
     })
 
   const toggleKpis = () => patch((s) => ({ budgetKpisCollapsed: !s.budgetKpisCollapsed }))
+  const toggleAnalysis = () => patch((s) => ({ budgetAnalysisCollapsed: !s.budgetAnalysisCollapsed }))
   const toggleDiv = (name: string) =>
     patch((s) => {
       const next = new Set(s.expandedBudgetDivisions)
@@ -151,6 +157,7 @@ export function BudgetView() {
   const collapseAll = () => patch({ expandedBudgetDivisions: new Set() })
 
   const kpisCollapsed = state.budgetKpisCollapsed
+  const analysisCollapsed = state.budgetAnalysisCollapsed
   const isExpanded = (division: string) => overBudgetOnly || state.expandedBudgetDivisions.has(division)
 
   return (
@@ -187,6 +194,28 @@ export function BudgetView() {
         </div>
       ) : (
         <>
+          {/* risk radar + cost-type mix (Phase 2) — collapsible */}
+          <button
+            type="button"
+            onClick={toggleAnalysis}
+            aria-expanded={!analysisCollapsed}
+            style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', background: 'none', border: 'none', padding: '2px 2px 12px', marginTop: 16, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
+          >
+            <span aria-hidden style={{ display: 'inline-block', width: 9, fontSize: 10, color: 'var(--tx-faint)', transform: analysisCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .12s ease' }}>▸</span>
+            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--tx-tertiary)', fontWeight: 600 }}>Risk &amp; cost-type mix</span>
+            {analysisCollapsed && (
+              <span style={{ fontFamily: mono, fontSize: 11.5, color: 'var(--tx-faint)', marginLeft: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {risk.lines.length > 0 ? `${formatMoney(risk.totalExposure)} over budget · ${risk.lines.length} codes` : 'No cost codes over budget'}
+              </span>
+            )}
+          </button>
+          {!analysisCollapsed && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(0,1fr)', gap: 12 }}>
+              <RiskPanel risk={risk} gaps={gaps} />
+              <MixPanel mix={mix} />
+            </div>
+          )}
+
           {/* toolbar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 2px 9px' }}>
             <span style={{ fontSize: 12, color: 'var(--tx-tertiary)' }}>Click a division to drill in · a column header to sort · a column edge to resize.</span>
@@ -350,6 +379,99 @@ function LineRow({ line }: { line: BudgetLine }) {
       <Money v={line.budget - line.committed} />
       <Money v={line.eac} />
       <Money v={line.projectedOverUnder} over />
+    </div>
+  )
+}
+
+const panelCard: CSSProperties = { background: '#fff', border: '1px solid var(--bd-2)', borderRadius: 9, padding: '13px 15px', minWidth: 0 }
+const panelTitle: CSSProperties = { fontSize: 11, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--tx-tertiary)', fontWeight: 600 }
+
+/** Budget risk radar — total over-budget exposure, the worst cost codes, and the
+ *  largest un-bought scope still to award. */
+function RiskPanel({ risk, gaps }: { risk: OverBudgetResult; gaps: BudgetLine[] }) {
+  const top = risk.lines.slice(0, 6)
+  return (
+    <div style={panelCard}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <span style={panelTitle}>Budget risk</span>
+        <span style={{ fontSize: 10.5, color: 'var(--tx-faint)' }}>{risk.lines.length} over budget</span>
+      </div>
+      <div style={{ marginTop: 6, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span style={{ fontFamily: mono, fontSize: 20, fontWeight: 680, color: risk.totalExposure < 0 ? tone.danger.c : 'var(--tx-primary)' }}>{formatMoney(risk.totalExposure)}</span>
+        <span style={{ fontSize: 11, color: 'var(--tx-faint)' }}>projected over budget</span>
+      </div>
+
+      {top.length > 0 ? (
+        <div style={{ marginTop: 11 }}>
+          {top.map((l) => (
+            <RiskRow key={`${l.costCode}|${l.costType}`} line={l} amount={l.projectedOverUnder} amountColor={tone.danger.c} />
+          ))}
+        </div>
+      ) : (
+        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--tx-tertiary)' }}>No cost codes over budget.</div>
+      )}
+
+      {gaps.length > 0 && (
+        <>
+          <div style={{ marginTop: 12, marginBottom: 3, fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--tx-faint)', fontWeight: 600 }}>Largest uncommitted budget</div>
+          {gaps.map((l) => (
+            <RiskRow key={`${l.costCode}|${l.costType}`} line={l} amount={l.budget - l.committed} amountColor="var(--tx-secondary)" />
+          ))}
+        </>
+      )}
+    </div>
+  )
+}
+
+function RiskRow({ line, amount, amountColor }: { line: BudgetLine; amount: number; amountColor: string }) {
+  const [ccnum, ccname] = codeParts(line.costCode)
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '3px 0', minWidth: 0 }}>
+      <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 650, color: 'var(--tx-secondary-2)', flex: 'none' }}>{ccnum}</span>
+      <span style={{ fontSize: 12, color: 'var(--tx-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }} title={ccname}>{ccname}</span>
+      <span style={{ fontFamily: mono, fontSize: 11.5, fontWeight: 600, color: amountColor, flex: 'none', fontVariantNumeric: 'tabular-nums' }}>{formatMoney(amount)}</span>
+    </div>
+  )
+}
+
+/** Cost-type mix — hand-rolled SVG bars (no chart lib): budget as a light track,
+ *  committed overlaid in teal (amber when a type is over-committed). Bars scale to
+ *  the largest budget so the three types are comparable. */
+function MixPanel({ mix }: { mix: CostTypeSlice[] }) {
+  const max = Math.max(1, ...mix.map((s) => s.budget))
+  const teal = projectMeta.opiii.color
+  return (
+    <div style={panelCard}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <span style={panelTitle}>Cost-type mix</span>
+        <span style={{ fontSize: 10.5, color: 'var(--tx-faint)' }}>committed / budget</span>
+      </div>
+      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 13 }}>
+        {mix.map((s) => {
+          const over = s.budget > 0 && s.committed > s.budget
+          const budgetW = (s.budget / max) * 100
+          const committedW = Math.min(100, (s.committed / max) * 100)
+          const pct = s.budget > 0 ? `${Math.round((s.committed / s.budget) * 100)}%` : '—'
+          return (
+            <div key={s.costType}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx-secondary)' }}>{s.costType}</span>
+                <span style={{ fontFamily: mono, fontSize: 11, color: over ? tone.warn.c : 'var(--tx-faint)' }}>
+                  {formatMoney(s.committed)} / {formatMoney(s.budget)} · {pct}
+                </span>
+              </div>
+              <svg viewBox="0 0 100 8" preserveAspectRatio="none" style={{ width: '100%', height: 9, display: 'block' }} role="img" aria-label={`${s.costType}: ${pct} of budget committed`}>
+                <rect x="0" y="0" width={budgetW} height="8" fill="var(--bd-3)" />
+                <rect x="0" y="0" width={committedW} height="8" fill={over ? tone.warn.c : teal} />
+              </svg>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ marginTop: 12, display: 'flex', gap: 14, fontSize: 10, color: 'var(--tx-faint)' }}>
+        <span><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: 'var(--bd-3)', verticalAlign: -1, marginRight: 5 }} />Budget</span>
+        <span><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: teal, verticalAlign: -1, marginRight: 5 }} />Committed</span>
+      </div>
     </div>
   )
 }

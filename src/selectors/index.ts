@@ -531,3 +531,74 @@ export function sortedBudgetGroups(groups: BudgetDivisionGroup[], sort: BudgetSo
   )
   return out
 }
+
+// ---- Budget risk radar + cost-type mix (Budget Insights, Phase 2) ----
+
+/** The over-budget lines ranked by exposure, plus the job's total exposure. */
+export interface OverBudgetResult {
+  lines: BudgetLine[] // projectedOverUnder < 0, worst (most negative) first
+  totalExposure: number // Σ of the overruns — negative dollars (0 when nothing is over)
+}
+
+/**
+ * Rank the cost codes bleeding over budget (`projectedOverUnder < 0`) worst-first,
+ * with the summed exposure. Ties fall back to the natural cost-code sort. Pure — no
+ * clock, no mutation. `totalExposure` is negative so the UI can color it like the
+ * drill-down's Over/Under column.
+ */
+export function overBudget(lines: BudgetLine[]): OverBudgetResult {
+  const over = lines.filter((l) => l.projectedOverUnder < 0)
+  const ranked = [...over].sort(
+    (a, b) =>
+      a.projectedOverUnder - b.projectedOverUnder ||
+      compareDrawingNumber(a.costCode, b.costCode) ||
+      compareDrawingNumber(a.costType, b.costType),
+  )
+  const totalExposure = over.reduce((s, l) => s + l.projectedOverUnder, 0)
+  return { lines: ranked, totalExposure }
+}
+
+/**
+ * The biggest buyout gaps — bought-out scope (Material / Subcontract) with the most
+ * budget still uncommitted, i.e. the largest procurements still to award. Labor is
+ * excluded (self-perform work is never "bought out", so its full budget always reads
+ * as uncommitted). Worst-first, capped at `limit`. Pure.
+ */
+export function buyoutGaps(lines: BudgetLine[], limit = 5): BudgetLine[] {
+  return lines
+    .filter((l) => l.costType !== 'Labor' && l.budget - l.committed > 0)
+    .sort(
+      (a, b) =>
+        b.budget - b.committed - (a.budget - a.committed) ||
+        compareDrawingNumber(a.costCode, b.costCode) ||
+        compareDrawingNumber(a.costType, b.costType),
+    )
+    .slice(0, limit)
+}
+
+/** Budget & committed summed per cost type (the cost-type mix bars). */
+export interface CostTypeSlice {
+  costType: string
+  budget: number
+  committed: number
+}
+
+const COST_TYPE_ORDER = ['Labor', 'Material', 'Subcontract']
+
+/**
+ * Sum budget & committed per cost type for the mix bars. Canonical order (Labor,
+ * Material, Subcontract) first, then any other types by budget descending. Pure —
+ * no clock, no mutation.
+ */
+export function costTypeMix(lines: BudgetLine[]): CostTypeSlice[] {
+  const map = new Map<string, CostTypeSlice>()
+  for (const l of lines) {
+    const s = map.get(l.costType) ?? { costType: l.costType, budget: 0, committed: 0 }
+    s.budget += l.budget
+    s.committed += l.committed
+    map.set(l.costType, s)
+  }
+  const known = COST_TYPE_ORDER.filter((t) => map.has(t)).map((t) => map.get(t) as CostTypeSlice)
+  const others = [...map.values()].filter((s) => !COST_TYPE_ORDER.includes(s.costType)).sort((a, b) => b.budget - a.budget)
+  return [...known, ...others]
+}
