@@ -13,6 +13,7 @@ export type ViewType =
   | 'list'
   | 'financial'
   | 'budget'
+  | 'commitments'
   | 'photos'
   | 'dailyLog'
   | 'drawings'
@@ -221,6 +222,38 @@ export interface BudgetPending {
   costCode: string // budget cost_code, or the change-event cost-code name, or 'Unassigned'
   pendingAmount: number // Σ estimated_cost_amount of the cost code's open change-event line items
   openEvents: number // count of open change events touching the cost code
+}
+
+/**
+ * One commitment — a subcontract (SC) or purchase order (PO) with its financial
+ * position (Commitments, Phase 1). Reference data — NOT a court `Item` and never
+ * enters My Court (like `Drawing`/`BudgetLine`). The commitments master is
+ * header-only, so the financials come from the commitment's LATEST requisition
+ * (its AIA G702 summary); `hasRequisition` is false for a just-issued commitment
+ * with no pay app yet — the register shows "—" for its financials. Raw DOLLARS;
+ * the selector layer computes the rollup and % (never stored — DATA_CONTRACT §6).
+ */
+export interface Commitment {
+  project: Project // 'opiii' for v1 (only OP III is synced)
+  id: string // "commitments:<procore id>"
+  number: string // "SC-25-117-030" / "PO-25-117-061"
+  title: string
+  vendor: string // contract company (vendors_master.name; '' when unknown)
+  type: 'PO' | 'SC' | 'Other' // from the number prefix (no type field in the synced master)
+  status: string // "Draft" | "Approved" | …
+  executed: boolean
+  hasRequisition: boolean // financials below are real only when true
+  original: number // original_contract_sum (0 when no requisition yet)
+  revised: number // contract_sum_to_date (original + change orders)
+  billed: number // total_completed_and_stored_to_date
+  retainage: number // total_retainage
+  pctComplete: number // 0..1 (the latest requisition's percent_complete)
+  coCount: number // # commitment change orders (Void excluded)
+  coTotal: number // Σ commitment CO grand_total (Void excluded)
+  // descriptive (for the Phase 2 drawer; already synced):
+  description: string
+  deliveryDate: string | null
+  private: boolean
 }
 
 /**

@@ -11,7 +11,7 @@ import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { BudgetLine, BudgetPending, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
+import type { BudgetLine, BudgetPending, Commitment, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -614,6 +614,104 @@ export function costTypeMix(lines: BudgetLine[]): CostTypeSlice[] {
   const known = COST_TYPE_ORDER.filter((t) => map.has(t)).map((t) => map.get(t) as CostTypeSlice)
   const others = [...map.values()].filter((s) => !COST_TYPE_ORDER.includes(s.costType)).sort((a, b) => b.budget - a.budget)
   return [...known, ...others]
+}
+
+// ---- Commitments register (Commitments, Phase 1) ----
+
+/** Totals for the Commitments KPI cards. Sums span every commitment (rows with
+ *  no requisition contribute 0); `billing` counts the ones with a requisition. */
+export interface CommitmentRollup {
+  count: number
+  billing: number // commitments with a pay app (financials present)
+  original: number
+  revised: number
+  billed: number
+  retainage: number
+  pctComplete: number // overall billed / revised, 0..1 (0 when revised is 0)
+}
+
+/** Roll commitments up for the KPI cards. Deterministic, pure — no clock. */
+export function commitmentRollup(commitments: Commitment[]): CommitmentRollup {
+  let billing = 0
+  let original = 0
+  let revised = 0
+  let billed = 0
+  let retainage = 0
+  for (const c of commitments) {
+    if (c.hasRequisition) billing++
+    original += c.original
+    revised += c.revised
+    billed += c.billed
+    retainage += c.retainage
+  }
+  return {
+    count: commitments.length,
+    billing,
+    original,
+    revised,
+    billed,
+    retainage,
+    pctComplete: revised > 0 ? billed / revised : 0,
+  }
+}
+
+/** A sortable column of the Commitments register. */
+export type CommitmentSortCol = 'vendor' | 'type' | 'revised' | 'billed' | 'retainage' | 'pct' | 'status'
+export interface CommitmentSort {
+  col: CommitmentSortCol
+  dir: 'asc' | 'desc'
+}
+
+/** Deterministic tiebreak: natural commitment-number order, then id. */
+const byCommitmentNumber = (a: Commitment, b: Commitment) =>
+  compareDrawingNumber(a.number, b.number) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+
+const strCompare = (x: string, y: string): number => {
+  const a = x.toLowerCase()
+  const b = y.toLowerCase()
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
+function commitmentMetric(c: Commitment, col: CommitmentSortCol): number | string {
+  switch (col) {
+    case 'vendor':
+      return c.vendor
+    case 'type':
+      return c.type
+    case 'revised':
+      return c.revised
+    case 'billed':
+      return c.billed
+    case 'retainage':
+      return c.retainage
+    case 'pct':
+      return c.pctComplete
+    case 'status':
+      return c.status
+  }
+}
+
+/**
+ * The register order. `null` = the default: largest revised value first, with
+ * commitments that have no pay app yet (no financials) sinking to the bottom.
+ * An explicit sort orders by that column (strings case-insensitive); ties fall
+ * back to the natural number order so the result stays deterministic. Pure —
+ * the input array is copied, never mutated.
+ */
+export function commitmentsSorted(commitments: Commitment[], sort: CommitmentSort | null): Commitment[] {
+  const rows = [...commitments]
+  if (!sort) {
+    return rows.sort(
+      (a, b) => Number(b.hasRequisition) - Number(a.hasRequisition) || b.revised - a.revised || byCommitmentNumber(a, b),
+    )
+  }
+  const sign = sort.dir === 'asc' ? 1 : -1
+  return rows.sort((a, b) => {
+    const x = commitmentMetric(a, sort.col)
+    const y = commitmentMetric(b, sort.col)
+    const cmp = typeof x === 'string' ? strCompare(x, y as string) : x - (y as number)
+    return cmp * sign || byCommitmentNumber(a, b)
+  })
 }
 
 // ---- Pending-change forecast (Budget Insights, Phase 3) ----

@@ -25,7 +25,7 @@ export const TOOLS: Record<ToolKey, ToolMeta> = {
   documents: { label: 'Documents', code: 'DOC', view: 'list', group: 0, whoLabel: 'Owner', rightLabel: 'Status', desc: 'Contracts, permits, reports, insurance.' },
   primeContract: { label: 'Prime Contract', code: 'PC', view: 'financial', group: 1, desc: 'Owner contract value and billing to date.' },
   budget: { label: 'Budget', code: 'BUD', view: 'budget', group: 1, desc: 'Cost control by division.' },
-  commitments: { label: 'Commitments', code: 'COM', view: 'list', group: 1, whoLabel: 'Owner', rightLabel: 'Value', desc: 'Subcontracts and purchase orders.' },
+  commitments: { label: 'Commitments', code: 'COM', view: 'commitments', group: 1, desc: 'Subcontracts and purchase orders.' },
   changeOrders: { label: 'Change Orders', code: 'CO', view: 'list', group: 1, whoLabel: 'Waiting on', rightLabel: 'Status', desc: 'Executed and pending contract changes.' },
   invoicing: { label: 'Invoicing', code: 'INV', view: 'list', group: 1, whoLabel: 'Waiting on', rightLabel: 'Amount', desc: 'Pay applications in and out.' },
 }

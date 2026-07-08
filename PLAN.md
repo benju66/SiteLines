@@ -73,6 +73,20 @@ deferred (need a sync change). The "next Procore tool to enrich" after RFIs + su
 | 3 | Pending-change exposure (D) — cross-tool `sitelines_budget_pending` view (OPEN change events → line items → budget divisions) + `BudgetPending` seam + `budgetForecast` selector + collapsible "Pending changes" section on `BudgetView` (per-division Revised → Pending → Projected, incl. de-scope credits + an Unassigned bucket) | ✅ Done (2026-07-07) — $32,505 pending → projected $18.46M; ties to the open change-events register |
 | 4–5 | Actuals & billing (E, ERP JTD now surfaced — requisitions/billing still deferred) · Trends over time (F, needs snapshot capture) · Portfolio (G, needs McKenna sync) | 🗄️ Deferred |
 
+### Parallel workstream: Commitments (subcontract cost surface)
+Enrich **Commitments** from a bare register (no vendor, no value today) into a subcontract
+cost surface — its own plan: [Notes/plans/Commitments-Plan.md](Notes/plans/Commitments-Plan.md).
+Financials come from each commitment's **latest requisition G702 summary** (billed
+$15,283,425 reconciles to Budget's Invoiced-to-Date); the **Budget↔Commitment cost-code
+cross-link** needs an FP-Analytics sync change (owner chose to pursue it, 2026-07-08).
+
+| Phase | Surface | Status |
+|-------|---------|--------|
+| 1 | Commitments own view (like Budget) — `sitelines_commitments` view + `Commitment` seam + rollup KPIs + enriched sortable register (contract company · type · revised · billed · retainage · % complete · status) | 🚧 Built (app code + tests green; seed verified) — ⛔ awaiting owner sign-off on [sitelines_commitments.sql](sync/views/sitelines_commitments.sql), then apply + live verify |
+| 2 | Commitment detail drawer — description · dates · privacy + CO log + billing history (lazy `getCommitmentDetail`); summary/inclusions-exclusions/additional-info stubbed until Phase 3 | 📋 Planned |
+| 3 | ⛔ FP-Analytics sync change — commitment SOV line items (cost codes) + detail fields (sibling repo; owner-run re-sync) | 📋 Planned ⛔ cross-repo |
+| 4 | Budget↔Commitment cross-link — `sitelines_commitment_line_items` view; Budget cost code → the sub(s) behind it; fill the richer drawer fields | 📋 Planned ⛔ new view (after Phase 3) |
+
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**
 with its own plan: [Notes/plans/Procore-Data-Seam-Plan.md](Notes/plans/Procore-Data-Seam-Plan.md).
