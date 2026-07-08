@@ -445,9 +445,10 @@ def enrich_commitments_with_detail(token: str, commitments, line_item_rows: list
 
     The commitment *list* endpoint (`/commitments?project_id=`) carries the header
     only — no Schedule of Values, no scope detail. The *detail* endpoint
-    (`/commitments/{id}`) returns `line_items[]` (each with `cost_code`, `amount`,
-    `total_amount`, and a direct `budget_line_item_id` — the Budget cross-link) plus
-    `inclusions` / `exclusions` / `grand_total`. For every commitment we:
+    (`/commitments/{id}?project_id=`) returns `line_items[]` (each with `cost_code`
+    {id, name, full_code} — the Budget cross-link join — plus `amount`,
+    `total_amount`, `description`) plus `inclusions` / `exclusions` / `grand_total`.
+    For every commitment we:
       * flatten each SOV line item into line_item_rows — the WHOLE item, tagged with
         `line_item_id` (its key) + `commitment_id` (the parent link); storing the
         full item as `raw` keeps this drift-proof (the Phase-4 view maps cost_code /
@@ -472,7 +473,10 @@ def enrich_commitments_with_detail(token: str, commitments, line_item_rows: list
         cid = c.get('id')
         if not cid:
             continue
-        detail = get_json(token, f'{BASE_API_URL}/rest/v1.0/commitments/{cid}')
+        # project_id is required — without it Procore returns 400 (verified against
+        # both work-order (SC) and purchase-order (PO) commitments; this generic
+        # commitments/{id} show returns line_items for both, so no type branch needed).
+        detail = get_json(token, f'{BASE_API_URL}/rest/v1.0/commitments/{cid}?project_id={project_id}')
         if detail is None:
             return False
 

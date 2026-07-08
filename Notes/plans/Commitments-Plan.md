@@ -143,7 +143,7 @@ REUSE, do not fork:
 - **Exit criteria:** typecheck + build + tests; live — drawer opens, CO log + billing tie to
   Procore; seed renders.
 
-### Phase 3 — commitment SOV line items + detail fields (🚧 IMPLEMENTED 2026-07-08; ⛔ owner re-sync pending)
+### Phase 3 — commitment SOV line items + detail fields (✅ DONE + SYNCED + VERIFIED 2026-07-08)
 > **Step-0 correction:** the real Procore→Supabase sync is **in-repo at `sync/procore_pipeline.py`**
 > (moved from the standalone FP-Analytics folder in Data Seam Phase 1.5; that sibling copy is a
 > retired, flat-column ancestor). So Phase 3 was an **in-repo** change, not cross-repo. The live
@@ -156,41 +156,41 @@ REUSE, do not fork:
   numbering during sync. The structured data lives on the commitment **detail (show)** endpoint.
   The Casework PO's SOV lines map to budget cost codes **`12-123530.000`** and **`6-64100.000`**
   verbatim (verified against `procore_budget_detail_rows_master`), so the Budget↔Commitment link
-  (Phase 4) is real — and the detail endpoint carries a direct **`budget_line_item_id`** per line.
+  (Phase 4) is real. **Join is via `cost_code.full_code`** — each line item carries a `cost_code`
+  object; there is **no** top-level `budget_line_item_id` on the line item (an earlier assumption
+  the live probe corrected).
 - **What was built (in `sync/`):**
   - `migrations/0009_commitment_line_items.sql` — new **`procore_commitment_line_items_master`**
     (`line_item_id, project_id, raw jsonb, synced_at`, PK + project index + deny-all RLS +
     `authenticated_read`), mirroring `procore_change_event_line_items_master`. **Applied to Supabase.**
   - `procore_pipeline.py` — `enrich_commitments_with_detail()` does a per-commitment
-    `GET /rest/v1.0/commitments/{id}`, flattens each `line_items[]` entry (the full item as `raw`,
-    tagged with `line_item_id` + `commitment_id`), and merges the detail-only scope fields
-    (`inclusions`, `exclusions`, `grand_total`, `line_items_total`, `retainage_percent`, dates)
-    onto the commitment's `raw`. The commitment LIST still upserts unconditionally (Phase 1/2
-    depend on it); only the new line-items table is gated on full enrichment success (purge
-    safety). Fail-safe: a failed detail fetch → skip the line-items upsert (no purge), commitments
-    unaffected.
-- **⛔ Remaining owner steps (only these):**
-  1. **Confirm the Procore Data Connection App** has the Commitments *show* permission in the
-     Developer Portal (expected identical to the list scope — but verify; this is the "touches the
-     Procore app" gate).
-  2. **Run the re-sync** — `cd sync && python procore_pipeline.py` (upsert + scoped purge;
-     non-destructive; run lengthens by ~1 GET per commitment).
-  3. **First-run verification** (I could not run the live pipeline): confirm
-     `procore_commitment_line_items_master` populates and the log has no "enrichment incomplete"
-     warning. If it does, the `GET /commitments/{id}` path/shape needs adjustment (a
-     project-scoped or type-specific `work_order_contracts`/`purchase_order_contracts` variant) —
-     a one-line endpoint change; the raw-JSONB design keeps field drift safe.
-- **Exit criteria:** `procore_commitment_line_items_master` populated for OP III; the Casework PO
-  (PO-25-117-123) shows its 4 SOV lines summing to $539,086.57 across `12-123530.000` /
-  `6-64100.000`; inclusions/exclusions present on the commitment `raw`; verified read-only.
+    `GET /rest/v1.0/commitments/{id}?project_id={pid}` (the `project_id` param is REQUIRED —
+    without it Procore returns 400; the generic show works for both SC/work-order and PO
+    /purchase-order commitments, so no type branch), flattens each `line_items[]` entry (the full
+    item as `raw`, tagged with `line_item_id` + `commitment_id`), and merges the detail-only scope
+    fields (`inclusions`, `exclusions`, `grand_total`, …) onto the commitment's `raw`. The
+    commitment LIST still upserts unconditionally (Phase 1/2 depend on it); only the new
+    line-items table is gated on full enrichment success (purge safety). Fail-safe: a failed
+    detail fetch → skip the line-items upsert (no purge), commitments unaffected.
+- **✅ Ran + verified (2026-07-08, live sync):** `procore_commitment_line_items_master` =
+  **479 line items across all 51 real commitments**, every one carrying a `cost_code`. The
+  Casework PO (PO-25-117-123) → **9 lines summing to $539,086.57 = its `grand_total`** across
+  `12-123530.000` / `6-64100.000` (the PDF's 4-row SOV was a grouped summary of the same total).
+  `inclusions` on 41 / `exclusions` on 17 / `grand_total` on all 53 commitments.
+- **⚠️ Operational finding — rate limit:** the added ~1 GET per commitment pushed the run over
+  Procore's rate budget and it slept **~39 min** to recover; in the aftermath RFIs / submittals /
+  punch / meetings were rate-limited out and **skipped this run (fail-safe — no purge, existing
+  rows preserved)**. They self-heal on the next normal nightly run. If the nightly job runs near
+  the rate ceiling, consider spacing the commitment detail GETs or gating enrichment to
+  changed commitments.
 
 ### Phase 4 — Budget↔Commitment cross-link + richer drawer (after Phase 3)
 - **Scope:** ⛔ a `sitelines_commitment_line_items` view (cost code → commitment). Budget
   cost codes drill to the subcontract(s) behind them; Commitments ↔ Budget cross-links;
   fill in the drawer's real inclusions/exclusions + contract-summary from the Phase-3
   commitment `raw`, and replace the Phase-2 scope-text parser's cost-code guesses with the
-  synced SOV line items. Join on the detail endpoint's **`budget_line_item_id`** (a direct FK
-  to the budget line) with cost-code match as the fallback.
+  synced SOV line items. Join `procore_commitment_line_items_master.raw->'cost_code'->>'full_code'`
+  to the budget's `cost_code` (proven on the Casework PO: `12-123530.000` / `6-64100.000`).
 - **Approval gates:** ⛔ Supabase view SQL. No re-sync (Phase 3 did it).
 - **Exit criteria:** typecheck + build + tests; live — a Budget cost code opens its
   commitment(s); seed renders. Then STOP.
