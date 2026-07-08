@@ -7,6 +7,7 @@ import { Header } from '@/components/layout/Header'
 import { MainContent } from '@/components/layout/MainContent'
 import { ActivityDrawer } from '@/components/overlays/ActivityDrawer'
 import { CommandPalette } from '@/components/overlays/CommandPalette'
+import { CommitmentDrawer } from '@/components/overlays/CommitmentDrawer'
 import { DrawingViewerOverlay } from '@/components/overlays/DrawingViewerOverlay'
 import { RecordDetailDrawer } from '@/components/overlays/RecordDetailDrawer'
 
@@ -23,7 +24,7 @@ function useGlobalKeys() {
         e.preventDefault()
         patch((s) => ({ palette: !s.palette, query: '' }))
       } else if (e.key === 'Escape') {
-        patch({ palette: false, detail: null, activity: false, viewer: null })
+        patch({ palette: false, detail: null, commitment: null, activity: false, viewer: null })
       }
     }
     window.addEventListener('keydown', onKey)
@@ -113,6 +114,7 @@ export function App() {
         card's overflow:hidden never clips them (README "Global Layout").
       */}
       <RecordDetailDrawer />
+      <CommitmentDrawer />
       <DrawingViewerOverlay />
       <ActivityDrawer />
       <CommandPalette />

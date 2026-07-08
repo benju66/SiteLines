@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Commitment } from '@/types'
-import { commitmentRollup, commitmentsSorted } from './index'
+import type { Commitment, CommitmentBilling, CommitmentChangeOrder } from '@/types'
+import { commitmentBillingsSorted, commitmentChangeOrdersSorted, commitmentRollup, commitmentsSorted } from './index'
 
 /** Minimal Commitment builder — only the fields the selectors read. */
 function cm(
@@ -108,5 +108,55 @@ describe('commitmentsSorted', () => {
   it('sorts by % complete', () => {
     const pcts = commitmentsSorted(commitments, { col: 'pct', dir: 'desc' }).map((c) => c.pctComplete)
     expect(pcts).toEqual([...pcts].sort((a, b) => b - a))
+  })
+})
+
+const co = (number: string, amount: number): CommitmentChangeOrder => ({
+  id: `commitments:1:co:${number}`,
+  number,
+  title: `Change order ${number}`,
+  amount,
+  status: 'Approved',
+  executed: true,
+  date: null,
+})
+
+const bill = (number: string, billedToDate: number): CommitmentBilling => ({
+  id: `commitments:1:req:${number}`,
+  number,
+  invoiceNumber: `R-${number}`,
+  period: '',
+  billingDate: null,
+  status: 'Approved',
+  pctComplete: 0.5,
+  billedToDate,
+  thisPeriod: 0,
+})
+
+describe('commitmentChangeOrdersSorted', () => {
+  it('orders by CO number ascending (chronological), numerically not lexically', () => {
+    const out = commitmentChangeOrdersSorted([co('010', 5), co('002', 4), co('001', 1)])
+    expect(out.map((c) => c.number)).toEqual(['001', '002', '010'])
+  })
+
+  it('does not mutate its input', () => {
+    const input = [co('002', 4), co('001', 1)]
+    const before = input.map((c) => c.number)
+    commitmentChangeOrdersSorted(input)
+    expect(input.map((c) => c.number)).toEqual(before)
+  })
+})
+
+describe('commitmentBillingsSorted', () => {
+  it('orders by pay-app number descending (latest first), numerically', () => {
+    const out = commitmentBillingsSorted([bill('2', 20), bill('10', 100), bill('1', 10)])
+    expect(out.map((b) => b.number)).toEqual(['10', '2', '1'])
+  })
+
+  it('does not mutate its input', () => {
+    const input = [bill('1', 10), bill('2', 20)]
+    const before = input.map((b) => b.number)
+    commitmentBillingsSorted(input)
+    expect(input.map((b) => b.number)).toEqual(before)
   })
 })

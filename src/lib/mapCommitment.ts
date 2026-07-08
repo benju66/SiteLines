@@ -7,7 +7,8 @@
 // commitment has no requisition yet — `has_requisition` keeps that fact so the
 // register can show "—" instead of a misleading $0.
 
-import type { Commitment, Project } from '@/types'
+import { formatShortDate } from '@/lib/derive'
+import type { Commitment, CommitmentBilling, CommitmentChangeOrder, Project } from '@/types'
 
 /** One row of the sitelines_commitments view (numerics arrive as strings). */
 export interface CommitmentRow {
@@ -56,5 +57,59 @@ export function mapCommitment(row: CommitmentRow): Commitment {
     description: row.description ?? '',
     deliveryDate: row.delivery_date,
     private: !!row.private,
+  }
+}
+
+/** One row of the sitelines_commitment_change_orders view. */
+export interface CommitmentChangeOrderRow {
+  commitment: string
+  number: string | null
+  title: string | null
+  amount: number | string | null
+  status: string | null
+  executed: boolean | null
+  created_at: string | null
+}
+
+/** Map a CO-log view row to the CommitmentChangeOrder contract shape. */
+export function mapCommitmentChangeOrder(row: CommitmentChangeOrderRow): CommitmentChangeOrder {
+  const number = (row.number ?? '').trim()
+  return {
+    id: `${row.commitment}:co:${number}`,
+    number,
+    title: (row.title ?? '').trim(),
+    amount: num(row.amount),
+    status: (row.status ?? '').trim(),
+    executed: !!row.executed,
+    date: formatShortDate(row.created_at),
+  }
+}
+
+/** One row of the sitelines_commitment_billings view. */
+export interface CommitmentBillingRow {
+  commitment: string
+  number: string | null
+  invoice_number: string | null
+  period: string | null
+  billing_date: string | null
+  status: string | null
+  pct_complete: number | string | null
+  billed_to_date: number | string | null
+  this_period: number | string | null
+}
+
+/** Map a billing-history view row to the CommitmentBilling contract shape. */
+export function mapCommitmentBilling(row: CommitmentBillingRow): CommitmentBilling {
+  const number = (row.number ?? '').trim()
+  return {
+    id: `${row.commitment}:req:${number}`,
+    number,
+    invoiceNumber: (row.invoice_number ?? '').trim(),
+    period: (row.period ?? '').trim(),
+    billingDate: formatShortDate(row.billing_date),
+    status: (row.status ?? '').trim(),
+    pctComplete: num(row.pct_complete) / 100,
+    billedToDate: num(row.billed_to_date),
+    thisPeriod: num(row.this_period),
   }
 }

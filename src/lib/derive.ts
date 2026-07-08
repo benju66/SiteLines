@@ -38,6 +38,18 @@ export function deriveUrgency(dueDateISO: string | null, today: Date, isTerminal
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /**
+ * Absolute display date, e.g. "Jun 11, 2026" — for dates shown as-is (a
+ * commitment CO date, a pay-app billing date), not urgency-relative. No clock:
+ * the year is always shown. null/blank → null so callers can render "—".
+ */
+export function formatShortDate(iso: string | null): string | null {
+  if (!iso) return null
+  const d = parseISO(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
+}
+
+/**
  * Display string for a due date, matching the seed vocabulary:
  * "due Jun 24" (with the year appended when it isn't `today`'s year).
  * No due date → '—'.

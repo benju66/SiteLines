@@ -4,7 +4,7 @@
 // a supabaseDataSource reading the normalization views — the UI never knows
 // the difference.
 
-import type { ActivityEvent, BudgetLine, BudgetPending, Commitment, Contact, DailyLogEntry, Drawing, DrawingRevision, FinancialSource, Item, ItemDetail, Photo, ToolKey } from '@/types'
+import type { ActivityEvent, BudgetLine, BudgetPending, Commitment, CommitmentDetail, Contact, DailyLogEntry, Drawing, DrawingRevision, FinancialSource, Item, ItemDetail, Photo, ToolKey } from '@/types'
 
 export type ItemsByTool = Record<ToolKey, Item[]>
 
@@ -39,6 +39,14 @@ export interface DataSource {
    * generated summary. Rejects only on an actual read error.
    */
   getDetail(item: Item): Promise<ItemDetail | null>
+  /**
+   * Lazily fetch a commitment's detail (the drawer calls this on open, keyed by
+   * `Commitment.id`): its change-order log + billing history. The descriptive
+   * fields ride on the `Commitment` itself, so this only carries the two lists.
+   * Both arrays empty when the commitment has none; the caller orders them.
+   * Rejects only on an actual read error.
+   */
+  getCommitmentDetail(id: string): Promise<CommitmentDetail>
   /**
    * Lazily fetch every revision of a drawing (the viewer's revision picker calls
    * this on open, keyed by `Drawing.drawingId`). Returned newest-first is not

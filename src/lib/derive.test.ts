@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveUrgency, formatDueDate, statusTone, timeAgo } from './derive'
+import { deriveUrgency, formatDueDate, formatShortDate, statusTone, timeAgo } from './derive'
 
 // Fixed clock for every case — the fns take `today`/`now` in, so tests are
 // fully deterministic.
@@ -42,6 +42,18 @@ describe('formatDueDate', () => {
   })
   it('no due date → em dash', () => {
     expect(formatDueDate(null, TODAY)).toBe('—')
+  })
+})
+
+describe('formatShortDate', () => {
+  it('formats an absolute date with the year (no clock)', () => {
+    expect(formatShortDate('2026-06-11')).toBe('Jun 11, 2026')
+    expect(formatShortDate('2025-09-22T14:43:03')).toBe('Sep 22, 2025')
+  })
+  it('null / blank / unparseable → null', () => {
+    expect(formatShortDate(null)).toBeNull()
+    expect(formatShortDate('')).toBeNull()
+    expect(formatShortDate('not-a-date')).toBeNull()
   })
 })
 

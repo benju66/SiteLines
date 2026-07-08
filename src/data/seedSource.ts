@@ -3,7 +3,7 @@
 // exercise the loading/error states in dev (?slow / ?fail query params).
 
 import type { DataSource, Snapshot } from '@/lib/dataSource'
-import type { DrawingRevision, Item, ItemDetail, ItemResponse } from '@/types'
+import type { CommitmentDetail, DrawingRevision, Item, ItemDetail, ItemResponse } from '@/types'
 import { ACTIVITY } from './activity'
 import { BUDGET_LINES } from './budgetLines'
 import { BUDGET_PENDING } from './budgetPending'
@@ -40,6 +40,39 @@ export function createSeedSource(opts: { delayMs?: number; fail?: boolean } = {}
         assignees: item.mine ? undefined : item.who,
         attachments: [], // no real files in seed mode
       }
+    },
+    async getCommitmentDetail(id: string): Promise<CommitmentDetail> {
+      // Seed has no Procore detail; synthesize a deterministic CO log + billing
+      // history off the fixture commitment (no clock, no random) so the drawer's
+      // sections are exercised offline. Amounts stay internally consistent (COs
+      // sum to coTotal; pay apps ramp cumulatively to billed).
+      const c = COMMITMENTS.find((x) => x.id === id)
+      if (!c) return { changeOrders: [], billings: [] }
+      const round = (n: number) => Math.round(n * 100) / 100
+      const each = c.coCount > 0 ? round(c.coTotal / c.coCount) : 0
+      const changeOrders = Array.from({ length: c.coCount }, (_, i) => {
+        const number = String(i + 1).padStart(3, '0')
+        const amount = i === c.coCount - 1 ? round(c.coTotal - each * (c.coCount - 1)) : each
+        return { id: `${c.id}:co:${number}`, number, title: `Change order ${i + 1}`, amount, status: 'Approved', executed: true, date: null }
+      })
+      const periods = ['Apr 30, 2026', 'May 31, 2026', 'Jun 30, 2026']
+      const steps = c.hasRequisition ? 3 : 0
+      const billings = Array.from({ length: steps }, (_, i) => {
+        const k = i + 1
+        const number = String(k)
+        return {
+          id: `${c.id}:req:${number}`,
+          number,
+          invoiceNumber: `${c.number}-${number}`,
+          period: periods[i] ?? '',
+          billingDate: periods[i] ?? null,
+          status: 'Approved',
+          pctComplete: round((c.pctComplete * k) / steps * 100) / 100,
+          billedToDate: round((c.billed * k) / steps),
+          thisPeriod: round(c.billed / steps),
+        }
+      })
+      return { changeOrders, billings }
     },
     async getDrawingRevisions(drawingId: string): Promise<DrawingRevision[]> {
       // Seed has no Procore history; synthesize a short deterministic chain

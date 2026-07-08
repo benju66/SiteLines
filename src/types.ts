@@ -257,6 +257,52 @@ export interface Commitment {
 }
 
 /**
+ * One commitment change order (Commitments, Phase 2 — the detail drawer's CO
+ * log). Reference data, lazily fetched per commitment via
+ * `DataSource.getCommitmentDetail`. `amount` is raw dollars (can be negative — a
+ * de-scope credit); `date` is a preformatted display string.
+ */
+export interface CommitmentChangeOrder {
+  id: string // "<commitment id>:co:<number>" — stable list key
+  number: string // "001"
+  title: string
+  amount: number // grand_total (negative = credit)
+  status: string // "Approved" | …
+  executed: boolean
+  date: string | null // preformatted, e.g. "Sep 22, 2025"
+}
+
+/**
+ * One subcontractor pay application against a commitment (Commitments, Phase 2 —
+ * the detail drawer's billing history). Reference data, lazily fetched. Amounts
+ * are raw dollars; `pctComplete` is 0..1.
+ */
+export interface CommitmentBilling {
+  id: string // "<commitment id>:req:<number>" — stable list key
+  number: string // requisition number, e.g. "7"
+  invoiceNumber: string // "R-030567-000-7"
+  period: string // "05/01/26 - 05/31/26"
+  billingDate: string | null // preformatted, e.g. "Jun 11, 2026"
+  status: string
+  pctComplete: number // 0..1
+  billedToDate: number // total_completed_and_stored_to_date at this pay app
+  thisPeriod: number // current_payment_due for this pay app
+}
+
+/**
+ * The lazily-loaded detail behind a commitment (Commitments, Phase 2). Fetched
+ * via `DataSource.getCommitmentDetail(id)` when the drawer opens — the register
+ * `Commitment` stays light. The descriptive fields (description, dates, privacy)
+ * ride on the `Commitment` itself; this carries the two per-commitment lists.
+ * Contract summary / SOV inclusions-exclusions / additional info aren't synced
+ * yet (Phase 3) — the drawer stubs them.
+ */
+export interface CommitmentDetail {
+  changeOrders: CommitmentChangeOrder[]
+  billings: CommitmentBilling[]
+}
+
+/**
  * Financial rollup source (DATA_CONTRACT §6). Division rows are
  * [name, budget, committed, invoiced] in $millions; KPIs and % are computed in
  * the selector layer, not stored.

@@ -92,7 +92,7 @@ function StatusPill({ label }: { label: string }) {
 }
 
 export function CommitmentsView() {
-  const { state } = useApp()
+  const { state, patch } = useApp()
   const { commitments } = useSiteData()
 
   const [sort, setSort] = useState<CommitmentSort | null>(null)
@@ -139,7 +139,7 @@ export function CommitmentsView() {
       ) : (
         <>
           <div style={{ margin: '16px 2px 9px', fontSize: 12, color: 'var(--tx-tertiary)' }}>
-            Click a column header to sort · financials are the latest pay application (“—” = no billing yet).
+            Click a row to open its detail · a column header to sort · financials are the latest pay application (“—” = no billing yet).
           </div>
 
           <div style={{ background: '#fff', border: '1px solid var(--bd-2)', borderRadius: 9, overflow: 'hidden' }}>
@@ -184,7 +184,7 @@ export function CommitmentsView() {
                 </div>
 
                 {sorted.map((c) => (
-                  <CommitmentRow key={c.id} c={c} />
+                  <CommitmentRow key={c.id} c={c} onOpen={() => patch({ commitment: c })} />
                 ))}
 
                 {/* totals */}
@@ -207,10 +207,22 @@ export function CommitmentsView() {
   )
 }
 
-function CommitmentRow({ c }: { c: Commitment }) {
+function CommitmentRow({ c, onOpen }: { c: Commitment; onOpen: () => void }) {
   const missing = !c.hasRequisition
   return (
-    <div className="sl-hover-row" style={{ ...rowBase, padding: '9px 16px', borderBottom: '1px solid var(--bd-row)' }}>
+    <div
+      className="sl-hover-row"
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
+      style={{ ...rowBase, padding: '9px 16px', borderBottom: '1px solid var(--bd-row)', cursor: 'pointer' }}
+    >
       <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
         <span style={{ fontFamily: mono, fontSize: 11.5, fontWeight: 650, color: 'var(--tx-primary)', flex: 'none' }}>{c.number}</span>
         <span style={{ fontSize: 12.5, color: 'var(--tx-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={c.title}>

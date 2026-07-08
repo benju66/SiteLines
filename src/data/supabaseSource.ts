@@ -10,7 +10,7 @@ import { TERMINAL } from '@/lib/ballInCourt'
 import type { DataSource, ItemsByTool, SiteData, Snapshot } from '@/lib/dataSource'
 import { deriveUrgency, formatDueDate, formatMoney, statusTone, timeAgo } from '@/lib/derive'
 import { mapBudgetLine, mapBudgetPending, type BudgetLineRow, type BudgetPendingRow } from '@/lib/mapBudgetLine'
-import { mapCommitment, type CommitmentRow } from '@/lib/mapCommitment'
+import { mapCommitment, mapCommitmentBilling, mapCommitmentChangeOrder, type CommitmentRow, type CommitmentBillingRow, type CommitmentChangeOrderRow } from '@/lib/mapCommitment'
 import { mapDrawing, mapDrawingRevision, type DrawingRow, type DrawingRevisionRow } from '@/lib/mapDrawing'
 import { mapRfiDetail, type RfiDetailRow } from '@/lib/mapRfiDetail'
 import { mapSubmittalDetail, type SubmittalDetailRow } from '@/lib/mapSubmittalDetail'
@@ -194,6 +194,20 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
         return data ? mapSubmittalDetail(data as SubmittalDetailRow) : null
       }
       return null
+    },
+    async getCommitmentDetail(id: string) {
+      // Two focused reads, keyed by the commitment's seam id: the CO log and the
+      // billing history. Both views are read-only over the existing masters.
+      const [cos, bills] = await Promise.all([
+        client.from('sitelines_commitment_change_orders').select('*').eq('commitment', id),
+        client.from('sitelines_commitment_billings').select('*').eq('commitment', id),
+      ])
+      if (cos.error) throw new Error(`Supabase read failed (sitelines_commitment_change_orders): ${cos.error.message}`)
+      if (bills.error) throw new Error(`Supabase read failed (sitelines_commitment_billings): ${bills.error.message}`)
+      return {
+        changeOrders: ((cos.data ?? []) as CommitmentChangeOrderRow[]).map(mapCommitmentChangeOrder),
+        billings: ((bills.data ?? []) as CommitmentBillingRow[]).map(mapCommitmentBilling),
+      }
     },
     async getDrawingRevisions(drawingId: string) {
       const { data, error } = await client

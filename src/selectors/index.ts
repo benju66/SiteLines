@@ -11,7 +11,7 @@ import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { BudgetLine, BudgetPending, Commitment, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
+import type { BudgetLine, BudgetPending, Commitment, CommitmentBilling, CommitmentChangeOrder, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -712,6 +712,34 @@ export function commitmentsSorted(commitments: Commitment[], sort: CommitmentSor
     const cmp = typeof x === 'string' ? strCompare(x, y as string) : x - (y as number)
     return cmp * sign || byCommitmentNumber(a, b)
   })
+}
+
+// ---- Commitment detail drawer (Commitments, Phase 2) ----
+
+/** Numeric value of a "001"/"7" number; non-numeric sinks (NEGATIVE_INFINITY). */
+const seqValue = (s: string): number => {
+  const n = Number(s)
+  return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY
+}
+
+/**
+ * The CO log in chronological order — by change-order number ascending (001,
+ * 002, …), id-tiebroken. Deterministic, pure — the input is copied.
+ */
+export function commitmentChangeOrdersSorted(cos: CommitmentChangeOrder[]): CommitmentChangeOrder[] {
+  return [...cos].sort(
+    (a, b) => seqValue(a.number) - seqValue(b.number) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  )
+}
+
+/**
+ * Billing history newest-first — by requisition number descending (the latest
+ * pay app leads), id-tiebroken. Deterministic, pure — the input is copied.
+ */
+export function commitmentBillingsSorted(bills: CommitmentBilling[]): CommitmentBilling[] {
+  return [...bills].sort(
+    (a, b) => seqValue(b.number) - seqValue(a.number) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  )
 }
 
 // ---- Pending-change forecast (Budget Insights, Phase 3) ----
