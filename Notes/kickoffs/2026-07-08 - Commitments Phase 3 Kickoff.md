@@ -1,8 +1,15 @@
-# Kickoff — Commitments, Phase 3: FP-Analytics sync change (commitment SOV line items + detail fields)
+# Kickoff — Commitments, Phase 3: sync change (commitment SOV line items + detail fields)
 
-> ⚠️ **Cross-repo:** this phase is work in the SIBLING repo
-> `C:/Users/BUrness/Dev/FP-Analytics` (the Python Procore→Supabase ETL), **not** Sitelines.
-> Sitelines only *depends on* the new data. No Sitelines app code changes here.
+> ✅ **SUPERSEDED / IMPLEMENTED 2026-07-08.** Step 0 corrected two premises in this kickoff:
+> the real sync is **in-repo at `sync/procore_pipeline.py`** (the FP-Analytics folder is a
+> retired flat-column ancestor), and it **upserts** into `raw`-JSONB masters (not
+> drop-and-recreate). Phase 3 was implemented in-repo: `sync/migrations/0009_commitment_line_items.sql`
+> (applied) + `enrich_commitments_with_detail()` in `sync/procore_pipeline.py`. Remaining is
+> owner-only: confirm the Procore *show* scope, run `cd sync && python procore_pipeline.py`, and
+> verify the first run (see `Notes/plans/Commitments-Plan.md` § Phase 3). The historical plan
+> below is kept for context only.
+
+---
 
 ## ▶ Launch prompt (paste this to start a fresh session)
 > **⚙️ Run with: Opus 4.8 · effort xhigh** — money-accurate ETL change against a live schema, and step 0 is an ambiguous reconciliation (the repo's pipeline file doesn't match the production schema, so you must first find the code that actually writes the live `raw`-JSONB masters). Correctness matters; a wrong table shape breaks the Phase-4 views. (`/model claude-opus-4-8` first.) Escalate to `claude-fable-5` mid-session (`/model claude-fable-5`) if the pipeline-discrepancy reconciliation gets gnarly.

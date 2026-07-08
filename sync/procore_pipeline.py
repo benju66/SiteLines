@@ -439,6 +439,66 @@ def enrich_rfis_with_detail(token: str, rfis, project_id) -> bool:
     return True
 
 
+def enrich_commitments_with_detail(token: str, commitments, line_item_rows: list, project_id) -> bool:
+    """Fetch each commitment's DETAIL (show) endpoint to recover what the list
+    endpoint omits, in place + into line_item_rows.
+
+    The commitment *list* endpoint (`/commitments?project_id=`) carries the header
+    only — no Schedule of Values, no scope detail. The *detail* endpoint
+    (`/commitments/{id}`) returns `line_items[]` (each with `cost_code`, `amount`,
+    `total_amount`, and a direct `budget_line_item_id` — the Budget cross-link) plus
+    `inclusions` / `exclusions` / `grand_total`. For every commitment we:
+      * flatten each SOV line item into line_item_rows — the WHOLE item, tagged with
+        `line_item_id` (its key) + `commitment_id` (the parent link); storing the
+        full item as `raw` keeps this drift-proof (the Phase-4 view maps cost_code /
+        amount / budget_line_item_id out of `raw`, so exact Procore field names don't
+        have to be predicted here); and
+      * merge the detail-only scope fields onto the commitment list record so they
+        land in its `raw` (clean_record_labels HTML-strips inclusions/exclusions).
+
+    Returns True only if EVERY detail fetch succeeded. On any failure returns False
+    so the caller skips BOTH upserts — a partial fetch must never mark the tables
+    synced (which would let the scoped purge delete rows). Mirrors
+    enrich_rfis_with_detail / enrich_submittals_with_final.
+
+    Compliant, minimum-necessary: one extra GET per commitment already in scope
+    (not a bulk export), jittered to respect the spike rate-limit window (research §7).
+    """
+    if not commitments:
+        return True
+    for c in commitments:
+        if not isinstance(c, dict):
+            continue
+        cid = c.get('id')
+        if not cid:
+            continue
+        detail = get_json(token, f'{BASE_API_URL}/rest/v1.0/commitments/{cid}')
+        if detail is None:
+            return False
+
+        line_items = detail.get('line_items')
+        if isinstance(line_items, list):
+            for item in line_items:
+                if not isinstance(item, dict) or not item.get('id'):
+                    continue
+                item['line_item_id'] = item.get('id')
+                item['commitment_id'] = cid
+                line_item_rows.append(item)
+
+        # Detail-only scope fields → merged onto the commitment's raw.
+        for field in (
+            'inclusions', 'exclusions', 'grand_total', 'line_items_total',
+            'line_items_extended_total', 'retainage_percent',
+            'contract_start_date', 'contract_estimated_completion_date',
+            'actual_completion_date', 'signed_contract_received_date',
+        ):
+            if field in detail:
+                c[field] = detail[field]
+
+        time.sleep(random.uniform(0.5, 1.5))  # jitter between detail calls (research §7)
+    return True
+
+
 def _latest_final_attachments(distributions) -> list:
     """The reviewed submittal(s) from the most recent completed distribution.
 
@@ -649,6 +709,7 @@ def run_pipeline() -> None:
     co_packages_tbl = MasterTable('procore_change_order_packages_master', ['id', 'project_id'], 'project')
     cors_tbl = MasterTable('procore_change_order_requests_master', ['id', 'project_id'], 'project')
     commitments_tbl = MasterTable('procore_commitments_master', ['id', 'project_id'], 'project')
+    commitment_line_items_tbl = MasterTable('procore_commitment_line_items_master', ['line_item_id', 'project_id'], 'project')
     ccos_tbl = MasterTable('procore_commitment_change_orders_master', ['id', 'project_id'], 'project')
     prime_contracts_tbl = MasterTable('procore_prime_contracts_master', ['id', 'project_id'], 'project')
     pay_apps_tbl = MasterTable('procore_payment_applications_master', ['id', 'project_id'], 'project')
@@ -676,7 +737,7 @@ def run_pipeline() -> None:
         vendors_tbl, users_tbl,
         budget_views_tbl, budget_detail_rows_tbl,
         budget_mods_tbl, budget_meta_tbl, change_events_tbl, ce_line_items_tbl,
-        co_packages_tbl, cors_tbl, commitments_tbl, ccos_tbl, prime_contracts_tbl, pay_apps_tbl,
+        co_packages_tbl, cors_tbl, commitments_tbl, commitment_line_items_tbl, ccos_tbl, prime_contracts_tbl, pay_apps_tbl,
         pccos_tbl, pcos_tbl, requisitions_tbl, direct_costs_tbl, rfis_tbl, submittals_tbl,
         submittal_approvers_tbl,
         punch_tbl, meetings_tbl, drawings_tbl, specs_tbl, documents_tbl, schedule_tbl,
@@ -764,10 +825,25 @@ def run_pipeline() -> None:
         if copkgs is not None:
             co_packages_tbl.add(copkgs, p_id, run_ts)
 
-        # Commitments & CCOs
+        # Commitments & CCOs. The commitment LIST is complete on its own and Phase 1/2
+        # already depend on it, so it is ALWAYS upserted. Enrichment adds the SOV line
+        # items + scope fields from each commitment's detail (show) endpoint; the new
+        # line-items table only upserts if EVERY detail fetch succeeded, so a partial
+        # SOV set can never trigger the scoped purge. (Unlike RFIs/submittals, whose
+        # stored shape depends on enrichment, so those gate the parent upsert.)
         com = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/commitments?project_id={p_id}')
         if com is not None:
-            commitments_tbl.add(com, p_id, run_ts)
+            cli_rows: list = []
+            detail_ok = enrich_commitments_with_detail(token, com, cli_rows, p_id)
+            commitments_tbl.add(com, p_id, run_ts)  # merged scope fields are additive
+            if detail_ok:
+                commitment_line_items_tbl.add(cli_rows, p_id, run_ts)
+            else:
+                logging.warning(
+                    'Commitment detail enrichment incomplete for project %s — commitments '
+                    'upserted (list is complete), but skipping line-items upsert (no purge) '
+                    'so a partial SOV set cannot delete rows.', p_id
+                )
 
         ccos = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/projects/{p_id}/commitment_change_orders')
         if ccos is not None:

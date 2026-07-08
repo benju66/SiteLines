@@ -143,46 +143,46 @@ REUSE, do not fork:
 - **Exit criteria:** typecheck + build + tests; live — drawer opens, CO log + billing tie to
   Procore; seed renders.
 
-### Phase 3 — ⛔ FP-Analytics sync change: commitment SOV line items + detail fields
-Kickoff: [`2026-07-08 - Commitments Phase 3 Kickoff.md`](../kickoffs/2026-07-08%20-%20Commitments%20Phase%203%20Kickoff.md).
-Grounded 2026-07-08 against the FP-Analytics repo + the live Supabase schema + a real
-commitment export (Alpine Cabinetry Casework PO-25-117-123).
+### Phase 3 — commitment SOV line items + detail fields (🚧 IMPLEMENTED 2026-07-08; ⛔ owner re-sync pending)
+> **Step-0 correction:** the real Procore→Supabase sync is **in-repo at `sync/procore_pipeline.py`**
+> (moved from the standalone FP-Analytics folder in Data Seam Phase 1.5; that sibling copy is a
+> retired, flat-column ancestor). So Phase 3 was an **in-repo** change, not cross-repo. The live
+> masters are `{<key>, project_id, raw jsonb, synced_at}` via upsert + scoped purge (not
+> drop-and-recreate). The [kickoff](../kickoffs/2026-07-08%20-%20Commitments%20Phase%203%20Kickoff.md)
+> is superseded by this implementation.
 
 - **Why (proven):** the synced commitment `description` is a lossy, flattened scope blob —
-  Procore strips the SOV line items, the priced breakdown, inclusions/exclusions, and the
-  list numbering during sync. The real structured data lives on the Procore **commitment
-  detail (show)** endpoint. The Casework PO's SOV lines map to budget cost codes
-  **`12-123530.000`** and **`6-64100.000`** verbatim (verified against
-  `procore_budget_detail_rows_master`), so the Budget↔Commitment link (Phase 4) is real and
-  joinable — and the detail endpoint even carries a direct **`budget_line_item_id`** per line.
-- **Scope (SIBLING REPO `C:/Users/BUrness/Dev/FP-Analytics`, NOT Sitelines):** add a
-  per-commitment `GET /rest/v1.0/commitments/{id}` (show) call to the sync. Its response
-  carries `line_items[]` (`cost_code {id,name,full_code}`, `amount`, `total_amount`,
-  `budget_line_item_id`, `description`) **plus** `inclusions`, `exclusions`, `grand_total`,
-  `line_items_total`, `retainage_percent`, contract dates. Land:
-  - a new **`procore_commitment_line_items_master`** — one row per SOV line item; and
-  - the fuller detail merged into **`procore_commitments_master.raw`** (the show response is a
-    superset of the list response), so inclusions/exclusions/grand_total ride along for free.
-- **⛔ Reconcile the pipeline discrepancy FIRST:** the repo's `procore_pipeline.py` writes
-  **flat wide columns** (`json_normalize` + `to_sql(if_exists='replace')`, no `raw`), but the
-  **live** masters are `{<key>, project_id, raw jsonb, synced_at}` (e.g. `procore_commitments_master`
-  = `id, project_id, raw, synced_at`). So the repo file does **not** match what populates
-  production — find/confirm the actual production sync (the version that writes `raw` +
-  `synced_at`) before adding the new table, and shape the new table to the **live** convention
-  (thin key + `raw` JSONB) so Sitelines views read it uniformly with `raw->>'…'`.
-- **Pattern to mirror:** the live `procore_change_event_line_items_master`
-  (`line_item_id, project_id, raw jsonb, synced_at`) is the exact precedent — a child
-  line-item table keyed by its own id. The per-commitment fetch loop already exists in spirit
-  (the CO-request sync iterates `for c in com` and does a follow-up GET per commitment).
-- **Approval gates:** ⛔ owner runs the sync change + a full re-sync (the pipeline
-  drop-and-recreates every master; run gets longer by ~1 GET per commitment). ⛔ confirm the
-  Procore Data Connection App already has the Commitments *show* permission in the Developer
-  Portal (expected same scope as the list call — but verify; this is the "touches the Procore
-  app" gate). Repo is **not** git-tracked — note before editing.
-- **Exit criteria:** `procore_commitment_line_items_master` populated for OP III with cost
-  codes + amounts that reconcile to each commitment's `grand_total`; the Casework PO shows its
-  4 SOV lines summing to $539,086.57 across codes `12-123530.000` / `6-64100.000`;
-  inclusions/exclusions present on the commitment `raw`; verified read-only.
+  Procore strips the SOV line items, the priced breakdown, inclusions/exclusions, and the list
+  numbering during sync. The structured data lives on the commitment **detail (show)** endpoint.
+  The Casework PO's SOV lines map to budget cost codes **`12-123530.000`** and **`6-64100.000`**
+  verbatim (verified against `procore_budget_detail_rows_master`), so the Budget↔Commitment link
+  (Phase 4) is real — and the detail endpoint carries a direct **`budget_line_item_id`** per line.
+- **What was built (in `sync/`):**
+  - `migrations/0009_commitment_line_items.sql` — new **`procore_commitment_line_items_master`**
+    (`line_item_id, project_id, raw jsonb, synced_at`, PK + project index + deny-all RLS +
+    `authenticated_read`), mirroring `procore_change_event_line_items_master`. **Applied to Supabase.**
+  - `procore_pipeline.py` — `enrich_commitments_with_detail()` does a per-commitment
+    `GET /rest/v1.0/commitments/{id}`, flattens each `line_items[]` entry (the full item as `raw`,
+    tagged with `line_item_id` + `commitment_id`), and merges the detail-only scope fields
+    (`inclusions`, `exclusions`, `grand_total`, `line_items_total`, `retainage_percent`, dates)
+    onto the commitment's `raw`. The commitment LIST still upserts unconditionally (Phase 1/2
+    depend on it); only the new line-items table is gated on full enrichment success (purge
+    safety). Fail-safe: a failed detail fetch → skip the line-items upsert (no purge), commitments
+    unaffected.
+- **⛔ Remaining owner steps (only these):**
+  1. **Confirm the Procore Data Connection App** has the Commitments *show* permission in the
+     Developer Portal (expected identical to the list scope — but verify; this is the "touches the
+     Procore app" gate).
+  2. **Run the re-sync** — `cd sync && python procore_pipeline.py` (upsert + scoped purge;
+     non-destructive; run lengthens by ~1 GET per commitment).
+  3. **First-run verification** (I could not run the live pipeline): confirm
+     `procore_commitment_line_items_master` populates and the log has no "enrichment incomplete"
+     warning. If it does, the `GET /commitments/{id}` path/shape needs adjustment (a
+     project-scoped or type-specific `work_order_contracts`/`purchase_order_contracts` variant) —
+     a one-line endpoint change; the raw-JSONB design keeps field drift safe.
+- **Exit criteria:** `procore_commitment_line_items_master` populated for OP III; the Casework PO
+  (PO-25-117-123) shows its 4 SOV lines summing to $539,086.57 across `12-123530.000` /
+  `6-64100.000`; inclusions/exclusions present on the commitment `raw`; verified read-only.
 
 ### Phase 4 — Budget↔Commitment cross-link + richer drawer (after Phase 3)
 - **Scope:** ⛔ a `sitelines_commitment_line_items` view (cost code → commitment). Budget
