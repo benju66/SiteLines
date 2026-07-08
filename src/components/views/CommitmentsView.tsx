@@ -119,8 +119,10 @@ export function CommitmentsView() {
 
   return (
     <div style={{ padding: '18px 22px 20px' }}>
-      {/* rollup KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 12 }}>
+      {/* rollup KPI cards — 3 per row (matches Budget); 5 metrics wrap to 3 + 2.
+          The app card's content column is ~595px, too tight for 5 across without
+          truncating the dollar values. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12 }}>
         {kpis.map((k) => (
           <div key={k.label} style={{ background: '#fff', border: '1px solid var(--bd-2)', borderRadius: 9, padding: '14px 15px', minWidth: 0 }}>
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--tx-tertiary-2)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.label}</div>
