@@ -82,10 +82,11 @@ cross-link** needs an FP-Analytics sync change (owner chose to pursue it, 2026-0
 
 | Phase | Surface | Status |
 |-------|---------|--------|
-| 1 | Commitments own view (like Budget) — `sitelines_commitments` view + `Commitment` seam + rollup KPIs + enriched sortable register (contract company · type · revised · billed · retainage · % complete · status) | 🚧 Built (app code + tests green; seed verified) — ⛔ awaiting owner sign-off on [sitelines_commitments.sql](sync/views/sitelines_commitments.sql), then apply + live verify |
-| 2 | Commitment detail drawer — description · dates · privacy + CO log + billing history (lazy `getCommitmentDetail`); summary/inclusions-exclusions/additional-info stubbed until Phase 3 | 📋 Planned |
-| 3 | ⛔ FP-Analytics sync change — commitment SOV line items (cost codes) + detail fields (sibling repo; owner-run re-sync) | 📋 Planned ⛔ cross-repo |
+| 1 | Commitments own view (like Budget) — `sitelines_commitments` view + `Commitment` seam + rollup KPIs + enriched sortable register (contract company · type · revised · billed · retainage · % complete · status) | ✅ Shipped — view applied, live-verified (billed $15,283,425), committed on `commitments-phase-1` |
+| 2 | Commitment detail drawer — description · dates · privacy + CO log + billing history (lazy `getCommitmentDetail`) + scope-outline parser ([parseScope.ts](src/lib/parseScope.ts)); summary/inclusions-exclusions still stubbed until Phase 3 | 🚧 Built + 2 detail views applied (app + 111 tests green; live drawer verified) — ⛔ awaiting owner "Approved" to commit |
+| 3 | ⛔ FP-Analytics sync change — per-commitment detail (show) pull → `procore_commitment_line_items_master` (cost code + amount + `budget_line_item_id`) + inclusions/exclusions onto commitment `raw` (sibling repo; owner-run re-sync) | 📋 Planned — kickoff ready ([kickoff](Notes/kickoffs/2026-07-08%20-%20Commitments%20Phase%203%20Kickoff.md)); ⛔ cross-repo · reconcile pipeline↔live-schema discrepancy first |
 | 4 | Budget↔Commitment cross-link — `sitelines_commitment_line_items` view; Budget cost code → the sub(s) behind it; fill the richer drawer fields | 📋 Planned ⛔ new view (after Phase 3) |
+| 5 | ⚖️ CONDITIONAL — manual scope-structure cleanup (non-destructive editor + user-overrides layer); build only if Phase 3 step-0 finds the API returns flat scope text | 📋 Deferred — decide after Phase 3 |
 
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**

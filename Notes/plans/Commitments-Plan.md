@@ -144,21 +144,88 @@ REUSE, do not fork:
   Procore; seed renders.
 
 ### Phase 3 — ⛔ FP-Analytics sync change: commitment SOV line items + detail fields
-- **Scope (SIBLING REPO `C:/Users/BUrness/Dev/FP-Analytics`, not Sitelines):** extend the
-  Procore→Supabase sync to pull the **commitment detail endpoint** — SOV line items (cost
-  code + amount) into a new `procore_commitment_line_items_master`, plus the commitment
-  detail fields (contract summary, SOV inclusions/exclusions, additional info). Owner-run.
-- **Approval gates:** ⛔ owner runs the sync change + a re-sync; touches Procore app scopes.
-  This Sitelines plan only **depends on** it; the FP-Analytics work is its own effort.
-- **Exit criteria:** the new table/fields populated for OP III; verified read-only.
+Kickoff: [`2026-07-08 - Commitments Phase 3 Kickoff.md`](../kickoffs/2026-07-08%20-%20Commitments%20Phase%203%20Kickoff.md).
+Grounded 2026-07-08 against the FP-Analytics repo + the live Supabase schema + a real
+commitment export (Alpine Cabinetry Casework PO-25-117-123).
+
+- **Why (proven):** the synced commitment `description` is a lossy, flattened scope blob —
+  Procore strips the SOV line items, the priced breakdown, inclusions/exclusions, and the
+  list numbering during sync. The real structured data lives on the Procore **commitment
+  detail (show)** endpoint. The Casework PO's SOV lines map to budget cost codes
+  **`12-123530.000`** and **`6-64100.000`** verbatim (verified against
+  `procore_budget_detail_rows_master`), so the Budget↔Commitment link (Phase 4) is real and
+  joinable — and the detail endpoint even carries a direct **`budget_line_item_id`** per line.
+- **Scope (SIBLING REPO `C:/Users/BUrness/Dev/FP-Analytics`, NOT Sitelines):** add a
+  per-commitment `GET /rest/v1.0/commitments/{id}` (show) call to the sync. Its response
+  carries `line_items[]` (`cost_code {id,name,full_code}`, `amount`, `total_amount`,
+  `budget_line_item_id`, `description`) **plus** `inclusions`, `exclusions`, `grand_total`,
+  `line_items_total`, `retainage_percent`, contract dates. Land:
+  - a new **`procore_commitment_line_items_master`** — one row per SOV line item; and
+  - the fuller detail merged into **`procore_commitments_master.raw`** (the show response is a
+    superset of the list response), so inclusions/exclusions/grand_total ride along for free.
+- **⛔ Reconcile the pipeline discrepancy FIRST:** the repo's `procore_pipeline.py` writes
+  **flat wide columns** (`json_normalize` + `to_sql(if_exists='replace')`, no `raw`), but the
+  **live** masters are `{<key>, project_id, raw jsonb, synced_at}` (e.g. `procore_commitments_master`
+  = `id, project_id, raw, synced_at`). So the repo file does **not** match what populates
+  production — find/confirm the actual production sync (the version that writes `raw` +
+  `synced_at`) before adding the new table, and shape the new table to the **live** convention
+  (thin key + `raw` JSONB) so Sitelines views read it uniformly with `raw->>'…'`.
+- **Pattern to mirror:** the live `procore_change_event_line_items_master`
+  (`line_item_id, project_id, raw jsonb, synced_at`) is the exact precedent — a child
+  line-item table keyed by its own id. The per-commitment fetch loop already exists in spirit
+  (the CO-request sync iterates `for c in com` and does a follow-up GET per commitment).
+- **Approval gates:** ⛔ owner runs the sync change + a full re-sync (the pipeline
+  drop-and-recreates every master; run gets longer by ~1 GET per commitment). ⛔ confirm the
+  Procore Data Connection App already has the Commitments *show* permission in the Developer
+  Portal (expected same scope as the list call — but verify; this is the "touches the Procore
+  app" gate). Repo is **not** git-tracked — note before editing.
+- **Exit criteria:** `procore_commitment_line_items_master` populated for OP III with cost
+  codes + amounts that reconcile to each commitment's `grand_total`; the Casework PO shows its
+  4 SOV lines summing to $539,086.57 across codes `12-123530.000` / `6-64100.000`;
+  inclusions/exclusions present on the commitment `raw`; verified read-only.
 
 ### Phase 4 — Budget↔Commitment cross-link + richer drawer (after Phase 3)
 - **Scope:** ⛔ a `sitelines_commitment_line_items` view (cost code → commitment). Budget
   cost codes drill to the subcontract(s) behind them; Commitments ↔ Budget cross-links;
-  fill in the drawer's contract-summary / inclusions-exclusions / additional-info fields.
+  fill in the drawer's real inclusions/exclusions + contract-summary from the Phase-3
+  commitment `raw`, and replace the Phase-2 scope-text parser's cost-code guesses with the
+  synced SOV line items. Join on the detail endpoint's **`budget_line_item_id`** (a direct FK
+  to the budget line) with cost-code match as the fallback.
 - **Approval gates:** ⛔ Supabase view SQL. No re-sync (Phase 3 did it).
 - **Exit criteria:** typecheck + build + tests; live — a Budget cost code opens its
   commitment(s); seed renders. Then STOP.
+
+> Phase-2 note (2026-07-08): the drawer already renders the flattened `description` as a
+> best-effort scope outline (numbered GENERAL REQUIREMENTS clauses + SOV cost-code dividers
+> parsed from the text + bolded sub-labels — see `src/lib/parseScope.ts`). That's a stopgap
+> over the lossy blob; Phase 3's structured SOV supersedes the parsed cost codes.
+
+### Phase 5 — ⚖️ CONDITIONAL: manual scope-structure cleanup (decide AFTER Phase 3 step-0)
+**Only build this if Phase 3's step-0 check finds the Procore API returns the scope as flat
+text** (no HTML/rich-text structure). If the API exposes structure, sync it and render
+faithfully — this phase is unnecessary. Owner decision, 2026-07-08.
+
+- **Problem:** the parser recovers headers + numbered clauses + SOV cost-code dividers, but
+  the un-numbered prose (e.g. the SCOPE CLARIFICATIONS wall) can't be auto-structured because
+  the sync strips its list numbering/bullets. Owner wants to hand-fix those residual walls so
+  the drawer reads like the executed contract.
+- **Why it's viable (owner domain input):** an executed subcontract's scope **language never
+  changes** — a change order carries its own scope, it does not rewrite the original. So the
+  `description` text is effectively immutable, which makes a one-time manual cleanup **persist
+  across re-syncs** (the sync rewrites the row byte-identical). This removes the staleness trap.
+- **Design (keep it safe + faithful):**
+  - **Parser-first, manual-fix-fallback:** the parser output is the starting point; the user
+    only nudges the residue.
+  - **Non-destructive editor — the words are LOCKED, read-only.** The user only imposes
+    *structure* (split here · this is a header · indent this), never edits text, so the
+    rendered scope can't diverge from the contract language.
+  - **App's first user-authored data layer:** store the structure overrides in a **separate**
+    table keyed to the stable commitment id, which the sync never touches (a `UserData` /
+    annotations provider alongside the read-only `SiteData`). Keep a **hash of the source
+    description** so the rare change (a still-draft commitment, a re-execution) flags
+    "source changed — re-check your structure" instead of silently showing stale formatting.
+- **Gates:** ⛔ new Supabase table for user overrides (present SQL). This is a real expansion
+  (the app stops being a pure read-only mirror) — its own kickoff, not bolted onto the drawer.
 
 ## Hard guardrails (do not violate)
 - Overlays (the detail drawer) render `position:fixed` OUTSIDE the card's `overflow:hidden`
