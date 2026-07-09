@@ -254,6 +254,32 @@ export interface Commitment {
   description: string
   deliveryDate: string | null
   private: boolean
+  // scope detail (Phase 4 — from the commitment detail sync; HTML-stripped flat
+  // text, '' when Procore has none). `grandTotal` is the SOV total (= Σ the
+  // commitment's line-item amounts; the original contract sum before COs); 0 when
+  // absent.
+  inclusions: string
+  exclusions: string
+  grandTotal: number
+}
+
+/**
+ * One commitment SOV (schedule-of-values) line item (Commitments, Phase 4).
+ * Reference data — NOT a court `Item` and never enters My Court (like
+ * `Commitment`/`BudgetLine`). Each line carries the Procore `cost_code.full_code`
+ * (e.g. "12-123530.000"), which matches the budget's cost_code prefix — this is
+ * the seam for the Budget↔Commitment cross-link. Raw DOLLARS; the selector layer
+ * joins to budget codes and rolls up (never stored — DATA_CONTRACT §6). Loaded in
+ * the main snapshot (479 rows for OP III), not lazily — small enough to ride along.
+ */
+export interface CommitmentLineItem {
+  project: Project // 'opiii' for v1 (only OP III is synced)
+  id: string // "commitments:<commitment id>:li:<line item id>" — stable list key
+  commitmentId: string // "commitments:<commitment id>" — matches Commitment.id
+  costCode: string // Procore cost_code.full_code, e.g. "12-123530.000" (the join key)
+  costCodeName: string // cost_code.name, e.g. "Residential Casework"
+  amount: number // the line's value in dollars (= total_amount on the synced rows)
+  description: string // the SOV line's scope text
 }
 
 /**

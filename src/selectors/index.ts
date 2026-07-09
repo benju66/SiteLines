@@ -11,7 +11,7 @@ import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { BudgetLine, BudgetPending, Commitment, CommitmentBilling, CommitmentChangeOrder, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
+import type { BudgetLine, BudgetPending, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -740,6 +740,106 @@ export function commitmentBillingsSorted(bills: CommitmentBilling[]): Commitment
   return [...bills].sort(
     (a, b) => seqValue(b.number) - seqValue(a.number) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
   )
+}
+
+// ---- Budget↔Commitment cross-link (Commitments, Phase 4) ----
+
+/** One subcontract behind a budget cost code: the commitment plus the dollars
+ *  and line-item count it carries against that specific cost code. */
+export interface CostCodeCommitment {
+  commitment: Commitment
+  amount: number // Σ this commitment's SOV line-item amounts under the cost code
+  lineItemCount: number
+}
+
+/**
+ * The cost-code prefix of a budget cost-code string — "12-123530.000 -
+ * Residential Casework" → "12-123530.000" (the key commitment line items carry
+ * in `costCode`). Split on the first " - " (the code itself has no spaced dash);
+ * a code with no title is returned whole. Pure.
+ */
+export function costCodeKey(budgetCostCode: string): string {
+  const i = budgetCostCode.indexOf(' - ')
+  return (i >= 0 ? budgetCostCode.slice(0, i) : budgetCostCode).trim()
+}
+
+/**
+ * Map each commitment cost code (full_code, e.g. "12-123530.000") to the
+ * subcontract(s) behind it — the seam for the Budget↔Commitment cross-link.
+ * Aggregates a commitment's SOV line-item amounts per cost code, joins to the
+ * commitment by id, and orders the subcontracts by amount desc (natural
+ * commitment-number tiebreak). Line items whose commitment isn't in
+ * `commitments` (e.g. filtered out of scope) are skipped, and a cost code left
+ * with no resolvable commitment is omitted. Deterministic, pure — no clock, the
+ * inputs are never mutated.
+ */
+export function commitmentsByCostCode(
+  lineItems: CommitmentLineItem[],
+  commitments: Commitment[],
+): Map<string, CostCodeCommitment[]> {
+  const byId = new Map<string, Commitment>(commitments.map((c) => [c.id, c] as const))
+  // costCode → commitmentId → running { amount, count }
+  const acc = new Map<string, Map<string, { amount: number; count: number }>>()
+  for (const li of lineItems) {
+    const code = li.costCode
+    if (!code) continue
+    let inner = acc.get(code)
+    if (!inner) {
+      inner = new Map()
+      acc.set(code, inner)
+    }
+    const e = inner.get(li.commitmentId) ?? { amount: 0, count: 0 }
+    e.amount += li.amount
+    e.count += 1
+    inner.set(li.commitmentId, e)
+  }
+  const out = new Map<string, CostCodeCommitment[]>()
+  for (const [code, inner] of acc) {
+    const list: CostCodeCommitment[] = []
+    for (const [cid, e] of inner) {
+      const commitment = byId.get(cid)
+      if (!commitment) continue
+      list.push({ commitment, amount: e.amount, lineItemCount: e.count })
+    }
+    if (list.length === 0) continue
+    list.sort((a, b) => b.amount - a.amount || byCommitmentNumber(a.commitment, b.commitment))
+    out.set(code, list)
+  }
+  return out
+}
+
+/**
+ * A commitment's SOV line items grouped by cost code, for the drawer's schedule-
+ * of-values section: each group is one cost code (code + name) with its line
+ * items and a subtotal. Groups ordered by subtotal desc (natural cost-code
+ * tiebreak); line items within a group by amount desc (id-tiebroken).
+ * Deterministic, pure — the input is never mutated.
+ */
+export interface CommitmentSovGroup {
+  costCode: string
+  costCodeName: string
+  amount: number // subtotal for the code
+  lineItems: CommitmentLineItem[]
+}
+
+export function commitmentSovByCostCode(lineItems: CommitmentLineItem[]): CommitmentSovGroup[] {
+  const buckets = new Map<string, CommitmentLineItem[]>()
+  for (const li of lineItems) {
+    const arr = buckets.get(li.costCode)
+    if (arr) arr.push(li)
+    else buckets.set(li.costCode, [li])
+  }
+  const groups: CommitmentSovGroup[] = [...buckets.entries()].map(([costCode, lis]) => {
+    const sorted = [...lis].sort((a, b) => b.amount - a.amount || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    return {
+      costCode,
+      costCodeName: sorted.find((l) => l.costCodeName)?.costCodeName ?? '',
+      amount: lis.reduce((s, l) => s + l.amount, 0),
+      lineItems: sorted,
+    }
+  })
+  groups.sort((a, b) => b.amount - a.amount || compareDrawingNumber(a.costCode, b.costCode))
+  return groups
 }
 
 // ---- Pending-change forecast (Budget Insights, Phase 3) ----

@@ -10,15 +10,15 @@
 // over-committed lines (committed > budget) read amber. Collapse state lives in
 // AppState. Hand-rolled — no table library.
 
-import { useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { formatMoney } from '@/lib/derive'
-import { boughtOut, budgetByDivision, budgetForecast, budgetTotals, buyoutGaps, costTypeMix, financialView, overBudget, scoped, sortedBudgetGroups } from '@/selectors'
-import type { BudgetDivisionGroup, BudgetForecast, BudgetSort, BudgetSortCol, CostTypeSlice, OverBudgetResult } from '@/selectors'
+import { boughtOut, budgetByDivision, budgetForecast, budgetTotals, buyoutGaps, commitmentsByCostCode, costCodeKey, costTypeMix, financialView, overBudget, scoped, sortedBudgetGroups } from '@/selectors'
+import type { BudgetDivisionGroup, BudgetForecast, BudgetSort, BudgetSortCol, CostCodeCommitment, CostTypeSlice, OverBudgetResult } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useSiteData } from '@/state/DataContext'
 import { mono, projectMeta, tone } from '@/theme/tokens'
-import type { BudgetLine } from '@/types'
+import type { BudgetLine, Commitment } from '@/types'
 
 // Seven columns. Widths are resizable; these defaults are mirrored in the CSS-var
 // fallback so rows render before the effect runs. `sort` = null → not sortable.
@@ -98,10 +98,13 @@ function divName(s: string): string {
 
 export function BudgetView() {
   const { state, patch } = useApp()
-  const { financials, budgetLines, budgetPending } = useSiteData()
+  const { financials, budgetLines, budgetPending, commitments, commitmentLineItems } = useSiteData()
 
   const [sort, setSort] = useState<BudgetSort | null>(null)
   const [overBudgetOnly, setOverBudgetOnly] = useState(false)
+  // Which cost codes have their subcontract cross-link revealed (transient UI,
+  // like sort/overBudgetOnly — not persisted in AppState). Keyed by cost-code prefix.
+  const [expandedCostCodes, setExpandedCostCodes] = useState<Set<string>>(new Set())
 
   // KPI cards stay identical to today's Budget (reuse the shared selector); the
   // table is the new drill-down. Both re-scope with the global project.
@@ -112,6 +115,18 @@ export function BudgetView() {
   const shownLines = overBudgetOnly ? lines.filter((l) => l.projectedOverUnder < 0) : lines
   const groups = sortedBudgetGroups(budgetByDivision(shownLines), sort)
   const totals = budgetTotals(shownLines)
+
+  // Budget↔Commitment cross-link (Phase 4): cost-code prefix → the subcontract(s)
+  // behind it. Scoped to the same project as the budget lines.
+  const linksByCode = commitmentsByCostCode(scoped(commitmentLineItems, state.project), scoped(commitments, state.project))
+  const toggleCostCode = (code: string) =>
+    setExpandedCostCodes((prev) => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
+  const openCommitment = (c: Commitment) => patch({ commitment: c })
 
   // Phase 2 analysis — always over the full scoped lines (independent of the table's filter).
   const risk = overBudget(lines)
@@ -257,7 +272,7 @@ export function BudgetView() {
 
           {/* toolbar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 2px 9px' }}>
-            <span style={{ fontSize: 12, color: 'var(--tx-tertiary)' }}>Click a division to drill in · a column header to sort · a column edge to resize.</span>
+            <span style={{ fontSize: 12, color: 'var(--tx-tertiary)' }}>Click a division to drill in · a column header to sort · a code’s subcontract badge to see the commitment(s) behind it.</span>
             <span style={{ marginLeft: 'auto' }} />
             <button
               type="button"
@@ -321,7 +336,16 @@ export function BudgetView() {
                   </div>
 
                   {groups.map((g) => (
-                    <DivisionSection key={g.division} group={g} expanded={isExpanded(g.division)} onToggle={() => toggleDiv(g.division)} />
+                    <DivisionSection
+                      key={g.division}
+                      group={g}
+                      expanded={isExpanded(g.division)}
+                      onToggle={() => toggleDiv(g.division)}
+                      linksByCode={linksByCode}
+                      expandedCostCodes={expandedCostCodes}
+                      onToggleCostCode={toggleCostCode}
+                      onOpenCommitment={openCommitment}
+                    />
                   ))}
 
                   {/* grand total */}
@@ -371,7 +395,26 @@ const btnStyle: CSSProperties = {
   fontFamily: 'inherit',
 }
 
-function DivisionSection({ group, expanded, onToggle }: { group: BudgetDivisionGroup; expanded: boolean; onToggle: () => void }) {
+function DivisionSection({
+  group,
+  expanded,
+  onToggle,
+  linksByCode,
+  expandedCostCodes,
+  onToggleCostCode,
+  onOpenCommitment,
+}: {
+  group: BudgetDivisionGroup
+  expanded: boolean
+  onToggle: () => void
+  linksByCode: Map<string, CostCodeCommitment[]>
+  expandedCostCodes: Set<string>
+  onToggleCostCode: (code: string) => void
+  onOpenCommitment: (c: Commitment) => void
+}) {
+  // A cost code can span two lines (Material + Subcontract); show the cross-link
+  // affordance on the FIRST line of each code only (tracked while mapping).
+  const seenCodes = new Set<string>()
   return (
     <section>
       <div
@@ -402,12 +445,25 @@ function DivisionSection({ group, expanded, onToggle }: { group: BudgetDivisionG
         <Money v={group.eac} strong />
         <Money v={group.projectedOverUnder} over strong />
       </div>
-      {expanded && group.lines.map((l) => <LineRow key={`${l.costCode}|${l.costType}`} line={l} />)}
+      {expanded &&
+        group.lines.map((l) => {
+          const key = costCodeKey(l.costCode)
+          const link = linksByCode.get(key)
+          const owns = !!link && !seenCodes.has(key) // affordance once per code
+          if (link) seenCodes.add(key)
+          const open = owns && expandedCostCodes.has(key)
+          return (
+            <Fragment key={`${l.costCode}|${l.costType}`}>
+              <LineRow line={l} link={owns ? link : null} expanded={open} onToggle={() => onToggleCostCode(key)} />
+              {open && link && <CommitmentSubRows links={link} onOpen={onOpenCommitment} />}
+            </Fragment>
+          )
+        })}
     </section>
   )
 }
 
-function LineRow({ line }: { line: BudgetLine }) {
+function LineRow({ line, link, expanded, onToggle }: { line: BudgetLine; link: CostCodeCommitment[] | null; expanded: boolean; onToggle: () => void }) {
   const [ccnum, ccname] = codeParts(line.costCode)
   return (
     <div className="sl-hover-row" style={{ ...rowBase, padding: '9px 16px', borderBottom: '1px solid var(--bd-row)' }}>
@@ -415,6 +471,7 @@ function LineRow({ line }: { line: BudgetLine }) {
         <span style={{ fontFamily: mono, fontSize: 11.5, fontWeight: 650, color: 'var(--tx-primary)', flex: 'none' }}>{ccnum}</span>
         <span style={{ fontSize: 12.5, color: 'var(--tx-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={ccname}>{ccname}</span>
         <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: '.3px', textTransform: 'uppercase', color: 'var(--tx-faint)', border: '1px solid var(--bd-1)', borderRadius: 4, padding: '1px 5px', flex: 'none' }}>{line.costType}</span>
+        {link && <SubcontractChip count={link.length} expanded={expanded} onToggle={onToggle} />}
       </span>
       <Money v={line.budget} />
       <Money v={line.committed} />
@@ -424,6 +481,84 @@ function LineRow({ line }: { line: BudgetLine }) {
       <Money v={line.eac - line.erpJtd} />
       <Money v={line.eac} />
       <Money v={line.projectedOverUnder} over />
+    </div>
+  )
+}
+
+/** The cross-link affordance on a cost-code row that has commitment(s) behind it:
+ *  a small teal pill with the count and a disclosure caret. Clicking reveals the
+ *  subcontract sub-rows (CommitmentSubRows). */
+function SubcontractChip({ count, expanded, onToggle }: { count: number; expanded: boolean; onToggle: () => void }) {
+  const teal = projectMeta.opiii.color
+  return (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      onClick={(e) => {
+        e.stopPropagation()
+        onToggle()
+      }}
+      className="sl-linked-row"
+      title={`${count} subcontract${count === 1 ? '' : 's'} behind this cost code`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        flex: 'none',
+        fontFamily: mono,
+        fontSize: 10,
+        fontWeight: 650,
+        letterSpacing: '.2px',
+        color: teal,
+        background: projectMeta.opiii.bg,
+        border: `1px solid ${teal}33`,
+        borderRadius: 20,
+        padding: '1px 7px',
+        cursor: 'pointer',
+        lineHeight: 1.5,
+      }}
+    >
+      <span aria-hidden style={{ display: 'inline-block', fontSize: 9, transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .12s ease' }}>▸</span>
+      {count} {count === 1 ? 'sub' : 'subs'}
+    </button>
+  )
+}
+
+/** The revealed subcontract(s) behind a cost code: number · company · type ·
+ *  amount-against-this-code · ›. Clicking a row opens that commitment's drawer. */
+function CommitmentSubRows({ links, onOpen }: { links: CostCodeCommitment[]; onOpen: (c: Commitment) => void }) {
+  return (
+    <div style={{ background: 'var(--fill-1)', borderBottom: '1px solid var(--bd-row)', padding: '4px 16px 8px' }}>
+      <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--tx-faint)', fontWeight: 600, padding: '3px 0 3px 40px' }}>
+        Subcontract{links.length === 1 ? '' : 's'} behind this cost code
+      </div>
+      {links.map(({ commitment: c, amount }) => (
+        <button
+          key={c.id}
+          type="button"
+          onClick={() => onOpen(c)}
+          className="sl-linked-row"
+          style={{
+            display: 'flex',
+            width: '100%',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 8px 6px 40px',
+            background: 'transparent',
+            border: 'none',
+            borderRadius: 6,
+            cursor: 'pointer',
+            textAlign: 'left',
+            fontFamily: 'inherit',
+          }}
+        >
+          <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 650, color: 'var(--tx-secondary-2)', flex: 'none' }}>{c.number}</span>
+          <span style={{ fontSize: 12, color: 'var(--tx-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }} title={c.vendor}>{c.vendor || '—'}</span>
+          <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.3px', textTransform: 'uppercase', color: 'var(--tx-faint)', border: '1px solid var(--bd-1)', borderRadius: 4, padding: '1px 5px', flex: 'none' }}>{c.type}</span>
+          <span style={{ ...numBase, width: 108, flex: 'none', color: amount === 0 ? 'var(--tx-faint-2)' : 'var(--tx-secondary)' }}>{formatMoney(amount)}</span>
+          <span aria-hidden style={{ fontSize: 13, color: 'var(--tx-faint)', flex: 'none' }}>›</span>
+        </button>
+      ))}
     </div>
   )
 }

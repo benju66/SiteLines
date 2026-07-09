@@ -14,9 +14,9 @@ import { TOOLS } from '@/data/tools'
 import { formatMoney, statusTone } from '@/lib/derive'
 import { parseScope, SUBHEADER_LABEL } from '@/lib/parseScope'
 import type { ScopeBlock } from '@/lib/parseScope'
-import { commitmentBillingsSorted, commitmentChangeOrdersSorted } from '@/selectors'
+import { commitmentBillingsSorted, commitmentChangeOrdersSorted, commitmentSovByCostCode } from '@/selectors'
 import { useApp } from '@/state/AppContext'
-import { useData } from '@/state/DataContext'
+import { useData, useSiteData } from '@/state/DataContext'
 import { mono } from '@/theme/tokens'
 import type { Commitment, CommitmentDetail } from '@/types'
 import { CodeBadge, ProjectTag, StatusPill } from '@/components/ui/primitives'
@@ -54,8 +54,14 @@ export function CommitmentDrawer() {
 
 function CommitmentPanel({ commitment: c, onClose }: { commitment: Commitment; onClose: () => void }) {
   const { getCommitmentDetail } = useData()
+  const { commitmentLineItems } = useSiteData()
   const [detail, setDetail] = useState<CommitmentDetail | null>(null) // null = still loading
   const [failed, setFailed] = useState(false)
+
+  // SOV line items ride on the main snapshot — filter to this commitment, grouped
+  // by cost code (Phase 4). These are the codes the Budget cross-link joins on.
+  const sov = commitmentSovByCostCode(commitmentLineItems.filter((li) => li.commitmentId === c.id))
+  const sovTotal = sov.reduce((s, g) => s + g.amount, 0)
 
   useEffect(() => {
     let alive = true
@@ -192,13 +198,56 @@ function CommitmentPanel({ commitment: c, onClose }: { commitment: Commitment; o
             </div>
           </Section>
 
-          {/* not-yet-synced fields (Phase 3) */}
-          <div style={{ ...sectionLabel, margin: '18px 0 8px' }}>Contract summary &amp; SOV</div>
-          <div style={{ background: 'var(--fill-1)', border: '1px dashed var(--bd-2)', borderRadius: 9, padding: '12px 13px', fontSize: 11.5, color: 'var(--tx-faint)', lineHeight: 1.5 }}>
-            Contract summary, schedule-of-values inclusions &amp; exclusions, and additional
-            information live in Procore and aren’t synced to Sitelines yet — they arrive with
-            the commitment detail sync (Phase 3).
-          </div>
+          {/* schedule of values — the synced SOV line items grouped by cost code (Phase 4) */}
+          {sov.length > 0 && (
+            <>
+              <div style={{ ...sectionLabel, margin: '18px 0 9px', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span>Schedule of values</span>
+                <span style={{ fontFamily: mono, fontSize: 10.5, fontWeight: 600, color: 'var(--tx-faint)', textTransform: 'none', letterSpacing: 0 }}>{formatMoney(sovTotal)}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                {sov.map((g) => (
+                  <div key={g.costCode} style={{ background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 9, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '9px 12px', borderBottom: '1px solid var(--bd-row)', background: 'var(--fill-1)' }}>
+                      <span style={{ fontFamily: mono, fontSize: 10.5, fontWeight: 700, color: 'var(--tx-secondary-2)', background: 'var(--fill-3)', border: '1px solid var(--bd-1)', borderRadius: 4, padding: '1px 6px', flex: 'none' }}>{g.costCode}</span>
+                      <span style={{ fontSize: 12, color: 'var(--tx-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }} title={g.costCodeName}>{g.costCodeName}</span>
+                      <span style={{ ...money, fontSize: 12 }}>{formatMoney(g.amount)}</span>
+                    </div>
+                    {g.lineItems.map((li) => (
+                      <div key={li.id} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '7px 12px', borderTop: '1px solid var(--bd-row)' }}>
+                        <span style={{ fontSize: 12, color: 'var(--tx-secondary)', lineHeight: 1.4, flex: 1, minWidth: 0 }}>{li.description || '—'}</span>
+                        <span style={{ fontFamily: mono, fontSize: 11.5, fontVariantNumeric: 'tabular-nums', color: li.amount === 0 ? 'var(--tx-faint-2)' : 'var(--tx-secondary)', flex: 'none' }}>{formatMoney(li.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* inclusions / exclusions — real scope fields from the commitment detail sync (Phase 4) */}
+          {c.inclusions.trim() && (
+            <>
+              <div style={{ ...sectionLabel, margin: '18px 0 7px' }}>Inclusions</div>
+              <ScopeOutline blocks={parseScope(c.inclusions)} />
+            </>
+          )}
+          {c.exclusions.trim() && (
+            <>
+              <div style={{ ...sectionLabel, margin: '18px 0 7px' }}>Exclusions</div>
+              <ScopeOutline blocks={parseScope(c.exclusions)} />
+            </>
+          )}
+
+          {/* nothing scope-related synced for this commitment */}
+          {sov.length === 0 && !c.inclusions.trim() && !c.exclusions.trim() && (
+            <>
+              <div style={{ ...sectionLabel, margin: '18px 0 8px' }}>Contract scope</div>
+              <div style={{ background: 'var(--fill-1)', border: '1px dashed var(--bd-2)', borderRadius: 9, padding: '12px 13px', fontSize: 11.5, color: 'var(--tx-faint)', lineHeight: 1.5 }}>
+                No schedule of values, inclusions, or exclusions recorded on this commitment in Procore.
+              </div>
+            </>
+          )}
         </div>
       </div>
     </Backdrop>

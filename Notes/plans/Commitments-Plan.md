@@ -184,7 +184,23 @@ REUSE, do not fork:
   the rate ceiling, consider spacing the commitment detail GETs or gating enrichment to
   changed commitments.
 
-### Phase 4 — Budget↔Commitment cross-link + richer drawer (after Phase 3)
+### Phase 4 — Budget↔Commitment cross-link + richer drawer (✅ DONE + APPLIED + VERIFIED 2026-07-09)
+> **Shipped:** `sitelines_commitment_line_items` view (479 rows) + `sitelines_commitments` extended
+> with `inclusions`/`exclusions`/`grand_total` — both applied to Supabase (`security_invoker`,
+> additive/read-only, no re-sync). Data seam: `CommitmentLineItem` type + `mapCommitmentLineItem` +
+> `commitmentLineItems` slice (supabase + seed) + `inclusions`/`exclusions`/`grandTotal` on
+> `Commitment`. Selectors `commitmentsByCostCode` / `commitmentSovByCostCode` / `costCodeKey` (+ tests).
+> Budget drill-down: a cost code with commitment(s) behind it shows a teal "N sub(s)" badge (once per
+> code even when split Material+Subcontract) that reveals the subcontract(s) → opens the existing
+> `CommitmentDrawer`. Drawer: Phase-2 stub replaced with real inclusions/exclusions (via `parseScope`;
+> HTML entities decoded) + a Schedule-of-Values section (SOV line items grouped by cost code, subtotals
+> reconciling to `grand_total`). Verified: app + 121 tests + build green; live `:5173` — Casework
+> `12-123530.000` → PO-25-117-123 (Alpine Cabinetry) $500,000; SOV + inclusions/exclusions render.
+> **Money note:** commitments billed = $15,285,899 (each commitment's LATEST requisition, incl. one
+> Under-Review pay app — PO-25-117-085 #3, $2,474.04); Budget's Invoiced-to-Date counts approved-only
+> ($15,283,425). Owner confirmed "billed to date" = cumulative through the latest invoice (incl. the
+> current one), so this is correct-as-is; the two reconverge when the pending pay app is approved.
+
 - **Scope:** ⛔ a `sitelines_commitment_line_items` view (cost code → commitment). Budget
   cost codes drill to the subcontract(s) behind them; Commitments ↔ Budget cross-links;
   fill in the drawer's real inclusions/exclusions + contract-summary from the Phase-3

@@ -1,9 +1,16 @@
-// Seed fixture: the Commitments register (Commitments, Phase 1). A small,
-// deterministic slice shaped like the live sitelines_commitments view after
-// mapCommitment — a few subcontracts and a PO in various states, including one
-// with no requisition yet (hasRequisition false → the register shows "—") and
-// one still in Draft. Raw dollars; internally consistent (revised = original +
-// coTotal, retainage = 5% of billed) so the rollup reads sensibly offline.
+// Seed fixture: the Commitments register (Commitments, Phase 1 + Phase 4). A
+// small, deterministic slice shaped like the live sitelines_commitments view
+// after mapCommitment — a few subcontracts and a PO in various states, including
+// one with no requisition yet (hasRequisition false → the register shows "—")
+// and one still in Draft. Raw dollars; internally consistent (revised = original
+// + coTotal, retainage = 5% of billed) so the rollup reads sensibly offline.
+//
+// Phase 4 adds `inclusions` / `exclusions` (HTML-stripped flat scope text, ''
+// when none) and `grandTotal` (the SOV total = Σ this commitment's seed line
+// items in COMMITMENT_LINE_ITEMS, 0 when it has none entered). Drywall & Paint
+// (9002) carries a full SOV; Final Cleaning (9005) shows a just-issued
+// commitment whose SOV is entered but has no requisition yet (grandTotal > 0,
+// financials still "—").
 
 import type { Commitment } from '@/types'
 
@@ -28,6 +35,10 @@ export const COMMITMENTS: Commitment[] = [
     description: 'Complete mechanical and plumbing scope per contract documents.',
     deliveryDate: null,
     private: true,
+    inclusions:
+      'MECHANICAL AND PLUMBING SCOPE OF WORK Furnish all labor, material, and equipment for the following. 1. Complete HVAC systems including rooftop units, ductwork, and controls. 2. Domestic water, sanitary, and storm piping. 3. Mechanical insulation of ducts and piping.',
+    exclusions: 'Temporary heat. Fire protection / sprinkler. Cutting and patching. Painting of exposed piping.',
+    grandTotal: 0, // no SOV line items in the seed slice for this one
   },
   {
     project: 'opiii',
@@ -49,6 +60,10 @@ export const COMMITMENTS: Commitment[] = [
     description: 'Gypsum board assemblies, taping, and field painting.',
     deliveryDate: null,
     private: true,
+    inclusions:
+      'DRYWALL AND PAINT SCOPE OF WORK Furnish all labor, material, and equipment for the following. 1. Gypsum board assemblies at all units and common areas. 2. Level 4 finish at exposed walls and ceilings. 3. Field painting of all gypsum surfaces, two coats.',
+    exclusions: 'Acoustical ceilings. Fireproofing. Wallcovering. Exterior painting.',
+    grandTotal: 1_190_000, // = Σ its seed SOV line items (gypsum + painting)
   },
   {
     project: 'opiii',
@@ -70,6 +85,10 @@ export const COMMITMENTS: Commitment[] = [
     description: 'Power, lighting, and low-voltage rough-in and trim.',
     deliveryDate: null,
     private: true,
+    inclusions:
+      'ELECTRICAL SCOPE OF WORK Furnish all labor, material, and equipment for the following. 1. Power distribution, panels, and feeders. 2. Lighting and lighting controls. 3. Low-voltage rough-in for data and fire alarm.',
+    exclusions: 'Fire alarm devices and programming. Owner AV systems. Site lighting.',
+    grandTotal: 0,
   },
   {
     project: 'opiii',
@@ -91,6 +110,9 @@ export const COMMITMENTS: Commitment[] = [
     description: 'Unit appliance package, delivered per phasing schedule.',
     deliveryDate: '2026-08-14',
     private: false,
+    inclusions: '',
+    exclusions: '',
+    grandTotal: 0,
   },
   {
     project: 'opiii',
@@ -112,6 +134,9 @@ export const COMMITMENTS: Commitment[] = [
     description: 'Rough and final cleaning of all units and common areas.',
     deliveryDate: null,
     private: true,
+    inclusions: 'FINAL CLEANING SCOPE OF WORK Rough and final cleaning of all units and common areas, plus final touch-up painting after cleaning.',
+    exclusions: 'Post-occupancy cleaning. Window washing above second floor.',
+    grandTotal: 8_000, // SOV entered (touch-up painting) but no requisition yet → financials still "—"
   },
   {
     project: 'opiii',
@@ -133,5 +158,8 @@ export const COMMITMENTS: Commitment[] = [
     description: 'Site landscaping, irrigation, and seasonal plantings.',
     deliveryDate: null,
     private: true,
+    inclusions: '',
+    exclusions: '',
+    grandTotal: 0,
   },
 ]

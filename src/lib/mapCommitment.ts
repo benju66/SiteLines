@@ -8,7 +8,7 @@
 // register can show "—" instead of a misleading $0.
 
 import { formatShortDate } from '@/lib/derive'
-import type { Commitment, CommitmentBilling, CommitmentChangeOrder, Project } from '@/types'
+import type { Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Project } from '@/types'
 
 /** One row of the sitelines_commitments view (numerics arrive as strings). */
 export interface CommitmentRow {
@@ -31,9 +31,27 @@ export interface CommitmentRow {
   description: string | null
   delivery_date: string | null
   private: boolean | null
+  inclusions: string | null
+  exclusions: string | null
+  grand_total: number | string | null
 }
 
 const num = (v: number | string | null): number => (v == null ? 0 : Number(v))
+
+// Procore's inclusions/exclusions/description arrive HTML-stripped, but a few
+// named entities survive the strip (verified in the master: `&amp;`, `&gt;`).
+// Decode the common set so the drawer shows "R&D" not "R&amp;D". Pure — display
+// derivation at the seam (DATA_CONTRACT §6), never mutating the stored raw.
+const ENTITIES: Record<string, string> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&apos;': "'",
+  '&nbsp;': ' ',
+}
+const decodeEntities = (s: string): string => s.replace(/&(?:amp|lt|gt|quot|apos|nbsp|#39);/g, (m) => ENTITIES[m] ?? m)
 
 /** Map a commitments view row to the Commitment contract shape. */
 export function mapCommitment(row: CommitmentRow): Commitment {
@@ -54,9 +72,36 @@ export function mapCommitment(row: CommitmentRow): Commitment {
     pctComplete: num(row.pct_complete) / 100,
     coCount: num(row.co_count),
     coTotal: num(row.co_total),
-    description: row.description ?? '',
+    description: decodeEntities(row.description ?? ''),
     deliveryDate: row.delivery_date,
     private: !!row.private,
+    inclusions: decodeEntities(row.inclusions ?? ''),
+    exclusions: decodeEntities(row.exclusions ?? ''),
+    grandTotal: num(row.grand_total),
+  }
+}
+
+/** One row of the sitelines_commitment_line_items view (numerics arrive as strings). */
+export interface CommitmentLineItemRow {
+  project: string | null
+  id: string
+  commitment_id: string
+  cost_code: string | null
+  cost_code_name: string | null
+  amount: number | string | null
+  description: string | null
+}
+
+/** Map a commitment-line-item view row to the CommitmentLineItem contract shape. */
+export function mapCommitmentLineItem(row: CommitmentLineItemRow): CommitmentLineItem {
+  return {
+    project: (row.project ?? 'opiii') as Project,
+    id: row.id,
+    commitmentId: row.commitment_id,
+    costCode: (row.cost_code ?? '').trim(),
+    costCodeName: (row.cost_code_name ?? '').trim(),
+    amount: num(row.amount),
+    description: decodeEntities((row.description ?? '').trim()),
   }
 }
 

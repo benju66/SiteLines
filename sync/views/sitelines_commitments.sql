@@ -31,6 +31,17 @@
 -- security_invoker=true respects RLS; all four masters already carry the
 -- authenticated_read SELECT policy (verified) — no new grants needed. Read-only
 -- over existing tables; no re-sync — data already synced.
+--
+-- 2026-07-08 Phase 4 addition: inclusions / exclusions / grand_total are ADDITIVE
+-- (new columns appended at the END only — CREATE OR REPLACE requires the existing
+-- columns keep their order/types; every prior column is byte-identical, so the
+-- Phase 1–3 rollup is unchanged). They come from the commitment detail sync
+-- (Phase 3), which merged the detail-only scope fields onto the commitment raw.
+-- Verified read-only (project 3051002): inclusions on 41 real commitments,
+-- exclusions on 15, grand_total on all 53 (incl. templates). inclusions/exclusions
+-- are HTML-stripped flat text (a few surviving entities like &amp; / &gt; are
+-- decoded in mapCommitment); grand_total = the commitment's SOV total (= Σ its
+-- line-item amounts; = original contract sum before COs). No re-sync.
 -- ============================================================================
 
 CREATE OR REPLACE VIEW sitelines_commitments WITH (security_invoker = true) AS
@@ -76,7 +87,11 @@ SELECT
     COALESCE(k.co_total, 0)                                                   AS co_total,
     c.raw->>'description'                                                     AS description,
     NULLIF(c.raw->>'delivery_date', '')                                       AS delivery_date,
-    COALESCE((c.raw->>'private')::boolean, false)                             AS private
+    COALESCE((c.raw->>'private')::boolean, false)                             AS private,
+    -- appended 2026-07-08 (Phase 4; CREATE OR REPLACE appends at the end):
+    NULLIF(c.raw->>'inclusions', '')                                          AS inclusions,
+    NULLIF(c.raw->>'exclusions', '')                                          AS exclusions,
+    NULLIF(c.raw->>'grand_total', '')::numeric                                AS grand_total
 FROM procore_commitments_master c
 LEFT JOIN procore_vendors_master v ON (v.raw->>'id')::bigint = (c.raw#>>'{vendor,id}')::bigint
 LEFT JOIN latest_req r ON r.commitment_id = (c.raw->>'id')::bigint

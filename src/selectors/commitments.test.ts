@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { Commitment, CommitmentBilling, CommitmentChangeOrder } from '@/types'
-import { commitmentBillingsSorted, commitmentChangeOrdersSorted, commitmentRollup, commitmentsSorted } from './index'
+import type { Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem } from '@/types'
+import {
+  commitmentBillingsSorted,
+  commitmentChangeOrdersSorted,
+  commitmentRollup,
+  commitmentsByCostCode,
+  commitmentSovByCostCode,
+  commitmentsSorted,
+  costCodeKey,
+} from './index'
 
 /** Minimal Commitment builder — only the fields the selectors read. */
 function cm(
@@ -31,6 +39,9 @@ function cm(
     description: '',
     deliveryDate: null,
     private: true,
+    inclusions: '',
+    exclusions: '',
+    grandTotal: revised,
     ...overrides,
   }
 }
@@ -158,5 +169,123 @@ describe('commitmentBillingsSorted', () => {
     const before = input.map((b) => b.number)
     commitmentBillingsSorted(input)
     expect(input.map((b) => b.number)).toEqual(before)
+  })
+})
+
+// ---- Budget↔Commitment cross-link (Phase 4) ----
+
+/** A SOV line-item builder — only the fields the cross-link selectors read. */
+const lineItem = (
+  commitment: string,
+  n: number,
+  costCode: string,
+  amount: number,
+  costCodeName = 'Cost Code',
+): CommitmentLineItem => ({
+  project: 'opiii',
+  id: `commitments:${commitment}:li:${n}`,
+  commitmentId: `commitments:${commitment}`,
+  costCode,
+  costCodeName,
+  amount,
+  description: `Line ${n}`,
+})
+
+describe('costCodeKey', () => {
+  it('strips the " - <title>" suffix off a budget cost code', () => {
+    expect(costCodeKey('12-123530.000 - Residential Casework')).toBe('12-123530.000')
+    expect(costCodeKey('9-99000.000 - Painting and Coating')).toBe('9-99000.000')
+  })
+
+  it('returns a bare code (no title) whole, and trims', () => {
+    expect(costCodeKey('12-123530.000')).toBe('12-123530.000')
+    expect(costCodeKey('  6-64100.000  ')).toBe('6-64100.000')
+  })
+
+  it('only splits on the first spaced dash (the code keeps its own hyphen)', () => {
+    // "12-123530.000" has an internal hyphen but no spaced dash, so it survives.
+    expect(costCodeKey('12-123530.000 - A - B')).toBe('12-123530.000')
+  })
+})
+
+describe('commitmentsByCostCode', () => {
+  const casework = cm('PO-25-117-123', 'Casework Co.', 539_086, 0)
+  const cleaning = cm('SC-25-117-101', 'BrightWorks', 8_000, 0)
+  const commitments = [casework, cleaning]
+
+  it('groups line items by cost code and sums amounts per commitment', () => {
+    const lineItems = [
+      lineItem('PO-25-117-123', 1, '12-123530.000', 500_000),
+      lineItem('PO-25-117-123', 2, '12-123530.000', 0),
+      lineItem('PO-25-117-123', 3, '6-64100.000', 39_086),
+    ]
+    const map = commitmentsByCostCode(lineItems, [casework])
+    expect([...map.keys()].sort()).toEqual(['12-123530.000', '6-64100.000'])
+    const casebehind = map.get('12-123530.000')!
+    expect(casebehind).toHaveLength(1)
+    expect(casebehind[0].commitment.number).toBe('PO-25-117-123')
+    expect(casebehind[0].amount).toBe(500_000) // two lines (500k + 0) summed
+    expect(casebehind[0].lineItemCount).toBe(2)
+  })
+
+  it('orders multiple subcontracts behind one code by amount desc', () => {
+    const lineItems = [
+      lineItem('PO-25-117-123', 1, '9-99000.000', 32_000),
+      lineItem('SC-25-117-101', 1, '9-99000.000', 8_000),
+    ]
+    const behind = commitmentsByCostCode(lineItems, commitments).get('9-99000.000')!
+    expect(behind.map((b) => b.commitment.number)).toEqual(['PO-25-117-123', 'SC-25-117-101'])
+    expect(behind.map((b) => b.amount)).toEqual([32_000, 8_000])
+  })
+
+  it('ties on amount break by natural commitment number', () => {
+    const a = cm('SC-11', 'Z', 0, 0)
+    const b = cm('SC-2', 'Y', 0, 0)
+    const lineItems = [lineItem('SC-11', 1, '3-33000.000', 100), lineItem('SC-2', 1, '3-33000.000', 100)]
+    const behind = commitmentsByCostCode(lineItems, [a, b]).get('3-33000.000')!
+    expect(behind.map((x) => x.commitment.number)).toEqual(['SC-2', 'SC-11'])
+  })
+
+  it('skips line items whose commitment is not in the list, and omits an emptied code', () => {
+    const lineItems = [
+      lineItem('PO-25-117-123', 1, '12-123530.000', 500_000),
+      lineItem('SC-99-UNKNOWN', 1, '12-123530.000', 5_000), // no matching commitment
+      lineItem('SC-99-UNKNOWN', 1, '5-55000.000', 5_000), // whole code has no resolvable commitment
+    ]
+    const map = commitmentsByCostCode(lineItems, [casework])
+    expect(map.get('12-123530.000')).toHaveLength(1) // only the casework line survives
+    expect(map.get('12-123530.000')![0].amount).toBe(500_000)
+    expect(map.has('5-55000.000')).toBe(false) // dropped entirely
+  })
+
+  it('does not mutate its inputs', () => {
+    const lineItems = [lineItem('PO-25-117-123', 1, '12-123530.000', 500_000)]
+    const before = lineItems.map((l) => l.id)
+    commitmentsByCostCode(lineItems, [casework])
+    expect(lineItems.map((l) => l.id)).toEqual(before)
+  })
+})
+
+describe('commitmentSovByCostCode', () => {
+  it('groups a commitment’s SOV by cost code, subtotals, ordered by subtotal desc', () => {
+    const lineItems = [
+      lineItem('9002', 1, '9-92116.000', 760_000, 'Gypsum Board Assemblies'),
+      lineItem('9002', 2, '9-92116.000', 248_000, 'Gypsum Board Assemblies'),
+      lineItem('9002', 3, '9-99000.000', 150_000, 'Painting and Coating'),
+      lineItem('9002', 4, '9-99000.000', 32_000, 'Painting and Coating'),
+    ]
+    const groups = commitmentSovByCostCode(lineItems)
+    expect(groups.map((g) => g.costCode)).toEqual(['9-92116.000', '9-99000.000'])
+    expect(groups[0].amount).toBe(1_008_000)
+    expect(groups[0].costCodeName).toBe('Gypsum Board Assemblies')
+    expect(groups[0].lineItems.map((l) => l.amount)).toEqual([760_000, 248_000]) // amount desc within a group
+    expect(groups[1].amount).toBe(182_000)
+  })
+
+  it('does not mutate its input', () => {
+    const lineItems = [lineItem('9002', 2, '9-92116.000', 1), lineItem('9002', 1, '9-92116.000', 2)]
+    const before = lineItems.map((l) => l.id)
+    commitmentSovByCostCode(lineItems)
+    expect(lineItems.map((l) => l.id)).toEqual(before)
   })
 })

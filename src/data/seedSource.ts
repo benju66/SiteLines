@@ -8,6 +8,7 @@ import { ACTIVITY } from './activity'
 import { BUDGET_LINES } from './budgetLines'
 import { BUDGET_PENDING } from './budgetPending'
 import { COMMITMENTS } from './commitments'
+import { COMMITMENT_LINE_ITEMS } from './commitmentLineItems'
 import { DAILY_LOGS } from './dailyLogs'
 import { DIRECTORY } from './directory'
 import { DRAWINGS } from './drawings'
@@ -23,7 +24,7 @@ export function createSeedSource(opts: { delayMs?: number; fail?: boolean } = {}
       if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs))
       if (fail) throw new Error('Simulated sync failure (seed source, ?fail)')
       return {
-        data: { itemsByTool: DATA, contacts: DIRECTORY, activity: ACTIVITY, financials: FINANCIALS, photos: PHOTOS, dailyLogs: DAILY_LOGS, drawings: DRAWINGS, budgetLines: BUDGET_LINES, budgetPending: BUDGET_PENDING, commitments: COMMITMENTS },
+        data: { itemsByTool: DATA, contacts: DIRECTORY, activity: ACTIVITY, financials: FINANCIALS, photos: PHOTOS, dailyLogs: DAILY_LOGS, drawings: DRAWINGS, budgetLines: BUDGET_LINES, budgetPending: BUDGET_PENDING, commitments: COMMITMENTS, commitmentLineItems: COMMITMENT_LINE_ITEMS },
         syncedAt: new Date(),
       }
     },
