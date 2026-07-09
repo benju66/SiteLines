@@ -216,7 +216,7 @@ REUSE, do not fork:
 > parsed from the text + bolded sub-labels — see `src/lib/parseScope.ts`). That's a stopgap
 > over the lossy blob; Phase 3's structured SOV supersedes the parsed cost codes.
 
-### Phase 5 — manual scope-structure cleanup (✅ CONDITION MET — planned + sub-phased 2026-07-09)
+### Phase 5 — manual scope-structure cleanup (✅ DONE — 5a + 5b + 5c shipped + verified 2026-07-09)
 **The Phase-5 condition is confirmed:** Phase 3 established that Procore syncs the scope as
 flat, HTML-stripped text with list numbering/bullets stripped — the structure the parser
 needs isn't in the text, so the un-numbered prose walls (e.g. the SCOPE CLARIFICATIONS block)
@@ -311,13 +311,31 @@ STOP for sign-off before applying (ref `jxesfirpghwpfmfjlfng`).
 - **Exit criteria:** typecheck + tests + build; live — a seeded override renders; a hash mismatch
   shows the "source changed" banner and falls back to the parser. ✅ met.
 
-#### Phase 5c — the inline structure editor (the fuller ops)
+#### Phase 5c — the inline structure editor (the fuller ops) — ✅ DONE + VERIFIED 2026-07-09
+> **Shipped:** the inline "Edit structure" editor. Pure ops in [scopeEdit.ts](../../src/lib/scopeEdit.ts)
+> — `splitBlock` (at a word boundary) · `setKind` (heading/para) · `reindent` (indent/outdent,
+> clamped) · `mergeUp` (into the previous block) · `segmentSource` (the initial seed) ·
+> `seedEditorBlocks` (fresh override, else segment) · `partitionsSource` (the save-time assertion).
+> Every op only regroups words, so the block list stays a partition of the source; **words are
+> locked** (no typed text). The editor lives inline in `CommitmentDrawer` per scope field: click a
+> word to break the line before it, per-block heading/indent/outdent/merge controls, and a toolbar
+> — **Save** (asserts `partitionsSource` then writes via the 5a seam), **Cancel**, **Reset to auto**
+> (deletes the override → back to the parser). Busy/error states on the write path. Co-located tests
+> (+16, 156 total). **The temporary `?scopeproof` scaffold + its App.tsx mount were removed.**
+> **Verified:** typecheck + tests + build; seed (`:5174`) — split→heading→indent→Save→refresh
+> persists as a structured outline reading the contract's words verbatim, Reset-to-auto reverts to
+> the parser; live (`:5175`, logged-in) — restructured SC-25-117-220's scope, saved (the partition
+> assertion passed), refreshed → persists in the real table, Reset-to-auto deleted the row.
+> **Follow-up (minor):** `segmentSource` still over-fragments very long numbered scopes (a real
+> 56-clause wall opens as ~56 blocks; the number trails the previous block); a smarter seed that
+> breaks *before* a leading clause marker would read better. Correctness/invariant unaffected — the
+> user can merge/split freely.
 - **Scope:** the "Edit structure" mode inside the drawer scope section — split (at word
   boundaries) · heading/para · indent/outdent · merge — operating on the block list and saving
   through the 5a seam, with the concatenation invariant asserted on save. Empty/loading/error
   states for the write path; a "reset to parser" affordance.
 - **Exit criteria:** typecheck + tests + build; live — restructure a real commitment's wall,
-  save, refresh → the structure persists and still reads the contract's words. STOP.
+  save, refresh → the structure persists and still reads the contract's words. ✅ met.
 
 ## Hard guardrails (do not violate)
 - Overlays (the detail drawer) render `position:fixed` OUTSIDE the card's `overflow:hidden`

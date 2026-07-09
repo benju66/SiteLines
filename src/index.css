@@ -89,6 +89,17 @@ button {
   background: #f2f4f6;
   border-color: #cdd2d8;
 }
+/* Scope structure editor (Commitments Phase 5c): the "Edit structure" link and
+   the per-word split targets. A split word highlights with a left rule so it's
+   clear the break lands BEFORE that word. */
+.sl-scope-edit:hover {
+  color: var(--tx-secondary);
+  text-decoration: underline;
+}
+.sl-splitword:hover {
+  background: var(--fill-3);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
 .sl-icon-btn:hover {
   background: var(--fill-1);
 }

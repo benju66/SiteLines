@@ -10,7 +10,6 @@ import { CommandPalette } from '@/components/overlays/CommandPalette'
 import { CommitmentDrawer } from '@/components/overlays/CommitmentDrawer'
 import { DrawingViewerOverlay } from '@/components/overlays/DrawingViewerOverlay'
 import { RecordDetailDrawer } from '@/components/overlays/RecordDetailDrawer'
-import { ScopeOverrideProof } from '@/components/dev/ScopeOverrideProof' // ⚠️ TEMPORARY — Phase 5a write proof; remove in 5c
 
 /**
  * Global keyboard shortcuts (README "Interactions"):
@@ -119,9 +118,6 @@ export function App() {
       <DrawingViewerOverlay />
       <ActivityDrawer />
       <CommandPalette />
-
-      {/* ⚠️ TEMPORARY — Phase 5a write-proof scaffold (only renders with ?scopeproof). Remove in 5c. */}
-      <ScopeOverrideProof />
     </>
   )
 }

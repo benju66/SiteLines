@@ -13,15 +13,17 @@ import type { CSSProperties, ReactNode } from 'react'
 import { TOOLS } from '@/data/tools'
 import { applyScopeOverride } from '@/lib/applyScopeOverride'
 import { formatMoney, statusTone } from '@/lib/derive'
+import { hashText } from '@/lib/hashText'
 import { SUBHEADER_LABEL } from '@/lib/parseScope'
 import type { ScopeBlock } from '@/lib/parseScope'
+import { mergeUp, partitionsSource, reindent, seedEditorBlocks, setKind, splitBlock } from '@/lib/scopeEdit'
 import { overrideKey } from '@/lib/userDataSource'
 import { commitmentBillingsSorted, commitmentChangeOrdersSorted, commitmentSovByCostCode } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useData, useSiteData } from '@/state/DataContext'
 import { useUserData } from '@/state/UserDataContext'
 import { mono, tone } from '@/theme/tokens'
-import type { Commitment, CommitmentDetail, ScopeField, ScopeOverride } from '@/types'
+import type { Commitment, CommitmentDetail, ScopeBlockOverride, ScopeField, ScopeOverride } from '@/types'
 import { CodeBadge, ProjectTag, StatusPill } from '@/components/ui/primitives'
 import { Backdrop } from './Backdrop'
 
@@ -151,8 +153,9 @@ function CommitmentPanel({ commitment: c, onClose }: { commitment: Commitment; o
           )}
 
           {/* scope of work — a saved structure override if present + fresh, else the
-              parser outline; a stale override falls back to the parser with a banner */}
-          <ScopeFieldSection label="Scope of work" source={c.description} override={overrideFor('description')} />
+              parser outline; a stale override falls back to the parser with a banner.
+              "Edit structure" (Phase 5c) opens the inline editor. */}
+          <ScopeFieldSection commitmentId={c.id} field="description" label="Scope of work" source={c.description} override={overrideFor('description')} />
 
           {/* change-order log */}
           <div style={{ ...sectionLabel, margin: '18px 0 9px', display: 'flex', alignItems: 'baseline', gap: 8 }}>
@@ -229,9 +232,9 @@ function CommitmentPanel({ commitment: c, onClose }: { commitment: Commitment; o
           )}
 
           {/* inclusions / exclusions — real scope fields from the commitment detail
-              sync (Phase 4), each with its own optional structure override (Phase 5b) */}
-          <ScopeFieldSection label="Inclusions" source={c.inclusions} override={overrideFor('inclusions')} />
-          <ScopeFieldSection label="Exclusions" source={c.exclusions} override={overrideFor('exclusions')} />
+              sync (Phase 4), each with its own optional structure override (Phase 5b/5c) */}
+          <ScopeFieldSection commitmentId={c.id} field="inclusions" label="Inclusions" source={c.inclusions} override={overrideFor('inclusions')} />
+          <ScopeFieldSection commitmentId={c.id} field="exclusions" label="Exclusions" source={c.exclusions} override={overrideFor('exclusions')} />
 
           {/* nothing scope-related synced for this commitment */}
           {sov.length === 0 && !c.inclusions.trim() && !c.exclusions.trim() && (
@@ -257,17 +260,180 @@ const indentPx = (indent?: number) => Math.min(Math.max(indent ?? 0, 0), 6) * IN
  * A commitment scope field: a saved structure override when present + fresh, else
  * the parser outline (Phase 5b). A stale override (its source text changed in
  * Procore since it was saved) falls back to the parser and shows a banner. Renders
- * nothing when the source field is empty.
+ * nothing when the source field is empty. "Edit structure" opens the inline editor
+ * (Phase 5c).
  */
-function ScopeFieldSection({ label, source, override }: { label: string; source: string; override?: ScopeOverride }) {
+function ScopeFieldSection({ commitmentId, field, label, source, override }: { commitmentId: string; field: ScopeField; label: string; source: string; override?: ScopeOverride }) {
+  const [editing, setEditing] = useState(false)
   if (!source.trim()) return null
   const render = applyScopeOverride(source, override)
   return (
     <>
-      <div style={{ ...sectionLabel, margin: '18px 0 7px' }}>{label}</div>
-      {render.stale && <StaleBanner />}
-      <ScopeOutline blocks={render.blocks} />
+      <div style={{ ...sectionLabel, margin: '18px 0 7px', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span>{label}</span>
+        {!editing && (
+          <button
+            type="button"
+            className="sl-scope-edit"
+            onClick={() => setEditing(true)}
+            style={{ fontFamily: 'inherit', fontSize: 10, fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: 'var(--tx-tertiary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            Edit structure
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <ScopeStructureEditor commitmentId={commitmentId} field={field} source={source} override={override} onClose={() => setEditing(false)} />
+      ) : (
+        <>
+          {render.stale && <StaleBanner />}
+          <ScopeOutline blocks={render.blocks} />
+        </>
+      )}
     </>
+  )
+}
+
+/**
+ * The inline "Edit structure" editor (Phase 5c). Works on a local copy of the block
+ * list via the pure ops in scopeEdit — WORDS ARE LOCKED, only structure changes:
+ * click a word to break the line before it, toggle heading/para, indent/outdent,
+ * merge into the previous line. On save it asserts the partition invariant, then
+ * writes through the UserData seam; "Reset to auto" deletes the override so the
+ * field falls back to the parser. Seeds from a fresh override, else a sentence
+ * segmentation of the source.
+ */
+function ScopeStructureEditor({ commitmentId, field, source, override, onClose }: { commitmentId: string; field: ScopeField; source: string; override?: ScopeOverride; onClose: () => void }) {
+  const { saveOverride, deleteOverride } = useUserData()
+  const [blocks, setBlocks] = useState<ScopeBlockOverride[]>(() => seedEditorBlocks(source, override))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const edit = (fn: (b: ScopeBlockOverride[]) => ScopeBlockOverride[]) => setBlocks((b) => fn(b))
+
+  const run = async (op: () => Promise<void>) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await op()
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const save = () => {
+    // The safety assertion: the pure ops guarantee this, so a failure means a bug —
+    // refuse the save rather than let the rendered scope diverge from the contract.
+    if (!partitionsSource(blocks, source)) {
+      setError('Safety check failed: the structure no longer matches the contract words. Not saved.')
+      return
+    }
+    void run(() => saveOverride({ commitmentId, field, blocks, sourceHash: hashText(source) }))
+  }
+
+  return (
+    <div style={{ border: '1px solid var(--bd-2)', borderRadius: 9, padding: 10, background: 'var(--fill-1)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.4px', color: 'var(--tx-tertiary)', textTransform: 'uppercase' }}>Editing structure</span>
+        <div style={{ flex: 1 }} />
+        <EditorBtn onClick={save} disabled={busy} primary>
+          {busy ? 'Saving…' : 'Save'}
+        </EditorBtn>
+        <EditorBtn onClick={onClose} disabled={busy}>
+          Cancel
+        </EditorBtn>
+        <EditorBtn onClick={() => void run(() => deleteOverride(commitmentId, field))} disabled={busy}>
+          Reset to auto
+        </EditorBtn>
+      </div>
+      <div style={{ fontSize: 10.5, color: 'var(--tx-faint)', lineHeight: 1.5, marginBottom: 8 }}>
+        The words are locked — you only restructure. Click a word to break the line before it.
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {blocks.map((b, i) => (
+          <EditorBlockRow
+            key={i}
+            block={b}
+            canMerge={i > 0}
+            onSplit={(wi) => edit((bl) => splitBlock(bl, i, wi))}
+            onMerge={() => edit((bl) => mergeUp(bl, i))}
+            onKind={(k) => edit((bl) => setKind(bl, i, k))}
+            onIndent={(d) => edit((bl) => reindent(bl, i, d))}
+          />
+        ))}
+      </div>
+      {error && <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.45, color: tone.danger.c }}>{error}</div>}
+    </div>
+  )
+}
+
+/** One editable block: a control cluster + the block's words as split targets. */
+function EditorBlockRow({ block, canMerge, onSplit, onMerge, onKind, onIndent }: { block: ScopeBlockOverride; canMerge: boolean; onSplit: (wordIndex: number) => void; onMerge: () => void; onKind: (kind: ScopeBlockOverride['kind']) => void; onIndent: (delta: number) => void }) {
+  const words = block.text.split(' ')
+  const isHeading = block.kind === 'heading'
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 7, paddingTop: 6, paddingBottom: 6, paddingRight: 8, paddingLeft: 8 + indentPx(block.indent) }}>
+      <div style={{ display: 'flex', gap: 3, flex: 'none' }}>
+        <IconBtn title="Merge into previous line" onClick={onMerge} disabled={!canMerge}>
+          ⤴
+        </IconBtn>
+        <IconBtn title={isHeading ? 'Make a paragraph' : 'Make a heading'} onClick={() => onKind(isHeading ? 'para' : 'heading')} active={isHeading}>
+          H
+        </IconBtn>
+        <IconBtn title="Outdent" onClick={() => onIndent(-1)} disabled={block.indent <= 0}>
+          ‹
+        </IconBtn>
+        <IconBtn title="Indent" onClick={() => onIndent(1)}>
+          ›
+        </IconBtn>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', fontSize: isHeading ? 11 : 12.5, fontWeight: isHeading ? 700 : 400, lineHeight: 1.55, color: isHeading ? 'var(--tx-tertiary)' : '#3c434c', minWidth: 0 }}>
+        {words.map((w, wi) => (
+          <button
+            key={wi}
+            type="button"
+            className={wi > 0 ? 'sl-splitword' : undefined}
+            title={wi > 0 ? 'Break line before this word' : undefined}
+            onClick={wi > 0 ? () => onSplit(wi) : undefined}
+            style={{ font: 'inherit', color: 'inherit', background: 'none', border: 'none', padding: '0 2px', margin: 0, cursor: wi > 0 ? 'pointer' : 'default', borderRadius: 3 }}
+          >
+            {w}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Small square control button used in an editor block row. */
+function IconBtn({ title, onClick, disabled, active, children }: { title: string; onClick: () => void; disabled?: boolean; active?: boolean; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      style={{ width: 20, height: 20, fontSize: 11, fontWeight: 700, borderRadius: 5, border: '1px solid var(--bd-1)', background: active ? 'var(--fill-3)' : '#fff', color: disabled ? 'var(--tx-faint-2)' : 'var(--tx-secondary)', cursor: disabled ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', padding: 0, lineHeight: 1 }}
+    >
+      {children}
+    </button>
+  )
+}
+
+/** A text button in the editor toolbar (Save / Cancel / Reset to auto). */
+function EditorBtn({ onClick, disabled, primary, children }: { onClick: () => void; disabled?: boolean; primary?: boolean; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{ fontFamily: 'inherit', fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: primary ? 'none' : '1px solid var(--bd-1)', background: primary ? '#1a1d21' : '#fff', color: primary ? '#fff' : 'var(--tx-secondary)', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1 }}
+    >
+      {children}
+    </button>
   )
 }
 
