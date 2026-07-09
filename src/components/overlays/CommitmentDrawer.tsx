@@ -11,14 +11,17 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { TOOLS } from '@/data/tools'
+import { applyScopeOverride } from '@/lib/applyScopeOverride'
 import { formatMoney, statusTone } from '@/lib/derive'
-import { parseScope, SUBHEADER_LABEL } from '@/lib/parseScope'
+import { SUBHEADER_LABEL } from '@/lib/parseScope'
 import type { ScopeBlock } from '@/lib/parseScope'
+import { overrideKey } from '@/lib/userDataSource'
 import { commitmentBillingsSorted, commitmentChangeOrdersSorted, commitmentSovByCostCode } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useData, useSiteData } from '@/state/DataContext'
-import { mono } from '@/theme/tokens'
-import type { Commitment, CommitmentDetail } from '@/types'
+import { useUserData } from '@/state/UserDataContext'
+import { mono, tone } from '@/theme/tokens'
+import type { Commitment, CommitmentDetail, ScopeField, ScopeOverride } from '@/types'
 import { CodeBadge, ProjectTag, StatusPill } from '@/components/ui/primitives'
 import { Backdrop } from './Backdrop'
 
@@ -55,8 +58,12 @@ export function CommitmentDrawer() {
 function CommitmentPanel({ commitment: c, onClose }: { commitment: Commitment; onClose: () => void }) {
   const { getCommitmentDetail } = useData()
   const { commitmentLineItems } = useSiteData()
+  const { overrides } = useUserData()
   const [detail, setDetail] = useState<CommitmentDetail | null>(null) // null = still loading
   const [failed, setFailed] = useState(false)
+
+  // The user-authored structure override for a scope field (Phase 5b), if any.
+  const overrideFor = (field: ScopeField): ScopeOverride | undefined => overrides[overrideKey(c.id, field)]
 
   // SOV line items ride on the main snapshot — filter to this commitment, grouped
   // by cost code (Phase 4). These are the codes the Budget cross-link joins on.
@@ -143,13 +150,9 @@ function CommitmentPanel({ commitment: c, onClose }: { commitment: Commitment; o
             </div>
           )}
 
-          {/* scope of work — parsed from the flat description into an outline */}
-          {c.description.trim() && (
-            <>
-              <div style={{ ...sectionLabel, margin: '18px 0 7px' }}>Scope of work</div>
-              <ScopeOutline blocks={parseScope(c.description)} />
-            </>
-          )}
+          {/* scope of work — a saved structure override if present + fresh, else the
+              parser outline; a stale override falls back to the parser with a banner */}
+          <ScopeFieldSection label="Scope of work" source={c.description} override={overrideFor('description')} />
 
           {/* change-order log */}
           <div style={{ ...sectionLabel, margin: '18px 0 9px', display: 'flex', alignItems: 'baseline', gap: 8 }}>
@@ -225,19 +228,10 @@ function CommitmentPanel({ commitment: c, onClose }: { commitment: Commitment; o
             </>
           )}
 
-          {/* inclusions / exclusions — real scope fields from the commitment detail sync (Phase 4) */}
-          {c.inclusions.trim() && (
-            <>
-              <div style={{ ...sectionLabel, margin: '18px 0 7px' }}>Inclusions</div>
-              <ScopeOutline blocks={parseScope(c.inclusions)} />
-            </>
-          )}
-          {c.exclusions.trim() && (
-            <>
-              <div style={{ ...sectionLabel, margin: '18px 0 7px' }}>Exclusions</div>
-              <ScopeOutline blocks={parseScope(c.exclusions)} />
-            </>
-          )}
+          {/* inclusions / exclusions — real scope fields from the commitment detail
+              sync (Phase 4), each with its own optional structure override (Phase 5b) */}
+          <ScopeFieldSection label="Inclusions" source={c.inclusions} override={overrideFor('inclusions')} />
+          <ScopeFieldSection label="Exclusions" source={c.exclusions} override={overrideFor('exclusions')} />
 
           {/* nothing scope-related synced for this commitment */}
           {sov.length === 0 && !c.inclusions.trim() && !c.exclusions.trim() && (
@@ -254,11 +248,61 @@ function CommitmentPanel({ commitment: c, onClose }: { commitment: Commitment; o
   )
 }
 
+// One indent level, in px — used for override blocks that carry an explicit
+// `indent` (Phase 5b). Clamped so a malformed depth can't push text off-panel.
+const INDENT_STEP = 16
+const indentPx = (indent?: number) => Math.min(Math.max(indent ?? 0, 0), 6) * INDENT_STEP
+
 /**
- * Render the parsed scope outline: ALL-CAPS headings, numbered sections and
- * clauses (indented), best-effort sub-bullets, and any unstructured prose as
- * plain paragraphs. The parser degrades a marker-less description to a single
- * 'para', so this reads as the old flat paragraph when there's no structure.
+ * A commitment scope field: a saved structure override when present + fresh, else
+ * the parser outline (Phase 5b). A stale override (its source text changed in
+ * Procore since it was saved) falls back to the parser and shows a banner. Renders
+ * nothing when the source field is empty.
+ */
+function ScopeFieldSection({ label, source, override }: { label: string; source: string; override?: ScopeOverride }) {
+  if (!source.trim()) return null
+  const render = applyScopeOverride(source, override)
+  return (
+    <>
+      <div style={{ ...sectionLabel, margin: '18px 0 7px' }}>{label}</div>
+      {render.stale && <StaleBanner />}
+      <ScopeOutline blocks={render.blocks} />
+    </>
+  )
+}
+
+/** Warns that a saved structure was built on scope text Procore has since changed. */
+function StaleBanner() {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: 7,
+        alignItems: 'flex-start',
+        background: tone.warn.bg,
+        border: `1px solid ${tone.warn.bd}`,
+        borderRadius: 8,
+        padding: '8px 10px',
+        marginBottom: 8,
+        fontSize: 11,
+        lineHeight: 1.45,
+        color: tone.warn.c,
+      }}
+    >
+      <span aria-hidden style={{ flex: 'none', fontSize: 12 }}>
+        ⚠
+      </span>
+      <span>The scope text changed in Procore since this structure was saved — showing the auto-parsed version. Re-check your saved structure.</span>
+    </div>
+  )
+}
+
+/**
+ * Render the scope outline: ALL-CAPS headings, numbered sections and clauses
+ * (indented), best-effort sub-bullets, and any unstructured prose as plain
+ * paragraphs. The parser degrades a marker-less description to a single 'para', so
+ * this reads as the old flat paragraph when there's no structure. Override blocks
+ * (Phase 5b) arrive as para/heading carrying an explicit `indent`.
  */
 function ScopeOutline({ blocks }: { blocks: ScopeBlock[] }) {
   return (
@@ -266,14 +310,14 @@ function ScopeOutline({ blocks }: { blocks: ScopeBlock[] }) {
       {blocks.map((b, i) => {
         if (b.kind === 'para') {
           return (
-            <p key={i} style={{ margin: i === 0 ? 0 : '8px 0 0', fontSize: 12.5, lineHeight: 1.55, color: '#3c434c' }}>
+            <p key={i} style={{ margin: i === 0 ? 0 : '8px 0 0', paddingLeft: indentPx(b.indent), fontSize: 12.5, lineHeight: 1.55, color: '#3c434c' }}>
               {renderProse(b.text)}
             </p>
           )
         }
         if (b.kind === 'heading') {
           return (
-            <div key={i} style={{ margin: '14px 0 5px', fontSize: 10.5, fontWeight: 700, letterSpacing: '.5px', color: 'var(--tx-tertiary)' }}>
+            <div key={i} style={{ margin: '14px 0 5px', paddingLeft: indentPx(b.indent), fontSize: 10.5, fontWeight: 700, letterSpacing: '.5px', color: 'var(--tx-tertiary)' }}>
               {b.text}
             </div>
           )

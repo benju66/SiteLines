@@ -291,13 +291,25 @@ STOP for sign-off before applying (ref `jxesfirpghwpfmfjlfng`).
 - **Exit criteria:** typecheck + tests + build; live `:5175` — a written override persists across
   a refresh (RLS admits the authenticated write); seed mode writes to `localStorage`. ✅ met.
 
-#### Phase 5b — render overrides in the drawer + staleness guard
+#### Phase 5b — render overrides in the drawer + staleness guard — ✅ DONE + VERIFIED 2026-07-09
+> **Shipped:** the override **read/render** path. Pure [applyScopeOverride.ts](../../src/lib/applyScopeOverride.ts)
+> (`(source, override) → { blocks, source: 'override'|'parser', stale }`): a fresh override's blocks
+> win, an empty/absent override → parser, a hash mismatch → parser **+ `stale`**. `ScopeBlock` gained
+> an optional `indent`; `ScopeOutline` honors it on para/heading (16px/level, clamped). The drawer's
+> three scope sections (description · inclusions · exclusions) now route through a `ScopeFieldSection`
+> that reads the override from `useUserData()` (keyed by `overrideKey(id, field)`) and shows a
+> `tone.warn` "source changed" banner when stale. Co-located tests (+5, 140 total). The temporary
+> `?scopeproof` panel now writes a realistic 3-block structure (heading + para + indented para,
+> concatenation-preserving) to exercise the render. **Verified:** typecheck + tests + build; seed
+> (`:5174`) — override renders (3 blocks, indent = 16px), tampered hash → banner + parser fallback,
+> and the open drawer re-renders live on a context write; live (`:5175`, logged-in) — a Supabase
+> override renders in the SC-25-117-220 drawer. No editor yet (5c).
 - **Scope:** the pure `applyScopeOverride` selector (+ tests) and its wiring into the drawer's
   three scope sections (description · inclusions · exclusions) via `ScopeOutline`; the
   source-hash staleness banner + parser fallback. Overrides seeded via fixture/manual row (the
   editor lands in 5c), so this phase is the **read/render** path only.
 - **Exit criteria:** typecheck + tests + build; live — a seeded override renders; a hash mismatch
-  shows the "source changed" banner and falls back to the parser. STOP.
+  shows the "source changed" banner and falls back to the parser. ✅ met.
 
 #### Phase 5c — the inline structure editor (the fuller ops)
 - **Scope:** the "Edit structure" mode inside the drawer scope section — split (at word

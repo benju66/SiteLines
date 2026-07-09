@@ -16,9 +16,24 @@ import { hashText, normalizeScope } from '@/lib/hashText'
 import { overrideKey } from '@/lib/userDataSource'
 import { useSiteData } from '@/state/DataContext'
 import { useUserData } from '@/state/UserDataContext'
-import type { ScopeField } from '@/types'
+import type { ScopeBlockOverride, ScopeField } from '@/types'
 
 const FIELD: ScopeField = 'description'
+
+// Build a deterministic demo structure from the source: a heading + two paragraphs
+// (the second indented). Purely structural — the blocks concatenate back to the
+// normalized source (the Phase-5c save invariant), so 5b renders the real words.
+function demoStructure(source: string): ScopeBlockOverride[] {
+  const words = normalizeScope(source).split(' ').filter(Boolean)
+  if (words.length <= 3) return words.length ? [{ kind: 'para', indent: 0, text: words.join(' ') }] : []
+  const head = Math.min(5, Math.max(2, Math.floor(words.length / 6)))
+  const mid = head + Math.ceil((words.length - head) / 2)
+  return [
+    { kind: 'heading', indent: 0, text: words.slice(0, head).join(' ') },
+    { kind: 'para', indent: 0, text: words.slice(head, mid).join(' ') },
+    { kind: 'para', indent: 1, text: words.slice(mid).join(' ') },
+  ]
+}
 
 const panel: React.CSSProperties = {
   position: 'fixed',
@@ -87,7 +102,7 @@ function ScopeOverrideProofPanel() {
       saveOverride({
         commitmentId: commitment.id,
         field: FIELD,
-        blocks: [{ kind: 'para', indent: 0, text: normalizeScope(commitment.description) }],
+        blocks: demoStructure(commitment.description),
         sourceHash: liveHash,
       }),
     )

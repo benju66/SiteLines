@@ -24,6 +24,8 @@ export interface ScopeBlock {
   marker: string | null // "1" / "2.13" (sections/clauses), a cost code (lineitems), or null
   text: string // the block's lead text (marker + glyphs stripped)
   bullets: string[] // best-effort "Label: a; b; c" sub-items (empty when none)
+  indent?: number // explicit nesting depth for override blocks (Phase 5b); parser
+  // blocks derive indent from their kind and leave this unset
 }
 
 // A run of 2+ ALL-CAPS words (letters, plus & or /), each 2+ chars — "SCOPE OF
