@@ -328,6 +328,47 @@ export interface CommitmentDetail {
   billings: CommitmentBilling[]
 }
 
+/** Which commitment scope field an override structures (DATA_CONTRACT — the three
+ *  scope surfaces covered in Phase 5). */
+export type ScopeField = 'description' | 'inclusions' | 'exclusions'
+
+/**
+ * One block of a scope-structure override (Commitments, Phase 5). A flat, ordered
+ * list — nesting is carried by `indent`, not a tree — so the editor (5c) and the
+ * "blocks are a partition of the source" invariant stay simple. The editor only
+ * performs structural ops (split / heading / indent / merge), never typed text, so
+ * `text` is always a verbatim slice of the source. Kept intentionally narrower than
+ * `parseScope`'s `ScopeBlock` (just para/heading, no markers/bullets): this is what
+ * the user authored, not what the parser guessed.
+ */
+export interface ScopeBlockOverride {
+  kind: 'para' | 'heading'
+  indent: number // 0-based nesting depth
+  text: string // a verbatim slice of the source scope text
+}
+
+/**
+ * A user-authored structural override of a commitment's scope text (Commitments,
+ * Phase 5). The app's FIRST user-authored / write-back data — distinct from the
+ * read-only Procore mirror (`Commitment` et al.), never a court `Item`, never in
+ * My Court / `ballInCourt`. Persisted via the `UserData` seam (Supabase table
+ * live, `localStorage` in seed), keyed by `(commitmentId, field)`. `sourceHash`
+ * (a `hashText` of the normalized source the structure was built on) guards
+ * staleness: on a mismatch, 5b falls back to the parser output. `updatedAt` is an
+ * ISO display timestamp stamped at save; the DB's `updated_by` audit column is not
+ * surfaced here.
+ */
+export interface ScopeOverride {
+  commitmentId: string // "commitments:<procore id>" — matches Commitment.id
+  field: ScopeField
+  blocks: ScopeBlockOverride[]
+  sourceHash: string
+  updatedAt: string // ISO timestamp, stamped at save (display only)
+}
+
+/** A `ScopeOverride` as authored, before the seam stamps `updatedAt` at save. */
+export type ScopeOverrideInput = Omit<ScopeOverride, 'updatedAt'>
+
 /**
  * Financial rollup source (DATA_CONTRACT §6). Division rows are
  * [name, budget, committed, invoiced] in $millions; KPIs and % are computed in

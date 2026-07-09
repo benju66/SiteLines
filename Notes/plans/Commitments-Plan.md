@@ -216,32 +216,96 @@ REUSE, do not fork:
 > parsed from the text + bolded sub-labels — see `src/lib/parseScope.ts`). That's a stopgap
 > over the lossy blob; Phase 3's structured SOV supersedes the parsed cost codes.
 
-### Phase 5 — ⚖️ CONDITIONAL: manual scope-structure cleanup (decide AFTER Phase 3 step-0)
-**Only build this if Phase 3's step-0 check finds the Procore API returns the scope as flat
-text** (no HTML/rich-text structure). If the API exposes structure, sync it and render
-faithfully — this phase is unnecessary. Owner decision, 2026-07-08.
+### Phase 5 — manual scope-structure cleanup (✅ CONDITION MET — planned + sub-phased 2026-07-09)
+**The Phase-5 condition is confirmed:** Phase 3 established that Procore syncs the scope as
+flat, HTML-stripped text with list numbering/bullets stripped — the structure the parser
+needs isn't in the text, so the un-numbered prose walls (e.g. the SCOPE CLARIFICATIONS block)
+can't be auto-structured. The only fix is a manual layer. Owner elected to build it (2026-07-09).
 
-- **Problem:** the parser recovers headers + numbered clauses + SOV cost-code dividers, but
-  the un-numbered prose (e.g. the SCOPE CLARIFICATIONS wall) can't be auto-structured because
-  the sync strips its list numbering/bullets. Owner wants to hand-fix those residual walls so
-  the drawer reads like the executed contract.
+- **Problem:** `parseScope` recovers ALL-CAPS headings + numbered clauses + SOV cost-code
+  dividers, but the un-numbered prose can't be auto-structured (no marker to key on). The owner
+  wants to hand-fix those residual walls so the drawer reads like the executed contract.
 - **Why it's viable (owner domain input):** an executed subcontract's scope **language never
   changes** — a change order carries its own scope, it does not rewrite the original. So the
-  `description` text is effectively immutable, which makes a one-time manual cleanup **persist
-  across re-syncs** (the sync rewrites the row byte-identical). This removes the staleness trap.
-- **Design (keep it safe + faithful):**
-  - **Parser-first, manual-fix-fallback:** the parser output is the starting point; the user
-    only nudges the residue.
-  - **Non-destructive editor — the words are LOCKED, read-only.** The user only imposes
-    *structure* (split here · this is a header · indent this), never edits text, so the
-    rendered scope can't diverge from the contract language.
-  - **App's first user-authored data layer:** store the structure overrides in a **separate**
-    table keyed to the stable commitment id, which the sync never touches (a `UserData` /
-    annotations provider alongside the read-only `SiteData`). Keep a **hash of the source
-    description** so the rare change (a still-draft commitment, a re-execution) flags
-    "source changed — re-check your structure" instead of silently showing stale formatting.
-- **Gates:** ⛔ new Supabase table for user overrides (present SQL). This is a real expansion
-  (the app stops being a pure read-only mirror) — its own kickoff, not bolted onto the drawer.
+  scope text is effectively **immutable**, which makes a one-time manual cleanup **persist across
+  re-syncs** (the sync rewrites the row byte-identical). A source-text hash guards the rare
+  exception (a still-draft commitment, a re-execution).
+
+**Locked product decisions (owner, 2026-07-09):**
+1. **Coverage:** all three scope fields — `description` + `inclusions` + `exclusions`.
+2. **Editing power:** the fuller set — **split** a wall into blocks · mark a block a **heading** ·
+   **indent/outdent** (nesting) · **merge** blocks.
+3. **Placement:** **inline in the `CommitmentDrawer`** — an "Edit structure" toggle on the scope
+   section (keeps contract context; matches the dense tool), not a separate overlay.
+
+**Design (safe + faithful — the load-bearing invariant):**
+- **Words are LOCKED.** The editor performs only *structural* ops (split at a word boundary ·
+  heading/para · indent/outdent · merge). It never accepts typed text. Therefore the stored
+  blocks are always a **partition of the source text** — the invariant
+  `normalize(blocks.map(b => b.text).join(' ')) === normalize(sourceText)` holds and is
+  **asserted on save**, so the rendered scope can never diverge from the executed contract.
+- **Parser-first, override-as-fallback-superseding:** the editor opens from the current render
+  (a stored override if present, else `parseScope` output); the user nudges the residue.
+- **App's first user-authored data layer** — a **write path**, distinct from the read-only
+  Procore mirror. A `UserData` seam (its own provider + source) sits alongside `SiteData`; the
+  live impl writes a new Supabase table, the seed impl writes `localStorage` so seed mode still
+  exercises the editor. Overrides are keyed `(commitment_id, field)` and carry a `source_hash`;
+  on load, a hash mismatch → **fall back to the parser output + flag "source changed — re-check
+  your structure"** rather than silently show stale formatting.
+
+**Block shape (the override model):** a flat, ordered list — `{ kind: 'para' | 'heading',
+indent: number, text: string }[]` — rendered by the existing `ScopeOutline`. Flat+indent (not a
+tree) keeps the editor and the invariant simple. A pure `applyScopeOverride(source, override,
+hash)` selector returns `ScopeBlock[]` (override when hash matches, else parser) + a `stale`
+flag; a pure, tested `hashText()` in `src/lib/`.
+
+**Gate:** ⛔ **new Supabase base table** `sitelines_scope_overrides` (writable — SELECT **and**
+INSERT/UPDATE/DELETE RLS for `authenticated`), the app's first write target. Present the DDL and
+STOP for sign-off before applying (ref `jxesfirpghwpfmfjlfng`).
+
+**Sub-phasing (one focused session each):**
+
+#### Phase 5a — the write seam (⛔ table + `UserData` provider) — ✅ DONE + APPLIED + VERIFIED 2026-07-09
+> **Shipped:** the app's first **write** path. New writable base table `sitelines_scope_overrides`
+> ([migration 0010](../../sync/migrations/0010_scope_overrides.sql)) with SELECT + write RLS for
+> `authenticated`; hardened by [0011](../../sync/migrations/0011_scope_overrides_owner_writes.sql)
+> so writes are scoped to `updated_by = auth.uid()` (clears the "RLS Policy Always True" advisor;
+> single-user-identical). A **separate** `UserDataSource` seam ([userDataSource.ts](../../src/lib/userDataSource.ts))
+> — Supabase impl ([supabaseUserData.ts](../../src/data/supabaseUserData.ts), upsert on the composite PK)
+> + `localStorage` impl ([localUserData.ts](../../src/data/localUserData.ts)) — behind a
+> `UserDataProvider` ([UserDataContext.tsx](../../src/state/UserDataContext.tsx)) mounted alongside
+> `DataProvider` in [main.tsx](../../src/main.tsx). `ScopeOverride`/`ScopeBlockOverride` types; pure
+> tested [hashText.ts](../../src/lib/hashText.ts) + [mapScopeOverride.ts](../../src/lib/mapScopeOverride.ts).
+> **Verified:** typecheck + **135 tests** + build green; live (`:5175`, logged-in) write → refresh →
+> re-read → delete round-trips through the real table (authenticated RLS admits it; `updated_by`
+> auto-stamped); seed (`:5174`) does the same via `localStorage`; `get_advisors` shows no
+> table-level warnings. ⚠️ The write-proof scaffold ([ScopeOverrideProof.tsx](../../src/components/dev/ScopeOverrideProof.tsx),
+> behind `?scopeproof`, mounted in [App.tsx](../../src/App.tsx)) is **temporary — remove in 5c**.
+- **Scope:** ⛔ `sitelines_scope_overrides` table + RLS (present DDL, STOP, apply). A
+  `UserDataSource` interface (`getScopeOverrides()` · `saveScopeOverride()` ·
+  `deleteScopeOverride()`) with a Supabase impl (live) + a `localStorage` impl (seed), a
+  `UserDataProvider` context alongside `DataProvider`, and the **read** path loading overrides
+  into context. Prove the round-trip end-to-end with a **minimal write** (e.g. a temporary
+  "reset structure" no-op button that writes+reads a row) — no editor UI yet. Pure `hashText()`
+  + `.test.ts`.
+- **Exit criteria:** typecheck + tests + build; live `:5175` — a written override persists across
+  a refresh (RLS admits the authenticated write); seed mode writes to `localStorage`. ✅ met.
+
+#### Phase 5b — render overrides in the drawer + staleness guard
+- **Scope:** the pure `applyScopeOverride` selector (+ tests) and its wiring into the drawer's
+  three scope sections (description · inclusions · exclusions) via `ScopeOutline`; the
+  source-hash staleness banner + parser fallback. Overrides seeded via fixture/manual row (the
+  editor lands in 5c), so this phase is the **read/render** path only.
+- **Exit criteria:** typecheck + tests + build; live — a seeded override renders; a hash mismatch
+  shows the "source changed" banner and falls back to the parser. STOP.
+
+#### Phase 5c — the inline structure editor (the fuller ops)
+- **Scope:** the "Edit structure" mode inside the drawer scope section — split (at word
+  boundaries) · heading/para · indent/outdent · merge — operating on the block list and saving
+  through the 5a seam, with the concatenation invariant asserted on save. Empty/loading/error
+  states for the write path; a "reset to parser" affordance.
+- **Exit criteria:** typecheck + tests + build; live — restructure a real commitment's wall,
+  save, refresh → the structure persists and still reads the contract's words. STOP.
 
 ## Hard guardrails (do not violate)
 - Overlays (the detail drawer) render `position:fixed` OUTSIDE the card's `overflow:hidden`
