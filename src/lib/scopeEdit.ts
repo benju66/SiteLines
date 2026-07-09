@@ -16,32 +16,76 @@ import type { ScopeBlockOverride, ScopeOverride } from '@/types'
 /** Max nesting depth the editor allows (matches ScopeOutline's indent clamp). */
 export const MAX_INDENT = 6
 
-// A fragment that is nothing but a list marker — "1.", "2.5.", "3" — left stranded
-// when the sentence splitter cuts right after its trailing dot. These get re-joined
-// to the clause that follows so a numbered scope doesn't shatter into tiny pieces.
-const BARE_MARKER = /^\d+(?:\.\d+)*\.?$/
+// Word classifiers for the seed heuristic. A bare integer section marker ("1.",
+// "12."), a decimal clause marker ("1.1.", "2.13.", "1.1.1."), an ALL-CAPS word
+// (heading candidate — trailing punctuation stripped, ≥2 caps so "OSHA"/"A.M."
+// don't count as a run on their own), and a sentence terminator.
+const SECTION_MARKER = /^\d{1,3}\.$/
+const CLAUSE_MARKER = /^\d{1,3}(?:\.\d{1,3})+\.$/
+const isCapsWord = (w: string): boolean => {
+  const s = w.replace(/[.,:;]+$/, '')
+  return /^[A-Z][A-Z&/]*$/.test(s) && (s.match(/[A-Z]/g)?.length ?? 0) >= 2
+}
+const endsSentence = (w: string) => /[.!?:]$/.test(w)
+const clauseDepth = (w: string) => Math.min(MAX_INDENT, (w.match(/\./g)?.length ?? 2) - 1)
+
+interface Seg {
+  kind: ScopeBlockOverride['kind']
+  indent: number
+  marker: boolean // true = led by a numbered marker (kept whole, not sentence-split)
+  words: string[]
+}
 
 /**
- * Segment source text into a starting block list — roughly one `para` per sentence,
- * so the editor opens on something already broken up rather than one wall. Splits
- * after a sentence terminator followed by whitespace (a decimal like "8.125%" has no
- * space after its dot, so it never splits there), then re-attaches any bare list
- * marker ("2.5.") to the clause after it. Always a partition of the normalized words.
+ * Segment source text into a starting block list. Rather than blindly break after
+ * every period (which strands clause numbers at the end of the wrong line), this
+ * breaks BEFORE structure: a run of ≥2 ALL-CAPS words becomes a `heading`; a numbered
+ * section ("1. …") or decimal clause ("1.1. …") starts its own block LED by its
+ * number (indented by depth); and any free prose in between is sentence-split so a
+ * wall reads as lines. Numbered clauses are kept whole (not sentence-split). Every
+ * word lands in exactly one block, so the result is always a partition of the
+ * normalized source — the save-time invariant holds regardless.
  */
 export function segmentSource(source: string): ScopeBlockOverride[] {
   const norm = normalizeScope(source)
   if (!norm) return []
-  const parts = norm
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-  const merged: string[] = []
-  for (const part of parts) {
-    const prev = merged[merged.length - 1]
-    if (prev !== undefined && BARE_MARKER.test(prev)) merged[merged.length - 1] = `${prev} ${part}`
-    else merged.push(part)
+  const words = norm.split(' ')
+  const caps = words.map(isCapsWord)
+  // A heading word = caps AND adjacent to another caps word (a run of ≥2).
+  const inHeadingRun = words.map((_, i) => caps[i] && (!!caps[i - 1] || !!caps[i + 1]))
+
+  const segs: Seg[] = []
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i]
+    const next = words[i + 1]
+    const last = segs[segs.length - 1] ?? null
+    let open: Seg | null = null
+    if (CLAUSE_MARKER.test(w)) open = { kind: 'para', indent: clauseDepth(w), marker: true, words: [] }
+    else if (SECTION_MARKER.test(w) && next !== undefined && /^[A-Z]/.test(next)) open = { kind: 'para', indent: 0, marker: true, words: [] }
+    // A heading run only starts a heading at a sentence boundary, so a mid-clause
+    // caps phrase ("Provide OSHA SAFETY training") doesn't split the clause.
+    else if (inHeadingRun[i] && !inHeadingRun[i - 1] && (i === 0 || endsSentence(words[i - 1]))) open = { kind: 'heading', indent: 0, marker: false, words: [] }
+    else if (last === null || (last.kind === 'heading' && !inHeadingRun[i])) open = { kind: 'para', indent: 0, marker: false, words: [] }
+    if (open) segs.push(open)
+    const target = segs[segs.length - 1]
+    if (target) target.words.push(w)
   }
-  return merged.map((text) => ({ kind: 'para' as const, indent: 0, text }))
+
+  // Sentence-split only free-prose blocks (not marker-led, not headings) so a wall
+  // of prose reads as lines while numbered clauses + headings stay intact.
+  const blocks: ScopeBlockOverride[] = []
+  for (const seg of segs) {
+    const text = seg.words.join(' ')
+    if (seg.kind === 'para' && !seg.marker) {
+      for (const s of text.split(/(?<=[.!?])\s+/)) {
+        const t = s.trim()
+        if (t) blocks.push({ kind: 'para', indent: seg.indent, text: t })
+      }
+    } else {
+      blocks.push({ kind: seg.kind, indent: seg.indent, text })
+    }
+  }
+  return blocks
 }
 
 /**

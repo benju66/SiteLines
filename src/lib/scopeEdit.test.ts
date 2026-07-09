@@ -8,30 +8,42 @@ const SOURCE = 'GENERAL REQUIREMENTS. Furnish all labor and material. Comply wit
 const para = (text: string, indent = 0): ScopeBlockOverride => ({ kind: 'para', indent, text })
 
 describe('segmentSource', () => {
-  it('splits into one para per sentence, preserving the words', () => {
+  it('detects an ALL-CAPS heading and sentence-splits the prose after it', () => {
     const blocks = segmentSource(SOURCE)
-    expect(blocks.map((b) => b.text)).toEqual([
-      'GENERAL REQUIREMENTS.',
-      'Furnish all labor and material.',
-      'Comply with 8.125% retainage.',
+    expect(blocks).toEqual([
+      { kind: 'heading', indent: 0, text: 'GENERAL REQUIREMENTS.' },
+      { kind: 'para', indent: 0, text: 'Furnish all labor and material.' },
+      { kind: 'para', indent: 0, text: 'Comply with 8.125% retainage.' },
     ])
-    expect(blocks.every((b) => b.kind === 'para' && b.indent === 0)).toBe(true)
     expect(partitionsSource(blocks, SOURCE)).toBe(true)
+  })
+
+  it('breaks BEFORE numbered markers so the number leads its clause (not trailing)', () => {
+    const src = 'GENERAL REQUIREMENTS 1. Use of Project Premises 1.1. Standard work hours apply.'
+    const blocks = segmentSource(src)
+    expect(blocks).toEqual([
+      { kind: 'heading', indent: 0, text: 'GENERAL REQUIREMENTS' },
+      { kind: 'para', indent: 0, text: '1. Use of Project Premises' },
+      { kind: 'para', indent: 1, text: '1.1. Standard work hours apply.' },
+    ])
+    expect(partitionsSource(blocks, src)).toBe(true)
+  })
+
+  it('keeps a numbered clause whole (does not sentence-split its body)', () => {
+    const src = '1.1. Standard work hours are 8:00 A.M. to 5:00 P.M. Monday through Friday.'
+    const blocks = segmentSource(src)
+    expect(blocks).toEqual([{ kind: 'para', indent: 1, text: src }])
+    expect(partitionsSource(blocks, src)).toBe(true)
   })
 
   it('does not split on a decimal (no space after the dot)', () => {
     expect(segmentSource('Hold 8.125% of each pay app.').length).toBe(1)
   })
 
-  it('re-attaches bare list markers to the clause that follows (no tiny fragments)', () => {
-    const src = 'Scope of work. 2.5. Manage all mobilization. 2.6. Provide submittals.'
+  it('does not treat a lone caps acronym mid-sentence as a heading', () => {
+    const src = 'Provide OSHA training for all workers.'
     const blocks = segmentSource(src)
-    expect(blocks.map((b) => b.text)).toEqual([
-      'Scope of work.',
-      '2.5. Manage all mobilization.',
-      '2.6. Provide submittals.',
-    ])
-    expect(partitionsSource(blocks, src)).toBe(true)
+    expect(blocks).toEqual([{ kind: 'para', indent: 0, text: src }])
   })
 
   it('returns [] for empty/whitespace source', () => {

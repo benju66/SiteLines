@@ -321,15 +321,18 @@ STOP for sign-off before applying (ref `jxesfirpghwpfmfjlfng`).
 > word to break the line before it, per-block heading/indent/outdent/merge controls, and a toolbar
 > — **Save** (asserts `partitionsSource` then writes via the 5a seam), **Cancel**, **Reset to auto**
 > (deletes the override → back to the parser). Busy/error states on the write path. Co-located tests
-> (+16, 156 total). **The temporary `?scopeproof` scaffold + its App.tsx mount were removed.**
+> (+18, 158 total). **The temporary `?scopeproof` scaffold + its App.tsx mount were removed.**
 > **Verified:** typecheck + tests + build; seed (`:5174`) — split→heading→indent→Save→refresh
 > persists as a structured outline reading the contract's words verbatim, Reset-to-auto reverts to
 > the parser; live (`:5175`, logged-in) — restructured SC-25-117-220's scope, saved (the partition
 > assertion passed), refreshed → persists in the real table, Reset-to-auto deleted the row.
-> **Follow-up (minor):** `segmentSource` still over-fragments very long numbered scopes (a real
-> 56-clause wall opens as ~56 blocks; the number trails the previous block); a smarter seed that
-> breaks *before* a leading clause marker would read better. Correctness/invariant unaffected — the
-> user can merge/split freely.
+> **Seed heuristic (improved 2026-07-09):** `segmentSource` now breaks *before* structure — a run of
+> ≥2 ALL-CAPS words → a `heading`; a numbered section/decimal clause starts its own block LED by its
+> number (indented by depth); free prose in between is sentence-split; numbered clauses stay whole.
+> The number now leads its clause instead of trailing the previous line. Verified live: SC-25-117-220's
+> scope opens at 34 clean blocks (was 56) — "GENERAL REQUIREMENTS" a heading, `1.`/`1.1.`… leading &
+> indented. Still a heuristic (a mid-clause caps phrase or a sentence-ending number can mis-split), but
+> always a partition, so the invariant is untouched and the user can merge/split freely.
 - **Scope:** the "Edit structure" mode inside the drawer scope section — split (at word
   boundaries) · heading/para · indent/outdent · merge — operating on the block list and saving
   through the 5a seam, with the concatenation invariant asserted on save. Empty/loading/error
