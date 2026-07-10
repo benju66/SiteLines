@@ -177,6 +177,29 @@ export function toggleBold(blocks: ScopeBlockOverride[], index: number, wordInde
   return blocks.map((x, i) => (i === index ? withBold(x, next) : x))
 }
 
+/**
+ * Set or clear bold on a RANGE of word indices at once (Phase R1 — the select-to-bold
+ * path). `on` = true bolds every index in `indices`; false clears them; either way the
+ * block's other bold words are preserved. Like `toggleBold` this is presentation only —
+ * it records WHICH existing words render bold, never changes `text` — so
+ * `partitionsSource` is invariant across it. Out-of-range word indices are ignored, the
+ * index set stays sorted + unique, and clearing the last bold word drops the `bold` key.
+ * No-op for an out-of-range block index. (Contract-and-note-agnostic, like `toggleBold`.)
+ */
+export function setBoldWords(blocks: ScopeBlockOverride[], index: number, indices: number[], on: boolean): ScopeBlockOverride[] {
+  const b = blocks[index]
+  if (!b) return blocks
+  const count = b.text.split(' ').length
+  const current = new Set(b.bold ?? [])
+  for (const i of indices) {
+    if (!Number.isInteger(i) || i < 0 || i >= count) continue
+    if (on) current.add(i)
+    else current.delete(i)
+  }
+  const next = [...current].sort((x, y) => x - y)
+  return blocks.map((x, i) => (i === index ? withBold(x, next) : x))
+}
+
 /** Set block `index`'s kind (heading ⇄ para). */
 export function setKind(blocks: ScopeBlockOverride[], index: number, kind: ScopeBlockOverride['kind']): ScopeBlockOverride[] {
   if (!blocks[index]) return blocks

@@ -8,15 +8,16 @@
 // Phase 3. Reference data; nothing here touches My Court. Dumb UI — formatting
 // (money / %) happens here, ordering comes from pure selectors.
 
-import { useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { TOOLS } from '@/data/tools'
 import { applyScopeOverride, computeOrdinals } from '@/lib/applyScopeOverride'
 import { formatMoney, statusTone } from '@/lib/derive'
 import { hashText } from '@/lib/hashText'
+import { canRedo, canUndo, initHistory, pushEdit, redo, undo } from '@/lib/history'
 import type { ScopeBlock } from '@/lib/parseScope'
 import { proseEmphasis } from '@/lib/proseEmphasis'
-import { addNote, dropEmptyNotes, mergeUp, partitionsSource, reindent, removeNote, seedEditorBlocks, setKind, setList, setNoteText, splitBlock, toggleBold } from '@/lib/scopeEdit'
+import { addNote, dropEmptyNotes, mergeUp, MAX_INDENT, partitionsSource, reindent, removeNote, seedEditorBlocks, setBoldWords, setKind, setList, setNoteText, splitBlock } from '@/lib/scopeEdit'
 import { overrideKey } from '@/lib/userDataSource'
 import { commitmentBillingsSorted, commitmentChangeOrdersSorted, commitmentSovByCostCode } from '@/selectors'
 import { useApp } from '@/state/AppContext'
@@ -323,25 +324,67 @@ function ScopeFieldSection({ commitmentId, field, label, source, override }: { c
   )
 }
 
+// The scope editor a Ctrl+Z/Ctrl+Y targets: the one you last opened or interacted with.
+// Undo/redo is bound on `window`, so if two scope editors are open at once this makes the
+// shortcut act on the focused one only (not both). A plain token — no re-render needed.
+let activeScopeEditor: object | null = null
+
+/** The floating "Bold" chip's live target: which line + word indices the current text
+ *  selection covers, whether the click should ADD bold (`on`, i.e. not all already bold),
+ *  and where to draw it (viewport coords — the chip is position:fixed). */
+interface ChipTarget {
+  line: number
+  words: number[]
+  on: boolean
+  left: number
+  top: number
+  above: boolean
+}
+
 /**
- * The inline "Edit structure" editor (Phase 5c). Works on a local copy of the block
- * list via the pure ops in scopeEdit — WORDS ARE LOCKED, only structure changes:
- * click a word to break the line before it, toggle heading/para, indent/outdent,
- * merge into the previous line. On save it asserts the partition invariant, then
- * writes through the UserData seam; "Reset to auto" deletes the override so the
- * field falls back to the parser. Seeds from a fresh override, else a sentence
- * segmentation of the source.
+ * The inline "Edit scope" editor (Phase 5c, rebuilt in R1 to a Notion-feel surface).
+ * Works on a local copy of the block list via the SAME pure ops in scopeEdit — WORDS
+ * ARE LOCKED, only structure changes. New interactions, same safe engine: click the gap
+ * between two words to break the line there; select words → a floating "Bold" chip
+ * (`setBoldWords`); a hover "⠿" handle opens a labeled format menu (heading/paragraph ·
+ * bullet · number · indent · outdent · join). Typing is allowed on your own notes only.
+ * On save it asserts the unchanged partition invariant, then writes through the UserData
+ * seam; "Reset to auto" deletes the override so the field falls back to the parser.
  */
 function ScopeStructureEditor({ commitmentId, field, source, override, onClose }: { commitmentId: string; field: ScopeField; source: string; override?: ScopeOverride; onClose: () => void }) {
   const { saveOverride, deleteOverride } = useUserData()
-  const [blocks, setBlocks] = useState<ScopeBlockOverride[]>(() => seedEditorBlocks(source, override))
+  // Block list lives in an undo/redo history (Ctrl+Z / Ctrl+Y). `present` is the current
+  // blocks; every edit records a step, and a burst of note typing coalesces into one.
+  const [hist, setHist] = useState(() => initHistory(seedEditorBlocks(source, override)))
+  const blocks = hist.present
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Bold mode (Phase 6c): while on, a word-click toggles that word's bold instead of
-  // splitting the line. Presentation only — bold marks EXISTING words, never typed text.
-  const [boldMode, setBoldMode] = useState(false)
+  // Which line's format menu is open (block index), or null. One at a time.
+  const [openMenu, setOpenMenu] = useState<number | null>(null)
+  // The floating "Bold" chip target for the current selection, or null when hidden.
+  const [chip, setChip] = useState<ChipTarget | null>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const editorId = useRef({}) // stable identity for the active-editor / undo scoping
+  // The document-level selection handler reads the latest blocks without re-subscribing.
+  const blocksRef = useRef(blocks)
+  blocksRef.current = blocks
 
-  const edit = (fn: (b: ScopeBlockOverride[]) => ScopeBlockOverride[]) => setBlocks((b) => fn(b))
+  // Record an edit through the history. `tag` coalesces consecutive same-tag edits into
+  // one undo step (used for note typing) — omit it and each edit is its own step.
+  const edit = (fn: (b: ScopeBlockOverride[]) => ScopeBlockOverride[], tag?: string) => setHist((h) => pushEdit(h, fn, tag ?? null))
+
+  // Undo / redo also dismiss any open menu + chip, whose anchors may not survive the
+  // block-list changing underneath them.
+  const doUndo = useCallback(() => {
+    setOpenMenu(null)
+    setChip(null)
+    setHist(undo)
+  }, [])
+  const doRedo = useCallback(() => {
+    setOpenMenu(null)
+    setChip(null)
+    setHist(redo)
+  }, [])
 
   const run = async (op: () => Promise<void>) => {
     setBusy(true)
@@ -359,9 +402,9 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
   const save = () => {
     // Drop blank notes (a stray "Add note" click) before saving so they never persist.
     const cleaned = dropEmptyNotes(blocks)
-    // The safety assertion: the pure ops guarantee the CONTRACT blocks still spell out
-    // the source (notes are excluded), so a failure means a bug — refuse the save rather
-    // than let the rendered contract scope diverge from what was executed.
+    // The safety assertion (UNCHANGED): the pure ops guarantee the CONTRACT blocks still
+    // spell out the source (notes are excluded), so a failure means a bug — refuse the
+    // save rather than let the rendered contract scope diverge from what was executed.
     if (!partitionsSource(cleaned, source)) {
       setError('Safety check failed: the structure no longer matches the contract words. Not saved.')
       return
@@ -369,13 +412,127 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
     void run(() => saveOverride({ commitmentId, field, blocks: cleaned, sourceHash: hashText(source) }))
   }
 
+  // Selection → Bold chip. On any selection change inside THIS editor's contract text,
+  // find the word spans the range intersects (a partial-word selection snaps to the whole
+  // touched word — bold is word-indexed) and float a chip over the selection. Scoped via
+  // rootRef so a second open editor doesn't react. Hidden on scroll (the chip is fixed).
+  useEffect(() => {
+    const onSelect = () => {
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) return setChip(null)
+      const range = sel.getRangeAt(0)
+      const anchor = range.commonAncestorContainer
+      const el = anchor.nodeType === 3 ? anchor.parentElement : (anchor as Element)
+      const textEl = el?.closest?.('.sl-pline-text') as HTMLElement | null
+      if (!textEl || !rootRef.current?.contains(textEl)) return setChip(null)
+      const line = Number(textEl.dataset.line)
+      const b = blocksRef.current[line]
+      // Headings are already bold and render via a separate path — no chip on them.
+      if (!b || b.kind === 'heading') return setChip(null)
+      const words: number[] = []
+      textEl.querySelectorAll('.sl-word').forEach((sp) => {
+        if (range.intersectsNode(sp)) words.push(Number((sp as HTMLElement).dataset.w))
+      })
+      if (words.length === 0) return setChip(null)
+      const rect = range.getBoundingClientRect()
+      if (rect.width === 0 && rect.height === 0) return setChip(null)
+      const allBold = words.every((w) => (b.bold ?? []).includes(w))
+      // Clamp the (fixed) chip so it never overflows the viewport / 452px drawer.
+      const HALF = 44
+      const left = Math.max(HALF + 8, Math.min(window.innerWidth - HALF - 8, rect.left + rect.width / 2))
+      const above = rect.top > 48 // flip below when the selection hugs the top edge
+      setChip({ line, words, on: !allBold, left, top: above ? rect.top - 8 : rect.bottom + 8, above })
+    }
+    const onScroll = () => setChip(null)
+    document.addEventListener('selectionchange', onSelect)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('selectionchange', onSelect)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [])
+
+  // While a format menu is open: close it on an outside click, and let Escape close the
+  // MENU first (a second Escape then closes the drawer, as usual). The app's drawer-close
+  // Escape handler is a window bubble listener, so we intercept in the capture phase and
+  // stop it — otherwise Escape would blow past the menu and close the whole drawer.
+  useEffect(() => {
+    if (openMenu === null) return
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Element | null
+      if (!t?.closest?.('.sl-pmenu') && !t?.closest?.('.sl-phandle')) setOpenMenu(null)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopImmediatePropagation()
+        e.preventDefault()
+        setOpenMenu(null)
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey, true)
+    }
+  }, [openMenu])
+
+  // This editor becomes the undo/redo target when it opens; opening or clicking into
+  // another scope editor hands the target over (see `activeScopeEditor`).
+  useEffect(() => {
+    const id = editorId.current
+    activeScopeEditor = id
+    return () => {
+      if (activeScopeEditor === id) activeScopeEditor = null
+    }
+  }, [])
+
+  // Ctrl/⌘+Z = undo, Ctrl/⌘+Y or Ctrl/⌘+Shift+Z = redo — but only for the active editor,
+  // and only when the event isn't the app's own shortcut. preventDefault stops the
+  // browser's (broken, for a controlled textarea) native undo.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || activeScopeEditor !== editorId.current) return
+      const k = e.key.toLowerCase()
+      if (k === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        doUndo()
+      } else if (k === 'y' || (k === 'z' && e.shiftKey)) {
+        e.preventDefault()
+        doRedo()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [doUndo, doRedo])
+
+  const applyChip = () => {
+    if (!chip) return
+    edit((bl) => setBoldWords(bl, chip.line, chip.words, chip.on))
+    window.getSelection()?.removeAllRanges()
+    setChip(null)
+  }
+
+  // Live ordinals via the shared rule, so a numbered line previews its real number
+  // (1·2·3) as you format — matching the saved outline exactly.
+  const ordinals = computeOrdinals(blocks)
+
+  const markActive = () => {
+    activeScopeEditor = editorId.current
+  }
+
   return (
-    <div style={{ border: '1px solid var(--bd-2)', borderRadius: 9, padding: 10, background: 'var(--fill-1)' }}>
+    <div ref={rootRef} className="sl-scope-editor" onPointerDownCapture={markActive} onFocusCapture={markActive} style={{ border: '1px solid var(--bd-2)', borderRadius: 9, padding: 10, background: 'var(--fill-1)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.4px', color: boldMode ? 'var(--accent)' : 'var(--tx-tertiary)', textTransform: 'uppercase' }}>
-          {boldMode ? 'Bold mode' : 'Editing structure'}
-        </span>
-        <BoldToggle active={boldMode} onClick={() => setBoldMode((m) => !m)} />
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.4px', color: 'var(--tx-secondary)', textTransform: 'uppercase' }}>Edit scope</span>
+        <div style={{ display: 'flex', gap: 3 }}>
+          <HistoryBtn title="Undo (Ctrl+Z)" onClick={doUndo} disabled={!canUndo(hist)}>
+            ↶
+          </HistoryBtn>
+          <HistoryBtn title="Redo (Ctrl+Y)" onClick={doRedo} disabled={!canRedo(hist)}>
+            ↷
+          </HistoryBtn>
+        </div>
         <div style={{ flex: 1 }} />
         <EditorBtn onClick={save} disabled={busy} primary>
           {busy ? 'Saving…' : 'Save'}
@@ -383,208 +540,269 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
         <EditorBtn onClick={onClose} disabled={busy}>
           Cancel
         </EditorBtn>
-        <EditorBtn onClick={() => void run(() => deleteOverride(commitmentId, field))} disabled={busy}>
+        <EditorBtn onClick={() => void run(() => deleteOverride(commitmentId, field))} disabled={busy} quiet>
           Reset to auto
         </EditorBtn>
       </div>
-      <div style={{ fontSize: 10.5, color: 'var(--tx-faint)', lineHeight: 1.5, marginBottom: 8 }}>
-        {boldMode
-          ? 'Click any word to bold or unbold it — the words stay locked. Click B again to go back to restructuring.'
-          : 'The words are locked — you only restructure. Click a word to break the line before it. Add your own notes below.'}
+      <div style={{ fontSize: 11, color: 'var(--tx-secondary)', lineHeight: 1.5, marginBottom: 10 }}>
+        The words stay locked — you regroup and annotate them. <b style={strong}>Select words to bold</b>, click between two words to split a line, hover a line to open its format menu, and add your own notes below.
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {(() => {
-          // Live ordinals via the shared rule, so a numbered block previews its real
-          // number (1·2·3) as you toggle — matching the saved outline exactly.
-          const ordinals = computeOrdinals(blocks)
-          return blocks.map((b, i) => (
-            <EditorBlockRow
-              key={i}
-              block={b}
-              ordinal={ordinals[i]}
-              canMerge={i > 0}
-              boldMode={boldMode}
-              onSplit={(wi) => edit((bl) => splitBlock(bl, i, wi))}
-              onMerge={() => edit((bl) => mergeUp(bl, i))}
-              onKind={(k) => edit((bl) => setKind(bl, i, k))}
-              onIndent={(d) => edit((bl) => reindent(bl, i, d))}
-              onList={(l) => edit((bl) => setList(bl, i, l))}
-              onBold={(wi) => edit((bl) => toggleBold(bl, i, wi))}
-              onNoteText={(t) => edit((bl) => setNoteText(bl, i, t))}
-              onDelete={() => edit((bl) => removeNote(bl, i))}
-            />
-          ))
-        })()}
+      <div className="sl-plist">
+        {blocks.map((b, i) => (
+          <EditorLine
+            key={i}
+            block={b}
+            index={i}
+            ordinal={ordinals[i]}
+            canMerge={i > 0 && blocks[i - 1].source === b.source}
+            menuOpen={openMenu === i}
+            onToggleMenu={() => setOpenMenu((m) => (m === i ? null : i))}
+            onSplit={(wi) => {
+              setChip(null)
+              edit((bl) => splitBlock(bl, i, wi))
+            }}
+            onMerge={() => {
+              setOpenMenu(null)
+              edit((bl) => mergeUp(bl, i))
+            }}
+            onKind={(k) => {
+              setOpenMenu(null)
+              edit((bl) => setKind(bl, i, k))
+            }}
+            onIndent={(d) => {
+              setOpenMenu(null)
+              edit((bl) => reindent(bl, i, d))
+            }}
+            onList={(l) => {
+              setOpenMenu(null)
+              edit((bl) => setList(bl, i, l))
+            }}
+            onNoteText={(t) => edit((bl) => setNoteText(bl, i, t), `note:${i}`)}
+            onDelete={() => {
+              setOpenMenu(null)
+              edit((bl) => removeNote(bl, i))
+            }}
+          />
+        ))}
       </div>
       {/* Add note (Phase 6b): appends an empty note — the ONE place typing is allowed.
           The contract words stay locked; notes render clearly marked as your additions. */}
       <button
         type="button"
-        onClick={() => edit((bl) => addNote(bl, bl.length - 1))}
+        onClick={() => {
+          setOpenMenu(null)
+          edit((bl) => addNote(bl, bl.length - 1))
+          // Focus the fresh note so the owner can just start typing (view-layer nicety).
+          setTimeout(() => {
+            const tas = rootRef.current?.querySelectorAll('textarea')
+            tas?.[tas.length - 1]?.focus()
+          }, 0)
+        }}
         className="sl-add-note"
-        style={{ marginTop: 6, width: '100%', fontFamily: 'inherit', fontSize: 11, fontWeight: 600, padding: '6px 10px', borderRadius: 6, border: `1px dashed ${tone.info.bd}`, background: tone.info.bg, color: tone.info.c, cursor: 'pointer' }}
+        style={{ marginTop: 8, fontFamily: 'inherit', fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 12px', borderRadius: 7, border: `1px solid ${tone.info.bd}`, background: tone.info.bg, color: tone.info.c, cursor: 'pointer' }}
       >
-        + Add note
+        <span aria-hidden style={{ fontSize: 14, lineHeight: 1 }}>+</span> Add note
       </button>
       {error && <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.45, color: tone.danger.c }}>{error}</div>}
+      {chip && <BoldChip left={chip.left} top={chip.top} above={chip.above} label={chip.on ? 'Bold' : 'Unbold'} onApply={applyChip} />}
     </div>
   )
 }
 
-/** One editable block: a control cluster + the block's words. Out of bold mode a
- *  word-click splits the line before it (Phase 5c); in bold mode a word-click toggles
- *  that word's bold (Phase 6c). Bold words preview bold live on paragraphs. A user note
- *  (Phase 6b, `source:'user'`) renders instead as a tinted, labelled text input — the
- *  ONE place typing is allowed — with indent / list / delete but no split/heading/bold. */
-function EditorBlockRow({ block, ordinal, canMerge, boldMode, onSplit, onMerge, onKind, onIndent, onList, onBold, onNoteText, onDelete }: { block: ScopeBlockOverride; ordinal?: number; canMerge: boolean; boldMode: boolean; onSplit: (wordIndex: number) => void; onMerge: () => void; onKind: (kind: ScopeBlockOverride['kind']) => void; onIndent: (delta: number) => void; onList: (list: ScopeBlockOverride['list']) => void; onBold: (wordIndex: number) => void; onNoteText: (text: string) => void; onDelete: () => void }) {
+/** A menu item in the hover "⠿" format menu (Phase R1). */
+interface MenuItemDef {
+  key: string
+  icon: string
+  label: string
+  on?: boolean
+  disabled?: boolean
+  sepBefore?: boolean
+  onClick: () => void
+}
+
+/** Format-menu items for a CONTRACT line: heading⇄para, bullet/number (paragraphs only),
+ *  indent/outdent, and join-with-above (only when the line above is joinable). Every item
+ *  wires an EXISTING pure op — no new capabilities. */
+function contractMenuItems(block: ScopeBlockOverride, canMerge: boolean, h: { onKind: (k: ScopeBlockOverride['kind']) => void; onList: (l: ScopeBlockOverride['list']) => void; onIndent: (d: number) => void; onMerge: () => void }): MenuItemDef[] {
   const isHeading = block.kind === 'heading'
-  // The list-style cycle (Phase 6a): plain → bullet → number → plain. Presentation
-  // only, and rendered on paragraphs — disabled on a heading (unaffected by lists).
-  const nextList: ScopeBlockOverride['list'] = block.list === 'bullet' ? 'number' : block.list === 'number' ? undefined : 'bullet'
-
-  if (block.source === 'user') {
-    const noteListTitle = block.list === 'bullet' ? 'Bulleted — click to number' : block.list === 'number' ? 'Numbered — click to remove' : 'No list — click to bullet'
-    return (
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: tone.info.bg, border: `1px solid ${tone.info.bd}`, borderRadius: 7, paddingTop: 6, paddingBottom: 6, paddingRight: 8, paddingLeft: 8 + indentPx(block.indent) }}>
-        <div style={{ display: 'flex', gap: 3, flex: 'none' }}>
-          <IconBtn title="Remove note" onClick={onDelete}>
-            ×
-          </IconBtn>
-          <IconBtn title={noteListTitle} onClick={() => onList(nextList)} active={block.list != null}>
-            {block.list === 'number' ? '1.' : '•'}
-          </IconBtn>
-          <IconBtn title="Outdent" onClick={() => onIndent(-1)} disabled={block.indent <= 0}>
-            ‹
-          </IconBtn>
-          <IconBtn title="Indent" onClick={() => onIndent(1)}>
-            ›
-          </IconBtn>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 0 }}>
-          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase', color: tone.info.c }}>Your note</span>
-          <textarea
-            value={block.text}
-            onChange={(e) => onNoteText(e.target.value)}
-            placeholder="Type your note…"
-            rows={2}
-            style={{ font: 'inherit', fontSize: 12.5, lineHeight: 1.5, color: '#3c434c', background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 5, padding: '5px 7px', resize: 'vertical', width: '100%', minWidth: 0, boxSizing: 'border-box' }}
-          />
-        </div>
-      </div>
-    )
+  const items: MenuItemDef[] = [{ key: 'kind', icon: 'H', label: isHeading ? 'Paragraph' : 'Heading', on: isHeading, onClick: () => h.onKind(isHeading ? 'para' : 'heading') }]
+  if (!isHeading) {
+    items.push({ key: 'bullet', icon: '•', label: 'Bullet list', on: block.list === 'bullet', onClick: () => h.onList(block.list === 'bullet' ? undefined : 'bullet') })
+    items.push({ key: 'number', icon: '1.', label: 'Numbered list', on: block.list === 'number', onClick: () => h.onList(block.list === 'number' ? undefined : 'number') })
   }
+  items.push({ key: 'indent', icon: '→', label: 'Indent', sepBefore: true, disabled: block.indent >= MAX_INDENT, onClick: () => h.onIndent(1) })
+  items.push({ key: 'outdent', icon: '←', label: 'Outdent', disabled: block.indent <= 0, onClick: () => h.onIndent(-1) })
+  if (canMerge) items.push({ key: 'merge', icon: '⤴', label: 'Join with line above', sepBefore: true, onClick: h.onMerge })
+  return items
+}
 
+/** Format-menu items for a NOTE: bullet/number + indent/outdent (delete lives on the
+ *  note's own × button). */
+function noteMenuItems(block: ScopeBlockOverride, h: { onList: (l: ScopeBlockOverride['list']) => void; onIndent: (d: number) => void }): MenuItemDef[] {
+  return [
+    { key: 'bullet', icon: '•', label: 'Bullet list', on: block.list === 'bullet', onClick: () => h.onList(block.list === 'bullet' ? undefined : 'bullet') },
+    { key: 'number', icon: '1.', label: 'Numbered list', on: block.list === 'number', onClick: () => h.onList(block.list === 'number' ? undefined : 'number') },
+    { key: 'indent', icon: '→', label: 'Indent', sepBefore: true, disabled: block.indent >= MAX_INDENT, onClick: () => h.onIndent(1) },
+    { key: 'outdent', icon: '←', label: 'Outdent', disabled: block.indent <= 0, onClick: () => h.onIndent(-1) },
+  ]
+}
+
+/**
+ * One editable line (Phase R1). A CONTRACT line renders as PLAIN TEXT (words are text,
+ * not buttons) with a thin split-gap between each pair of words and select-to-bold
+ * (handled by the parent's chip). A user note (`source:'user'`) renders as a tinted
+ * "Your note" textarea — the ONE place typing is allowed. Every line has a hover "⠿"
+ * handle opening a labeled format menu; the menu's items differ by line type. All wiring
+ * goes through the existing pure ops — no new capabilities, only new interactions.
+ */
+function EditorLine({ block, index, ordinal, canMerge, menuOpen, onToggleMenu, onSplit, onMerge, onKind, onIndent, onList, onNoteText, onDelete }: {
+  block: ScopeBlockOverride
+  index: number
+  ordinal?: number
+  canMerge: boolean
+  menuOpen: boolean
+  onToggleMenu: () => void
+  onSplit: (wordIndex: number) => void
+  onMerge: () => void
+  onKind: (kind: ScopeBlockOverride['kind']) => void
+  onIndent: (delta: number) => void
+  onList: (list: ScopeBlockOverride['list']) => void
+  onNoteText: (text: string) => void
+  onDelete: () => void
+}) {
+  const isNote = block.source === 'user'
+  const items = isNote ? noteMenuItems(block, { onList, onIndent }) : contractMenuItems(block, canMerge, { onKind, onList, onIndent, onMerge })
+  return (
+    <div className="sl-pline">
+      <button type="button" className={`sl-phandle${menuOpen ? ' is-open' : ''}`} title="Format this line" aria-haspopup="menu" aria-expanded={menuOpen} onClick={onToggleMenu}>
+        ⠿
+      </button>
+      <div className="sl-pbody" style={{ paddingLeft: indentPx(block.indent) }}>
+        {isNote ? <NoteBody block={block} ordinal={ordinal} onNoteText={onNoteText} onDelete={onDelete} /> : <ContractText block={block} index={index} ordinal={ordinal} onSplit={onSplit} />}
+      </div>
+      {menuOpen && <LineMenu items={items} />}
+    </div>
+  )
+}
+
+/** A contract line as plain, selectable text (Phase R1): an optional list marker, then
+ *  each word as an inert `<span data-w>` with a thin hoverable split-gap before words
+ *  1+. Words are NOT clickable; the gap splits and a text selection drives the Bold chip. */
+function ContractText({ block, index, ordinal, onSplit }: { block: ScopeBlockOverride; index: number; ordinal?: number; onSplit: (wordIndex: number) => void }) {
+  const isHeading = block.kind === 'heading'
   const words = block.text.split(' ')
   const boldSet = new Set(block.bold ?? [])
-  const listTitle = isHeading ? 'List style applies to paragraphs' : block.list === 'bullet' ? 'Bulleted — click to number' : block.list === 'number' ? 'Numbered — click to remove' : 'No list — click to bullet'
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 7, paddingTop: 6, paddingBottom: 6, paddingRight: 8, paddingLeft: 8 + indentPx(block.indent) }}>
-      <div style={{ display: 'flex', gap: 3, flex: 'none' }}>
-        <IconBtn title="Merge into previous line" onClick={onMerge} disabled={!canMerge}>
-          ⤴
-        </IconBtn>
-        <IconBtn title={isHeading ? 'Make a paragraph' : 'Make a heading'} onClick={() => onKind(isHeading ? 'para' : 'heading')} active={isHeading}>
-          H
-        </IconBtn>
-        <IconBtn title={listTitle} onClick={() => onList(nextList)} active={!isHeading && block.list != null} disabled={isHeading}>
-          {block.list === 'number' ? '1.' : '•'}
-        </IconBtn>
-        <IconBtn title="Outdent" onClick={() => onIndent(-1)} disabled={block.indent <= 0}>
-          ‹
-        </IconBtn>
-        <IconBtn title="Indent" onClick={() => onIndent(1)}>
-          ›
-        </IconBtn>
-      </div>
-      {/* Live list marker (Phase 6a) — mirrors the saved outline; headings ignore lists. */}
-      {!isHeading && block.list && <ListMarker list={block.list} ordinal={ordinal} />}
-      <div style={{ display: 'flex', flexWrap: 'wrap', fontSize: isHeading ? 11 : 12.5, fontWeight: isHeading ? 700 : 400, lineHeight: 1.55, color: isHeading ? 'var(--tx-tertiary)' : '#3c434c', minWidth: 0 }}>
-        {words.map((w, wi) => {
-          const isBold = boldSet.has(wi)
-          // In bold mode every word toggles bold; otherwise word 0 is inert and words
-          // 1+ split the line before them (Phase 5c behavior, unchanged).
-          const clickable = boldMode || wi > 0
-          const handleClick = boldMode ? () => onBold(wi) : wi > 0 ? () => onSplit(wi) : undefined
-          const title = boldMode ? (isBold ? 'Click to unbold this word' : 'Click to bold this word') : wi > 0 ? 'Break line before this word' : undefined
-          return (
-            <button
-              key={wi}
-              type="button"
-              className={boldMode ? 'sl-boldword' : wi > 0 ? 'sl-splitword' : undefined}
-              title={title}
-              onClick={handleClick}
-              // Bold previews live on paragraphs (headings are already bold; a lighter
-              // 650 would fight their 700 weight, so leave headings alone).
-              style={{ font: 'inherit', color: 'inherit', background: 'none', border: 'none', padding: '0 2px', margin: 0, cursor: clickable ? 'pointer' : 'default', borderRadius: 3, fontWeight: isBold && !isHeading ? 650 : undefined }}
-            >
-              {w}
-            </button>
-          )
-        })}
+    <div className={`sl-pline-text${isHeading ? ' heading' : ''}`} data-line={index} style={isHeading ? undefined : { color: '#3c434c' }}>
+      {!isHeading && block.list && (
+        <span className="sl-pmarker" aria-hidden>
+          {block.list === 'number' ? `${ordinal ?? ''}.` : '•'}
+        </span>
+      )}
+      {words.map((w, wi) => (
+        <Fragment key={wi}>
+          {wi > 0 && (
+            <span className="sl-gap" title="Split line here" onClick={() => onSplit(wi)}>
+              {' '}
+            </span>
+          )}
+          <span className={`sl-word${boldSet.has(wi) && !isHeading ? ' is-bold' : ''}`} data-w={wi}>
+            {w}
+          </span>
+        </Fragment>
+      ))}
+    </div>
+  )
+}
+
+/** A user note (Phase 6b) as a tinted "Your note" textarea — the ONE place typing is
+ *  allowed. Honors indent (applied by the parent) + an optional list marker; delete is
+ *  the ×. The words-locked contract partition is untouched (notes are excluded on save). */
+function NoteBody({ block, ordinal, onNoteText, onDelete }: { block: ScopeBlockOverride; ordinal?: number; onNoteText: (text: string) => void; onDelete: () => void }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+      {block.list && <ListMarker list={block.list} ordinal={ordinal} />}
+      <div style={{ flex: 1, minWidth: 0, background: tone.info.bg, border: `1px solid ${tone.info.bd}`, borderRadius: 8, padding: '7px 9px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase', color: tone.info.c }}>✎ Your note</span>
+          <button type="button" className="sl-note-x" title="Remove note" onClick={onDelete} style={{ background: 'none', border: 'none', color: tone.info.c, cursor: 'pointer', fontSize: 15, lineHeight: 1, minWidth: 24, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+            ×
+          </button>
+        </div>
+        <textarea
+          value={block.text}
+          onChange={(e) => onNoteText(e.target.value)}
+          placeholder="Type your note…"
+          rows={2}
+          style={{ font: 'inherit', fontSize: 12.5, lineHeight: 1.5, color: '#3c434c', background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 5, padding: '5px 7px', resize: 'vertical', width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+        />
       </div>
     </div>
   )
 }
 
-/** Small square control button used in an editor block row. */
-function IconBtn({ title, onClick, disabled, active, children }: { title: string; onClick: () => void; disabled?: boolean; active?: boolean; children: ReactNode }) {
+/** The hover "⠿" handle's labeled format menu (Phase R1): text items revealed on demand,
+ *  not a permanent glyph row. Keyboard-operable — focuses the first item on open (Escape /
+ *  outside-click close is owned by the parent). Anchored under the handle, left-aligned so
+ *  it never overflows the 452px drawer. */
+function LineMenu({ items }: { items: MenuItemDef[] }) {
+  const firstRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    firstRef.current?.focus()
+  }, [])
+  return (
+    <div className="sl-pmenu" role="menu">
+      {items.map((it, idx) => (
+        <Fragment key={it.key}>
+          {it.sepBefore && <div className="sl-pmenu-sep" aria-hidden />}
+          <button type="button" role="menuitem" ref={idx === 0 ? firstRef : undefined} className={it.on ? 'is-on' : undefined} disabled={it.disabled} onClick={(e) => { e.stopPropagation(); it.onClick() }}>
+            <span className="mi" aria-hidden>{it.icon}</span>
+            {it.label}
+          </button>
+        </Fragment>
+      ))}
+    </div>
+  )
+}
+
+/** The floating "Bold" chip shown over a text selection (Phase R1). position:fixed, so
+ *  the parent clamps it to the viewport; mousedown (not click) + preventDefault so the
+ *  selection survives long enough for the parent to read the touched words. */
+function BoldChip({ left, top, above, label, onApply }: { left: number; top: number; above: boolean; label: string; onApply: () => void }) {
+  return (
+    <button type="button" className="sl-boldchip" style={{ left, top, transform: above ? 'translate(-50%, -100%)' : 'translate(-50%, 0)' }} onMouseDown={(e) => { e.preventDefault(); onApply() }}>
+      <b>B</b> {label}
+    </button>
+  )
+}
+
+/** A text button in the editor toolbar. `primary` = the dark Save; `quiet` = a
+ *  borderless, muted secondary (Reset to auto — it discards the whole structure, so it
+ *  stays low-key, no modal); default = the bordered Cancel. */
+function EditorBtn({ onClick, disabled, primary, quiet, children }: { onClick: () => void; disabled?: boolean; primary?: boolean; quiet?: boolean; children: ReactNode }) {
   return (
     <button
       type="button"
-      title={title}
       onClick={onClick}
       disabled={disabled}
-      style={{ width: 20, height: 20, fontSize: 11, fontWeight: 700, borderRadius: 5, border: '1px solid var(--bd-1)', background: active ? 'var(--fill-3)' : '#fff', color: disabled ? 'var(--tx-faint-2)' : 'var(--tx-secondary)', cursor: disabled ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', padding: 0, lineHeight: 1 }}
+      style={{ fontFamily: 'inherit', fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: primary || quiet ? 'none' : '1px solid var(--bd-1)', background: primary ? '#1a1d21' : quiet ? 'transparent' : '#fff', color: primary ? '#fff' : quiet ? 'var(--tx-secondary-2)' : 'var(--tx-secondary)', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1 }}
     >
       {children}
     </button>
   )
 }
 
-/**
- * The bold-mode toggle (Phase 6c): a serif "B" in the editor header. Active (dark)
- * = bold mode on, so a word-click bolds instead of splitting. A mode switch, not a
- * per-block control, so it lives in the toolbar and drives every row.
- */
-function BoldToggle({ active, onClick }: { active: boolean; onClick: () => void }) {
+/** A compact icon button for the editor's undo / redo (↶ ↷); greys out at the ends of
+ *  the history. 24px tall for a comfortable target; the Ctrl+Z / Ctrl+Y shortcuts do the
+ *  same thing for keyboard users. */
+function HistoryBtn({ title, onClick, disabled, children }: { title: string; onClick: () => void; disabled?: boolean; children: ReactNode }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      title={active ? 'Bold mode on — click words to bold; click to restructure again' : 'Bold mode — click to bold individual words'}
-      style={{
-        fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: 12.5,
-        fontWeight: 700,
-        fontStyle: 'italic',
-        width: 22,
-        height: 22,
-        borderRadius: 6,
-        border: active ? 'none' : '1px solid var(--bd-1)',
-        background: active ? 'var(--accent)' : '#fff',
-        color: active ? '#fff' : 'var(--tx-secondary)',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 0,
-        lineHeight: 1,
-      }}
-    >
-      B
-    </button>
-  )
-}
-
-/** A text button in the editor toolbar (Save / Cancel / Reset to auto). */
-function EditorBtn({ onClick, disabled, primary, children }: { onClick: () => void; disabled?: boolean; primary?: boolean; children: ReactNode }) {
-  return (
-    <button
-      type="button"
+      title={title}
       onClick={onClick}
       disabled={disabled}
-      style={{ fontFamily: 'inherit', fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: primary ? 'none' : '1px solid var(--bd-1)', background: primary ? '#1a1d21' : '#fff', color: primary ? '#fff' : 'var(--tx-secondary)', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1 }}
+      style={{ width: 26, height: 24, fontSize: 14, lineHeight: 1, borderRadius: 6, border: '1px solid var(--bd-1)', background: '#fff', color: disabled ? 'var(--tx-faint-2)' : 'var(--tx-secondary)', cursor: disabled ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
     >
       {children}
     </button>

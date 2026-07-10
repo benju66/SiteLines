@@ -86,6 +86,16 @@ Everything else (`splitBlock`, `mergeUp`, `toggleBold`, `addNote`, `setNoteText`
 ## Sub-phasing (ship + verify each)
 
 ### Phase R1 — the Notion-feel rebuild (replaces word-buttons + bold-mode together)
+- **Status: ✅ Shipped (2026-07-10).** Editor rebuilt in `CommitmentDrawer.tsx` (plain-text lines ·
+  gap-split · selection→Bold chip · hover `⠿` handle menu · tinted note textareas; `BoldToggle`/bold-mode
+  + word-buttons deleted); new pure `setBoldWords` in `scopeEdit.ts` (+ tests); affordance classes in
+  `index.css`. **Follow-up shipped same day (owner-requested): undo/redo** — `Ctrl+Z` / `Ctrl+Y` /
+  `Ctrl+Shift+Z` + toolbar `↶ ↷`, backed by a pure tested `src/lib/history.ts` (no-op edits record
+  nothing; note-typing bursts coalesce to one step). 216 tests green; typecheck + build green. Verified
+  live on seed (`:5174`) — split · select→bold (+unbold) · handle menu (heading/bullet/number/indent) ·
+  add-note + type · save → refresh persists · contract words verbatim (`partitionsSource` passes) · undo/
+  redo incl. coalescing. **Live logged-in `:5175` left to the owner** (Supabase password not stored; the
+  save seam is unchanged from Phase 6a, which was live-verified). Committed to `main`.
 - **Scope:** `src/components/overlays/CommitmentDrawer.tsx` (+ `src/index.css`, + `setBoldWords` in
   `scopeEdit.ts` with a test). Rebuild the editor: (1) each block renders as **plain text** with hoverable
   **gap-split** zones between words (click a gap → `splitBlock`); (2) **selection → floating "Bold" chip**

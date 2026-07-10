@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { hashText } from './hashText'
-import { addNote, dropEmptyNotes, mergeUp, partitionsSource, reindent, removeNote, seedEditorBlocks, segmentSource, setKind, setList, setNoteText, splitBlock, toggleBold, MAX_INDENT } from './scopeEdit'
+import { addNote, dropEmptyNotes, mergeUp, partitionsSource, reindent, removeNote, seedEditorBlocks, segmentSource, setBoldWords, setKind, setList, setNoteText, splitBlock, toggleBold, MAX_INDENT } from './scopeEdit'
 import type { ScopeBlockOverride, ScopeOverride } from '@/types'
 
 const SOURCE = 'GENERAL REQUIREMENTS. Furnish all labor and material. Comply with 8.125% retainage.'
@@ -234,6 +234,54 @@ describe('toggleBold', () => {
     expect(setKind(blocks, 0, 'heading')[0].bold).toEqual([0, 2])
     expect(reindent(blocks, 0, 1)[0].bold).toEqual([0, 2])
     expect(setList(blocks, 0, 'bullet')[0].bold).toEqual([0, 2])
+  })
+})
+
+describe('setBoldWords (Phase R1 — select-to-bold)', () => {
+  it('bolds a range of words at once, keeping the set sorted + unique', () => {
+    const blocks = [para('one two three four five')]
+    const out = setBoldWords(blocks, 0, [3, 1, 1], true)
+    expect(out).toEqual([{ kind: 'para', indent: 0, text: 'one two three four five', bold: [1, 3] }])
+  })
+
+  it('unions with existing bold words (on = true preserves the rest)', () => {
+    const blocks: ScopeBlockOverride[] = [{ kind: 'para', indent: 0, text: 'one two three four', bold: [0] }]
+    expect(setBoldWords(blocks, 0, [2, 3], true)).toEqual([{ kind: 'para', indent: 0, text: 'one two three four', bold: [0, 2, 3] }])
+  })
+
+  it('clears a range (on = false), dropping the key when the set empties', () => {
+    const blocks: ScopeBlockOverride[] = [{ kind: 'para', indent: 0, text: 'one two three', bold: [0, 1, 2] }]
+    const out = setBoldWords(blocks, 0, [0, 2], false)
+    expect(out).toEqual([{ kind: 'para', indent: 0, text: 'one two three', bold: [1] }])
+    const emptied = setBoldWords(out, 0, [1], false)
+    expect(emptied).toEqual([para('one two three')])
+    expect('bold' in emptied[0]).toBe(false)
+  })
+
+  it('ignores out-of-range / non-integer word indices', () => {
+    const blocks = [para('one two')]
+    expect(setBoldWords(blocks, 0, [2, -1, 1.5, 0], true)).toEqual([{ kind: 'para', indent: 0, text: 'one two', bold: [0] }])
+  })
+
+  it('is a no-op for an out-of-range block index', () => {
+    const blocks = [para('one two')]
+    expect(setBoldWords(blocks, 5, [0], true)).toBe(blocks)
+  })
+
+  it('does NOT change the partition — bold is pure decoration, never stored words', () => {
+    const source = 'Furnish all labor and material.'
+    const blocks = segmentSource(source)
+    expect(partitionsSource(blocks, source)).toBe(true)
+    const bolded = setBoldWords(blocks, 0, [0, 2, 4], true)
+    expect(partitionsSource(bolded, source)).toBe(true)
+    expect(bolded.map((b) => b.text)).toEqual(blocks.map((b) => b.text))
+  })
+
+  it('agrees with a loop of toggleBold over the same fresh indices', () => {
+    const blocks = [para('one two three four')]
+    const viaRange = setBoldWords(blocks, 0, [1, 3], true)
+    const viaLoop = toggleBold(toggleBold(blocks, 0, 1), 0, 3)
+    expect(viaRange).toEqual(viaLoop)
   })
 })
 

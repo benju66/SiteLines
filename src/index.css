@@ -89,21 +89,210 @@ button {
   background: #f2f4f6;
   border-color: #cdd2d8;
 }
-/* Scope structure editor (Commitments Phase 5c): the "Edit structure" link and
-   the per-word split targets. A split word highlights with a left rule so it's
-   clear the break lands BEFORE that word. */
+/* Scope "Edit structure" link (Commitments Phase 5c). */
 .sl-scope-edit:hover {
   color: var(--tx-secondary);
   text-decoration: underline;
 }
-.sl-splitword:hover {
-  background: var(--fill-3);
-  box-shadow: inset 2px 0 0 var(--accent);
+
+/* ── Scope editor — Notion-feel rebuild (Commitments Phase R1) ─────────────────
+   Plain-text lines with a hover ⠿ handle, thin split-gaps between words, a labeled
+   format menu, and a floating select-to-bold chip. One token source — every color is
+   an existing CSS var (para body text stays the inline #3c434c used across the drawer). */
+
+/* A line row: the handle sits in a fixed left gutter and fades in on hover/focus. */
+.sl-pline {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  border-radius: 6px;
+  padding: 3px 4px 3px 2px;
 }
-/* Bold-mode word target (Commitments Phase 6c): a plain highlight (no left rule —
-   this toggles the word's bold, it doesn't break the line before it). */
-.sl-boldword:hover {
+.sl-pline:hover {
+  background: var(--fill-1);
+}
+.sl-phandle {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--tx-faint-2);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.sl-pline:hover .sl-phandle,
+.sl-phandle.is-open,
+.sl-phandle:focus-visible {
+  opacity: 1;
+}
+.sl-phandle:hover,
+.sl-phandle.is-open {
   background: var(--fill-3);
+  color: var(--tx-tertiary);
+}
+.sl-pbody {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 0;
+}
+
+/* The plain-text line. Words are inert; the thin gaps between them split the line. */
+.sl-pline-text {
+  font-size: 12.5px;
+  line-height: 1.6;
+  cursor: text;
+}
+.sl-pline-text.heading {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tx-tertiary);
+}
+.sl-pmarker {
+  color: var(--tx-faint);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin-right: 6px;
+}
+.sl-word.is-bold {
+  font-weight: 650;
+  color: var(--tx-primary);
+}
+/* A thin, hoverable split-gap that reads as the space between two words. It holds a
+   regular space so line-wrapping still works; the caret + tooltip appear on hover. */
+.sl-gap {
+  position: relative;
+  cursor: text;
+}
+.sl-gap::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.sl-gap:hover::before {
+  opacity: 1;
+}
+.sl-gap:hover::after {
+  content: 'Split line here';
+  position: absolute;
+  bottom: 135%;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--white);
+  background: var(--tx-primary);
+  padding: 3px 6px;
+  border-radius: 5px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* The labeled format menu, anchored under the handle. Left-aligned + narrow so it
+   never overflows the 452px drawer. */
+.sl-pmenu {
+  position: absolute;
+  z-index: 20;
+  top: 26px;
+  left: 20px;
+  min-width: 172px;
+  background: var(--white);
+  border: 1px solid var(--bd-2);
+  border-radius: 9px;
+  box-shadow: 0 6px 22px rgba(20, 25, 35, 0.16);
+  padding: 5px;
+}
+.sl-pmenu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--tx-secondary);
+  background: none;
+  border: none;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.sl-pmenu button:hover:not(:disabled),
+.sl-pmenu button:focus-visible {
+  background: var(--fill-1);
+}
+.sl-pmenu button:disabled {
+  color: var(--tx-faint-2);
+  cursor: default;
+}
+.sl-pmenu button.is-on,
+.sl-pmenu button.is-on .mi {
+  color: var(--accent);
+}
+.sl-pmenu button .mi {
+  width: 18px;
+  text-align: center;
+  color: var(--tx-tertiary);
+  font-size: 12px;
+}
+.sl-pmenu-sep {
+  height: 1px;
+  background: var(--bd-1);
+  margin: 4px 2px;
+}
+
+/* The floating select-to-bold chip (position:fixed; the parent sets left/top/transform). */
+.sl-boldchip {
+  position: fixed;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--white);
+  background: var(--tx-primary);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  box-shadow: 0 6px 20px rgba(20, 25, 35, 0.32);
+  cursor: pointer;
+}
+.sl-boldchip b {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 13px;
+}
+.sl-note-x:hover {
+  background: var(--fill-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sl-phandle,
+  .sl-gap::before {
+    transition: none;
+  }
 }
 /* "Add note" button (Commitments Phase 6b): a subtle darkening on hover. */
 .sl-add-note:hover {
