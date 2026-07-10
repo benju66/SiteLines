@@ -431,7 +431,9 @@ interface ScopeBlockOverride {
 - **Exit criteria:** typecheck + tests + build; seed (`:5174`) + live (`:5175`) — mark blocks as
   bullet/number, save, refresh → styles persist and render; contract words unchanged. STOP. ✅ met.
 
-#### Phase 6b — your-own-notes (the typing path + the one safety-model change)
+#### Phase 6b — your-own-notes (the typing path + the one safety-model change) — 📋 PLANNED 2026-07-10
+> **Kickoff:** [2026-07-10 - Commitments Phase 6b Kickoff](../kickoffs/2026-07-10%20-%20Commitments%20Phase%206b%20Kickoff.md).
+> Note placement **locked** (2026-07-10): a freestanding note block, addable anywhere at any indent.
 - **Scope:** add `source?: 'user'` note blocks — an "Add note" action creating an editable note block,
   a **text input** in the editor (the ONLY place typing is allowed; contract blocks stay read-only),
   note delete/indent/list-style; `partitionsSource` filters out `source:'user'` before asserting;
@@ -495,18 +497,16 @@ interface ScopeBlockOverride {
 - **Bold (6c) and lists (6a) are decoration only** — stored as `bold`/`list` (which words / which style),
   never as markup in `text`; `partitionsSource` must stay untouched by both.
 - Presentation styles (`list`, bold, the note tint) use the one token source (`tokens.ts`/`index.css`),
-  reusing `tone.warn`-style tokens (e.g. `--bg-accent`/`--text-accent`) and the existing `<strong>` style —
-  no ad-hoc hex.
+  reusing an existing `tone` token for the note tint (e.g. `tone.info` — distinct from `tone.warn`, which
+  the stale banner already uses) and the existing `<strong>` style — no ad-hoc hex.
 
 **Resolved decisions:**
 - **Number toggle UX** (6a) → a single **cycle** button (none → bullet → number → none). ✅ shipped.
 - **Bold input** (6c) → a **bold-mode toggle**, word-level (click words to bold in bold mode). ✅ locked 2026-07-10.
 - **Auto-bold precedence** (6c) → *your bold wins per block* (manual bold suppresses auto-bold on that
   block only). ✅ locked 2026-07-10.
-
-**Open decisions (confirm at 6b kickoff):**
-- **Note placement** — freestanding note block anywhere in the list (recommended: simplest, most
-  flexible) vs. only as an indented child of a contract block.
+- **Note placement** (6b) → a **freestanding** note block, addable anywhere in the list at any indent
+  (simplest data model + editor; most flexible). ✅ locked 2026-07-10.
 
 ## Hard guardrails (do not violate)
 - Overlays (the detail drawer) render `position:fixed` OUTSIDE the card's `overflow:hidden`
