@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { hashText } from './hashText'
-import { mergeUp, partitionsSource, reindent, seedEditorBlocks, segmentSource, setKind, splitBlock, MAX_INDENT } from './scopeEdit'
+import { mergeUp, partitionsSource, reindent, seedEditorBlocks, segmentSource, setKind, setList, splitBlock, MAX_INDENT } from './scopeEdit'
 import type { ScopeBlockOverride, ScopeOverride } from '@/types'
 
 const SOURCE = 'GENERAL REQUIREMENTS. Furnish all labor and material. Comply with 8.125% retainage.'
@@ -107,6 +107,34 @@ describe('partitionsSource', () => {
   })
   it('is false when the words differ from the source', () => {
     expect(partitionsSource([para('a b typed-in-word')], 'a b')).toBe(false)
+  })
+})
+
+describe('setList', () => {
+  it('sets a list style on the target block only', () => {
+    const blocks = [para('a'), para('b')]
+    expect(setList(blocks, 1, 'bullet')).toEqual([para('a'), { kind: 'para', indent: 0, text: 'b', list: 'bullet' }])
+  })
+
+  it('clears the list style by dropping the key (not storing undefined)', () => {
+    const blocks: ScopeBlockOverride[] = [{ kind: 'para', indent: 0, text: 'a', list: 'number' }]
+    const out = setList(blocks, 0, undefined)
+    expect(out).toEqual([para('a')])
+    expect('list' in out[0]).toBe(false)
+  })
+
+  it('is a no-op for an out-of-range index', () => {
+    const blocks = [para('a')]
+    expect(setList(blocks, 5, 'bullet')).toBe(blocks)
+  })
+
+  it('does NOT change the partition — list is pure decoration, never stored words', () => {
+    const source = 'Furnish all labor and material.'
+    const blocks = segmentSource(source)
+    expect(partitionsSource(blocks, source)).toBe(true)
+    const styled = setList(setList(blocks, 0, 'number'), 0, 'bullet')
+    expect(partitionsSource(styled, source)).toBe(true)
+    expect(styled.map((b) => b.text)).toEqual(blocks.map((b) => b.text))
   })
 })
 

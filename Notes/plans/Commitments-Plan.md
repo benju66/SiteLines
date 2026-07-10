@@ -340,6 +340,109 @@ STOP for sign-off before applying (ref `jxesfirpghwpfmfjlfng`).
 - **Exit criteria:** typecheck + tests + build; live — restructure a real commitment's wall,
   save, refresh → the structure persists and still reads the contract's words. ✅ met.
 
+### Phase 6 — scope list formatting + your-own-notes (🚧 6a DONE 2026-07-10 · 6b PLANNED)
+**Plain-English:** make a formatted scope read like a real list — bullet points and (opt-in)
+numbered items — and let the owner pin their **own** notes into a commitment's scope, shown clearly
+marked as additions, while the executed contract's words stay locked and exact. Extends the Phase-5
+editor; no Procore/read-path change.
+
+**Why now:** Phase 5 shipped structure (headings/indent/split/merge) but the owner expected true
+list formatting (bullets, numbers) and the ability to add clarifications. The mockup shown 2026-07-09
+is the target.
+
+**Locked product decisions (owner, 2026-07-09):**
+1. **Bullets** — any block can be a bulleted item; sub-bullets via indent. **Presentation only** —
+   the `•` is drawn at render, never stored in `text`, so the words-locked partition invariant holds.
+2. **Numbers — opt-in per block**, NOT automatic. These scopes already carry their own `1.`/`1.1.`
+   in the contract text; auto-numbering everything would double them. A block the owner marks
+   "numbered" shows a computed ordinal; consecutive numbered blocks at the same indent count 1·2·3.
+   Also presentation only.
+3. **Your-own-notes** — the owner may **type their own** new list items (clarifications, reminders)
+   that render clearly marked as additions (a tinted "Your note" row). The **contract words stay
+   verbatim and locked** — the owner explicitly chose "add my own items, contract locked" over a
+   fully-editable rewrite. Typing is allowed **only** on note blocks.
+
+**Data model (extend `ScopeBlockOverride`; no SQL change — `blocks` is already `jsonb`, and the only
+CHECK is on `field`):**
+```ts
+interface ScopeBlockOverride {
+  kind: 'para' | 'heading'
+  indent: number
+  text: string
+  list?: 'bullet' | 'number'   // NEW — render style; absent = plain. Decoration, not stored words.
+  source?: 'user'              // NEW — present = a user-authored note (free text); absent = contract words
+}
+```
+- **Safety invariant changes shape, not spirit:** `partitionsSource` (the save-time assertion) now
+  filters to **contract blocks** (`source !== 'user'`) before checking `normalize(join) === normalize(source)`.
+  User-note blocks are free text, excluded from the check, stored, and rendered as marked additions.
+  The drawer can therefore still never show altered *contract* language.
+- `ScopeBlock` (parser render type) gains optional `list?`/`source?` (like `indent?` did) so
+  `ScopeOutline` renders them; `coerceBlocks` (in `mapScopeOverride`) must validate the new optional
+  fields and drop a `source:'user'` block only if its `text` is missing.
+- Ordinal numbering is a **pure, tested** render-time computation (counter per indent level; a
+  non-number block breaks the run) — put it alongside `applyScopeOverride`/`scopeEdit`, not in the view.
+
+**Sub-phasing (one focused session each):**
+
+#### Phase 6a — list styling (bullets + opt-in numbers), presentation-only — ✅ DONE + VERIFIED 2026-07-10
+> **Shipped:** presentation-only list styling on override blocks. `ScopeBlockOverride` + `ScopeBlock`
+> gained `list?: 'bullet' | 'number'` (and `ScopeBlock` an `ordinal?` for the computed number). A pure,
+> tested [annotateOrdinals](../../src/lib/applyScopeOverride.ts) assigns each `list:'number'` block its
+> display ordinal — a counter per indent level: consecutive numbers count 1·2·3, a numbered block
+> restarts any deeper runs (nested lists restart under each parent), and any non-number block (prose,
+> heading, bullet) breaks + resets the run at its level; it runs inside `overrideToBlocks`, so parser
+> output is untouched. `ScopeOutline` draws a leading `•` for `list:'bullet'` and the ordinal (mono) for
+> `list:'number'` on **para** blocks only (headings unaffected), respecting `indent`, using the one token
+> source (`--tx-faint` / `--tx-tertiary`). [scopeEdit](../../src/lib/scopeEdit.ts) added a `setList` op
+> (clearing drops the key); the editor's `EditorBlockRow` got a single plain→bullet→number **cycle**
+> button (owner-picked over two toggles), disabled on headings. `coerceBlocks` validates `list` (drops an
+> invalid value to undefined) — the single read boundary for both Supabase jsonb + localStorage.
+> **Presentation-only guardrail held:** the marker is drawn at render, never stored in `text`, so
+> `partitionsSource` and the save flow are byte-for-byte unchanged (a co-located test proves applying a
+> list style leaves the partition invariant true). **Verified:** typecheck + **169 tests** (+11) + build
+> green; seed (`:5174`) — bullet + a 1·2·3 numbered run save → refresh → persist, words verbatim;
+> live (`:5175`, existing authenticated session) — wrote to the real `sitelines_scope_overrides` table
+> (`updated_by` = the user's `auth.uid()`, so the RLS-scoped write path, not a service-role bypass), the
+> stored blocks reconstruct to the complete verbatim contract prose (no marker glyphs in `text`), styles
+> persist across refresh, ordinals compute 1·2·3, and Reset-to-auto deleted the row (table left clean;
+> `get_advisors` shows no table/RLS findings). **No SQL change** (`blocks` is already `jsonb`).
+- **Scope:** add `list?: 'bullet' | 'number'` to the block model + `ScopeBlock`; render bullets and
+  computed ordinals in `ScopeOutline`; a pure tested ordinal helper; editor controls to toggle a
+  block's list style (per `EditorBlockRow`). **No safety-model change** — `partitionsSource` is
+  untouched (list is pure decoration). Co-located tests.
+- **Approval gates:** none (no SQL; `blocks` jsonb already accepts the new optional field). Confirm
+  `coerceBlocks` accepts+validates `list`.
+- **Exit criteria:** typecheck + tests + build; seed (`:5174`) + live (`:5175`) — mark blocks as
+  bullet/number, save, refresh → styles persist and render; contract words unchanged. STOP. ✅ met.
+
+#### Phase 6b — your-own-notes (the typing path + the one safety-model change)
+- **Scope:** add `source?: 'user'` note blocks — an "Add note" action creating an editable note block,
+  a **text input** in the editor (the ONLY place typing is allowed; contract blocks stay read-only),
+  note delete/indent/list-style; `partitionsSource` filters out `source:'user'` before asserting;
+  `ScopeOutline` renders notes with the tinted "Your note" treatment. Co-located tests (partition
+  ignores notes; a note round-trips; contract-only blocks still assert).
+- **Approval gates:** ⚠️ This is the one change to the words-locked safety model — the hard guardrail
+  below. No SQL gate.
+- **Exit criteria:** typecheck + tests + build; live (`:5175`) — add a note to a real commitment,
+  save, refresh → the note persists marked as yours and the contract words remain verbatim; a save
+  still fails if a contract block's words were somehow altered. STOP.
+
+**Phase-6 guardrails (in addition to the standing list below):**
+- **Contract words stay locked.** Typing is permitted ONLY on `source:'user'` blocks. Contract blocks
+  (`source` absent) remain restructure-only. `partitionsSource` must still pass for the contract
+  blocks on every save.
+- **Notes are always visibly the owner's** — distinct styling + a "Your note" marker; never rendered
+  as if they were the subcontractor's committed scope.
+- Presentation styles (`list`, the note tint) use the one token source (`tokens.ts`/`index.css`),
+  reusing `tone.warn`-style tokens (e.g. `--bg-accent`/`--text-accent`) — no ad-hoc hex.
+
+**Open decisions (confirm at kickoff):**
+- **Note placement** — freestanding note block anywhere in the list (recommended: simplest, most
+  flexible) vs. only as an indented child of a contract block.
+- **Number toggle UX** — a single cycle button (none → bullet → number → none) vs. two separate
+  toggles. Recommend the cycle button (fewer controls in a dense row).
+
 ## Hard guardrails (do not violate)
 - Overlays (the detail drawer) render `position:fixed` OUTSIDE the card's `overflow:hidden`
   (mount in `App.tsx`'s overlay slot).

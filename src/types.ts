@@ -345,6 +345,9 @@ export interface ScopeBlockOverride {
   kind: 'para' | 'heading'
   indent: number // 0-based nesting depth
   text: string // a verbatim slice of the source scope text
+  list?: 'bullet' | 'number' // presentation-only list style (Phase 6a); absent =
+  // plain. The `•` / computed ordinal is drawn at render — NEVER stored in `text`,
+  // so the words-locked partition invariant is untouched. Rendered on para blocks.
 }
 
 /**

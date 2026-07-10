@@ -26,6 +26,10 @@ export interface ScopeBlock {
   bullets: string[] // best-effort "Label: a; b; c" sub-items (empty when none)
   indent?: number // explicit nesting depth for override blocks (Phase 5b); parser
   // blocks derive indent from their kind and leave this unset
+  list?: 'bullet' | 'number' // presentation-only list style on an override para block
+  // (Phase 6a); drawn at render, never in `text`. Parser blocks leave this unset.
+  ordinal?: number // the computed display number for a list:'number' block (Phase 6a),
+  // assigned by annotateOrdinals; unset for bullets / plain / parser blocks
 }
 
 // A run of 2+ ALL-CAPS words (letters, plus & or /), each 2+ chars — "SCOPE OF

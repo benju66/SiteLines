@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { applyScopeOverride } from './applyScopeOverride'
+import { annotateOrdinals, applyScopeOverride } from './applyScopeOverride'
 import { hashText } from './hashText'
-import { parseScope } from './parseScope'
+import { parseScope, type ScopeBlock } from './parseScope'
 import type { ScopeOverride } from '@/types'
 
 const SOURCE = 'GENERAL REQUIREMENTS Furnish all labor and material. 1. Use of premises per contract.'
@@ -54,5 +54,58 @@ describe('applyScopeOverride', () => {
     expect(r.source).toBe('parser')
     expect(r.stale).toBe(false)
     expect(r.blocks).toEqual(parseScope(SOURCE))
+  })
+
+  it('carries a block’s list style through to the rendered blocks (with ordinals)', () => {
+    const override = overrideFor(SOURCE, [
+      { kind: 'para', indent: 0, text: 'GENERAL REQUIREMENTS', list: 'bullet' },
+      { kind: 'para', indent: 0, text: 'Furnish all labor and material.', list: 'number' },
+      { kind: 'para', indent: 0, text: '1. Use of premises per contract.', list: 'number' },
+    ])
+    const r = applyScopeOverride(SOURCE, override)
+    expect(r.source).toBe('override')
+    expect(r.blocks).toEqual([
+      { kind: 'para', marker: null, text: 'GENERAL REQUIREMENTS', bullets: [], indent: 0, list: 'bullet' },
+      { kind: 'para', marker: null, text: 'Furnish all labor and material.', bullets: [], indent: 0, list: 'number', ordinal: 1 },
+      { kind: 'para', marker: null, text: '1. Use of premises per contract.', bullets: [], indent: 0, list: 'number', ordinal: 2 },
+    ])
+  })
+})
+
+describe('annotateOrdinals', () => {
+  // Minimal render-shape block builder for the pure ordinal pass.
+  const b = (text: string, indent: number, list?: 'bullet' | 'number'): ScopeBlock => ({ kind: 'para', marker: null, text, bullets: [], indent, list })
+  const ordinals = (blocks: ScopeBlock[]) => annotateOrdinals(blocks).map((x) => x.ordinal)
+
+  it('numbers a consecutive run at the same indent 1·2·3', () => {
+    expect(ordinals([b('a', 0, 'number'), b('b', 0, 'number'), b('c', 0, 'number')])).toEqual([1, 2, 3])
+  })
+
+  it('restarts a nested run under each parent (nested lists restart)', () => {
+    const blocks = [
+      b('1', 0, 'number'),
+      b('1.1', 1, 'number'),
+      b('1.2', 1, 'number'),
+      b('2', 0, 'number'),
+      b('2.1', 1, 'number'),
+    ]
+    expect(ordinals(blocks)).toEqual([1, 1, 2, 2, 1])
+  })
+
+  it('resets the run when a non-number block breaks it', () => {
+    const blocks = [b('a', 0, 'number'), b('b', 0, 'number'), b('gap', 0), b('c', 0, 'number')]
+    expect(ordinals(blocks)).toEqual([1, 2, undefined, 1])
+  })
+
+  it('leaves bullet and plain blocks untouched (no ordinal), and a bullet breaks a number run', () => {
+    const blocks = [b('a', 0, 'number'), b('•', 0, 'bullet'), b('b', 0, 'number')]
+    const out = annotateOrdinals(blocks)
+    expect(out.map((x) => x.ordinal)).toEqual([1, undefined, 1])
+    expect(out[1]).toBe(blocks[1]) // pass-through, same reference
+  })
+
+  it('is a no-op on parser output (no list blocks)', () => {
+    const parsed = parseScope(SOURCE)
+    expect(annotateOrdinals(parsed)).toEqual(parsed)
   })
 })

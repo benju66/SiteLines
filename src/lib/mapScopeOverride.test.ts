@@ -38,6 +38,14 @@ describe('coerceBlocks', () => {
     expect(coerceBlocks({} as unknown)).toEqual([])
     expect(coerceBlocks('[]' as unknown)).toEqual([])
   })
+
+  it('keeps a valid list style and drops an invalid one to undefined (Phase 6a)', () => {
+    expect(coerceBlocks([{ kind: 'para', indent: 0, text: 'a', list: 'bullet' }])).toEqual([{ kind: 'para', indent: 0, text: 'a', list: 'bullet' }])
+    expect(coerceBlocks([{ kind: 'para', indent: 0, text: 'b', list: 'number' }])).toEqual([{ kind: 'para', indent: 0, text: 'b', list: 'number' }])
+    const dropped = coerceBlocks([{ kind: 'para', indent: 0, text: 'c', list: 'squiggle' }])
+    expect(dropped).toEqual([{ kind: 'para', indent: 0, text: 'c' }])
+    expect('list' in dropped[0]).toBe(false)
+  })
 })
 
 describe('mapScopeOverride', () => {

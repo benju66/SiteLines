@@ -136,6 +136,23 @@ export function setKind(blocks: ScopeBlockOverride[], index: number, kind: Scope
   return blocks.map((b, i) => (i === index ? { ...b, kind } : b))
 }
 
+/**
+ * Set block `index`'s list style — 'bullet' | 'number' | undefined to clear
+ * (Phase 6a). Presentation only: the `•`/ordinal is drawn at render and the words
+ * are untouched, so `partitionsSource` is invariant across this op. Clearing drops
+ * the `list` key entirely rather than storing `undefined`.
+ */
+export function setList(blocks: ScopeBlockOverride[], index: number, list: ScopeBlockOverride['list']): ScopeBlockOverride[] {
+  if (!blocks[index]) return blocks
+  return blocks.map((b, i) => {
+    if (i !== index) return b
+    if (list) return { ...b, list }
+    const next = { ...b }
+    delete next.list
+    return next
+  })
+}
+
 /** Change block `index`'s nesting by `delta`, clamped to [0, MAX_INDENT]. */
 export function reindent(blocks: ScopeBlockOverride[], index: number, delta: number): ScopeBlockOverride[] {
   const b = blocks[index]

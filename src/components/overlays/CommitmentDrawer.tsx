@@ -16,7 +16,7 @@ import { formatMoney, statusTone } from '@/lib/derive'
 import { hashText } from '@/lib/hashText'
 import { SUBHEADER_LABEL } from '@/lib/parseScope'
 import type { ScopeBlock } from '@/lib/parseScope'
-import { mergeUp, partitionsSource, reindent, seedEditorBlocks, setKind, splitBlock } from '@/lib/scopeEdit'
+import { mergeUp, partitionsSource, reindent, seedEditorBlocks, setKind, setList, splitBlock } from '@/lib/scopeEdit'
 import { overrideKey } from '@/lib/userDataSource'
 import { commitmentBillingsSorted, commitmentChangeOrdersSorted, commitmentSovByCostCode } from '@/selectors'
 import { useApp } from '@/state/AppContext'
@@ -362,6 +362,7 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
             onMerge={() => edit((bl) => mergeUp(bl, i))}
             onKind={(k) => edit((bl) => setKind(bl, i, k))}
             onIndent={(d) => edit((bl) => reindent(bl, i, d))}
+            onList={(l) => edit((bl) => setList(bl, i, l))}
           />
         ))}
       </div>
@@ -371,9 +372,13 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
 }
 
 /** One editable block: a control cluster + the block's words as split targets. */
-function EditorBlockRow({ block, canMerge, onSplit, onMerge, onKind, onIndent }: { block: ScopeBlockOverride; canMerge: boolean; onSplit: (wordIndex: number) => void; onMerge: () => void; onKind: (kind: ScopeBlockOverride['kind']) => void; onIndent: (delta: number) => void }) {
+function EditorBlockRow({ block, canMerge, onSplit, onMerge, onKind, onIndent, onList }: { block: ScopeBlockOverride; canMerge: boolean; onSplit: (wordIndex: number) => void; onMerge: () => void; onKind: (kind: ScopeBlockOverride['kind']) => void; onIndent: (delta: number) => void; onList: (list: ScopeBlockOverride['list']) => void }) {
   const words = block.text.split(' ')
   const isHeading = block.kind === 'heading'
+  // The list-style cycle (Phase 6a): plain → bullet → number → plain. Presentation
+  // only, and rendered on paragraphs — disabled on a heading (unaffected by lists).
+  const nextList: ScopeBlockOverride['list'] = block.list === 'bullet' ? 'number' : block.list === 'number' ? undefined : 'bullet'
+  const listTitle = isHeading ? 'List style applies to paragraphs' : block.list === 'bullet' ? 'Bulleted — click to number' : block.list === 'number' ? 'Numbered — click to remove' : 'No list — click to bullet'
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 7, paddingTop: 6, paddingBottom: 6, paddingRight: 8, paddingLeft: 8 + indentPx(block.indent) }}>
       <div style={{ display: 'flex', gap: 3, flex: 'none' }}>
@@ -382,6 +387,9 @@ function EditorBlockRow({ block, canMerge, onSplit, onMerge, onKind, onIndent }:
         </IconBtn>
         <IconBtn title={isHeading ? 'Make a paragraph' : 'Make a heading'} onClick={() => onKind(isHeading ? 'para' : 'heading')} active={isHeading}>
           H
+        </IconBtn>
+        <IconBtn title={listTitle} onClick={() => onList(nextList)} active={!isHeading && block.list != null} disabled={isHeading}>
+          {block.list === 'number' ? '1.' : '•'}
         </IconBtn>
         <IconBtn title="Outdent" onClick={() => onIndent(-1)} disabled={block.indent <= 0}>
           ‹
@@ -475,6 +483,32 @@ function ScopeOutline({ blocks }: { blocks: ScopeBlock[] }) {
     <div>
       {blocks.map((b, i) => {
         if (b.kind === 'para') {
+          // A presentation-only list marker (Phase 6a): a leading `•` for a bullet,
+          // the computed ordinal for a numbered block — drawn here, never in `text`.
+          if (b.list) {
+            const isNum = b.list === 'number'
+            const marker = isNum ? `${b.ordinal ?? ''}.` : '•'
+            return (
+              <div key={i} style={{ display: 'flex', gap: 8, margin: i === 0 ? 0 : '5px 0 0', paddingLeft: indentPx(b.indent) }}>
+                <span
+                  aria-hidden={!isNum}
+                  style={{
+                    flex: 'none',
+                    textAlign: isNum ? 'right' : 'left',
+                    minWidth: isNum ? 18 : 10,
+                    fontFamily: isNum ? mono : undefined,
+                    fontSize: isNum ? 11.5 : 12.5,
+                    fontWeight: isNum ? 650 : 400,
+                    lineHeight: 1.55,
+                    color: isNum ? 'var(--tx-tertiary)' : 'var(--tx-faint)',
+                  }}
+                >
+                  {marker}
+                </span>
+                <span style={{ minWidth: 0, fontSize: 12.5, lineHeight: 1.55, color: '#3c434c' }}>{renderProse(b.text)}</span>
+              </div>
+            )
+          }
           return (
             <p key={i} style={{ margin: i === 0 ? 0 : '8px 0 0', paddingLeft: indentPx(b.indent), fontSize: 12.5, lineHeight: 1.55, color: '#3c434c' }}>
               {renderProse(b.text)}

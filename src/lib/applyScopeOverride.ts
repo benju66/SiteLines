@@ -30,9 +30,33 @@ export interface ScopeRender {
   stale: boolean
 }
 
-/** Map the flat override block list onto the parser's ScopeBlock render shape. */
+/**
+ * Assign each `list:'number'` block its display ordinal (Phase 6a). Presentation
+ * only — the number is computed here at render, never stored in `text`. A counter
+ * runs per `indent` level: consecutive numbered blocks at the same level count
+ * 1·2·3; a numbered block restarts any deeper runs beneath it (nested lists restart
+ * under each parent); and any non-number block (prose, heading, bullet) breaks — and
+ * so resets — the run at its own level and deeper. Pure + deterministic. Blocks that
+ * aren't `list:'number'` pass through untouched.
+ */
+export function annotateOrdinals(blocks: ScopeBlock[]): ScopeBlock[] {
+  const counters: number[] = [] // counters[d] = running count at indent depth d
+  return blocks.map((b) => {
+    const depth = Math.max(0, b.indent ?? 0)
+    if (b.list === 'number') {
+      counters.length = depth + 1 // a shallower number restarts any deeper runs
+      counters[depth] = (counters[depth] ?? 0) + 1
+      return { ...b, ordinal: counters[depth] }
+    }
+    counters.length = depth // a non-number block breaks the run at its level (and below)
+    return b
+  })
+}
+
+/** Map the flat override block list onto the parser's ScopeBlock render shape,
+ *  carrying the presentation-only `list` style through and computing ordinals. */
 function overrideToBlocks(blocks: ScopeBlockOverride[]): ScopeBlock[] {
-  return blocks.map((b) => ({ kind: b.kind, marker: null, text: b.text, bullets: [], indent: b.indent }))
+  return annotateOrdinals(blocks.map((b) => ({ kind: b.kind, marker: null, text: b.text, bullets: [], indent: b.indent, list: b.list })))
 }
 
 export function applyScopeOverride(source: string, override?: ScopeOverride): ScopeRender {
