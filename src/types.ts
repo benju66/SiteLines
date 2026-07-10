@@ -348,6 +348,10 @@ export interface ScopeBlockOverride {
   list?: 'bullet' | 'number' // presentation-only list style (Phase 6a); absent =
   // plain. The `•` / computed ordinal is drawn at render — NEVER stored in `text`,
   // so the words-locked partition invariant is untouched. Rendered on para blocks.
+  bold?: number[] // presentation-only word-level emphasis (Phase 6c): indices into
+  // the block's space-split words (`text.split(' ')`) to render bold. Absent/empty =
+  // no manual bold. Which words, NEVER markup in `text`, so the partition invariant is
+  // untouched (same safe model as `list`); split/merge re-map these indices.
 }
 
 /**

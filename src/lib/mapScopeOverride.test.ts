@@ -46,6 +46,27 @@ describe('coerceBlocks', () => {
     expect(dropped).toEqual([{ kind: 'para', indent: 0, text: 'c' }])
     expect('list' in dropped[0]).toBe(false)
   })
+
+  it('keeps valid bold word indices, cleaned to a sorted unique set (Phase 6c)', () => {
+    expect(coerceBlocks([{ kind: 'para', indent: 0, text: 'one two three', bold: [2, 0] }])).toEqual([
+      { kind: 'para', indent: 0, text: 'one two three', bold: [0, 2] },
+    ])
+  })
+
+  it('drops out-of-range, negative, non-integer, and duplicate bold indices (Phase 6c)', () => {
+    // text has 3 words (valid indices 0–2): 5 is out of range, -1 negative, 1.5 non-integer, dup 0.
+    expect(coerceBlocks([{ kind: 'para', indent: 0, text: 'one two three', bold: [0, 0, 1, 5, -1, 1.5] }])).toEqual([
+      { kind: 'para', indent: 0, text: 'one two three', bold: [0, 1] },
+    ])
+  })
+
+  it('drops the bold field when nothing valid survives or it is not an array (Phase 6c)', () => {
+    const outOfRange = coerceBlocks([{ kind: 'para', indent: 0, text: 'one two', bold: [9, -2] }])
+    expect(outOfRange).toEqual([{ kind: 'para', indent: 0, text: 'one two' }])
+    expect('bold' in outOfRange[0]).toBe(false)
+    const notArray = coerceBlocks([{ kind: 'para', indent: 0, text: 'one two', bold: 'nope' }])
+    expect('bold' in notArray[0]).toBe(false)
+  })
 })
 
 describe('mapScopeOverride', () => {

@@ -30,6 +30,9 @@ export interface ScopeBlock {
   // (Phase 6a); drawn at render, never in `text`. Parser blocks leave this unset.
   ordinal?: number // the computed display number for a list:'number' block (Phase 6a),
   // assigned by annotateOrdinals; unset for bullets / plain / parser blocks
+  bold?: number[] // presentation-only word-level emphasis on an override para block
+  // (Phase 6c): indices into `text.split(' ')` to render bold. Drawn at render, never
+  // in `text`. Parser blocks leave this unset.
 }
 
 // A run of 2+ ALL-CAPS words (letters, plus & or /), each 2+ chars — "SCOPE OF

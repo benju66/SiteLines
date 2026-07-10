@@ -340,11 +340,11 @@ STOP for sign-off before applying (ref `jxesfirpghwpfmfjlfng`).
 - **Exit criteria:** typecheck + tests + build; live — restructure a real commitment's wall,
   save, refresh → the structure persists and still reads the contract's words. ✅ met.
 
-### Phase 6 — scope list formatting + your-own-notes (🚧 6a DONE 2026-07-10 · 6b PLANNED)
-**Plain-English:** make a formatted scope read like a real list — bullet points and (opt-in)
-numbered items — and let the owner pin their **own** notes into a commitment's scope, shown clearly
-marked as additions, while the executed contract's words stay locked and exact. Extends the Phase-5
-editor; no Procore/read-path change.
+### Phase 6 — scope list formatting + bold + your-own-notes (🚧 6a + 6c DONE 2026-07-10 · 6b PLANNED)
+**Plain-English:** make a formatted scope read like a real list — bullet points, (opt-in) numbered
+items, and **bold** emphasis on words that matter — and let the owner pin their **own** notes into a
+commitment's scope, shown clearly marked as additions, while the executed contract's words stay locked
+and exact. Extends the Phase-5 editor; no Procore/read-path change.
 
 **Why now:** Phase 5 shipped structure (headings/indent/split/merge) but the owner expected true
 list formatting (bullets, numbers) and the ability to add clarifications. The mockup shown 2026-07-09
@@ -361,6 +361,15 @@ is the target.
    that render clearly marked as additions (a tinted "Your note" row). The **contract words stay
    verbatim and locked** — the owner explicitly chose "add my own items, contract locked" over a
    fully-editable rewrite. Typing is allowed **only** on note blocks.
+4. **Bold — word-level, presentation-only** (owner, 2026-07-10). The owner can **bold individual words**
+   in a block to emphasize what matters. Bold is stored as *which words* are bold (word indices), never
+   by inserting markup into `text`, so the contract words stay verbatim and `partitionsSource` is
+   untouched — the same safe model as `list`. **Input:** a **bold-mode toggle** in the editor — flip it
+   on, then click words to bold/unbold (word-click otherwise splits the line). **Precedence:** *your bold
+   wins per block* — once a block has any manual bold, the auto-bolding of Title-case sub-labels
+   (`renderProse`/`SUBHEADER_LABEL`) turns off for that block; untouched blocks keep auto-bolding. Bold
+   selects existing words only (no typing), so it stays on the safe side of the words-locked line —
+   unlike notes (6b), it needs **no** safety-model change.
 
 **Data model (extend `ScopeBlockOverride`; no SQL change — `blocks` is already `jsonb`, and the only
 CHECK is on `field`):**
@@ -369,8 +378,9 @@ interface ScopeBlockOverride {
   kind: 'para' | 'heading'
   indent: number
   text: string
-  list?: 'bullet' | 'number'   // NEW — render style; absent = plain. Decoration, not stored words.
-  source?: 'user'              // NEW — present = a user-authored note (free text); absent = contract words
+  list?: 'bullet' | 'number'   // 6a (shipped) — render style; absent = plain. Decoration, not stored words.
+  bold?: number[]              // 6c — indices of the space-split words to render bold. Decoration, not stored words.
+  source?: 'user'              // 6b — present = a user-authored note (free text); absent = contract words
 }
 ```
 - **Safety invariant changes shape, not spirit:** `partitionsSource` (the save-time assertion) now
@@ -433,20 +443,70 @@ interface ScopeBlockOverride {
   save, refresh → the note persists marked as yours and the contract words remain verbatim; a save
   still fails if a contract block's words were somehow altered. STOP.
 
+#### Phase 6c — bold word-level emphasis, presentation-only — ✅ DONE + VERIFIED 2026-07-10
+> **Shipped.** `bold?: number[]` (space-split word indices) on `ScopeBlockOverride` + `ScopeBlock`
+> ([types.ts](../../src/types.ts) / [parseScope.ts](../../src/lib/parseScope.ts)), carried through
+> `overrideToBlocks`. Pure ops in [scopeEdit.ts](../../src/lib/scopeEdit.ts): `toggleBold` +
+> bold-index-aware `splitBlock`/`mergeUp` re-mapping (`setKind`/`reindent`/`setList` carry `bold`
+> through untouched — tested). The bold decision is a pure, tested
+> [proseEmphasis.ts](../../src/lib/proseEmphasis.ts): *your bold wins per block* (manual bold
+> suppresses the Title-case auto-bolder on that block only). Editor gets a bold-mode "B" toggle
+> ([CommitmentDrawer.tsx](../../src/components/overlays/CommitmentDrawer.tsx)) — in bold mode a
+> word-click toggles bold (live preview); out of bold mode it splits (unchanged). `coerceBlocks`
+> validates `bold` (sorted, unique, in-range, non-negative). **Presentation-only** — never stored in
+> `text`, `partitionsSource` untouched. 189 tests green; typecheck + build clean; seed (`:5174`) round-trip
+> verified (persist · render · words verbatim · split/merge keeps the right words bold · fresh-load clean
+> console). Kickoff:
+> [2026-07-10 - Commitments Phase 6c Kickoff](../kickoffs/2026-07-10%20-%20Commitments%20Phase%206c%20Kickoff.md).
+- **Scope:**
+  1. **Data model:** `bold?: number[]` on `ScopeBlockOverride` + `ScopeBlock` — indices into the block's
+     space-split words (`text.split(' ')`) that render bold. Absent/empty = no manual bold. Never stored
+     in `text`, so `partitionsSource` is untouched (pure decoration, same as `list`).
+  2. **Pure ops (the load-bearing correctness — co-located tests):** `toggleBold(blocks, index, wordIndex)`
+     (add/remove an index, kept sorted + in range). And **`splitBlock`/`mergeUp` must re-map bold indices**:
+     a split partitions the bold set at the cut and offsets the second half (`i → i − wordIndex`); a merge
+     appends `cur`'s indices offset by the previous block's word count. `setKind`/`reindent`/`setList`
+     already carry `bold` through untouched (word indices don't move). Test: toggle add/remove; split
+     re-maps to the two halves; merge offsets + round-trips; `partitionsSource` still true after any of them.
+  3. **Render:** `renderProse` honors a block's manual `bold` (wrap the bold-index words in `<strong>`,
+     reusing the existing strong style — one token source, no new hex) on **para** blocks (headings are
+     already bold). *Your bold wins per block:* when a block has manual bold, **suppress** the automatic
+     `SUBHEADER_LABEL` bolding for that block; blocks with no manual bold keep auto-bolding unchanged.
+  4. **Editor:** a **bold-mode toggle** (a "B" control + a clear "bold mode" indicator in the editor
+     header). In bold mode, a word-click toggles that word's bold (and bold words render bold live);
+     out of bold mode, a word-click splits the line (unchanged). Live preview, like 6a's markers.
+  5. **coerceBlocks:** validate `bold` — coerce to a clean array of unique, in-range non-negative integers;
+     drop the field otherwise. The single read boundary for Supabase jsonb + localStorage.
+  6. **Tests:** the pure ops above + `coerceBlocks`; a test proving a bold edit does NOT change the
+     partition result.
+- **Approval gates:** none (no SQL; `blocks` jsonb already accepts the new optional field). Confirm
+  `coerceBlocks` accepts + validates `bold`.
+- **Exit criteria:** typecheck + tests + build; seed (`:5174`) + live (`:5175`) — bold words in a block,
+  save, refresh → the bold **persists and renders**, auto-bold is suppressed on manually-bolded blocks,
+  the **contract words are unchanged** (a saved override still reads verbatim), and a split/merge keeps
+  the right words bold. Then STOP.
+
 **Phase-6 guardrails (in addition to the standing list below):**
 - **Contract words stay locked.** Typing is permitted ONLY on `source:'user'` blocks. Contract blocks
   (`source` absent) remain restructure-only. `partitionsSource` must still pass for the contract
   blocks on every save.
 - **Notes are always visibly the owner's** — distinct styling + a "Your note" marker; never rendered
   as if they were the subcontractor's committed scope.
-- Presentation styles (`list`, the note tint) use the one token source (`tokens.ts`/`index.css`),
-  reusing `tone.warn`-style tokens (e.g. `--bg-accent`/`--text-accent`) — no ad-hoc hex.
+- **Bold (6c) and lists (6a) are decoration only** — stored as `bold`/`list` (which words / which style),
+  never as markup in `text`; `partitionsSource` must stay untouched by both.
+- Presentation styles (`list`, bold, the note tint) use the one token source (`tokens.ts`/`index.css`),
+  reusing `tone.warn`-style tokens (e.g. `--bg-accent`/`--text-accent`) and the existing `<strong>` style —
+  no ad-hoc hex.
 
-**Open decisions (confirm at kickoff):**
+**Resolved decisions:**
+- **Number toggle UX** (6a) → a single **cycle** button (none → bullet → number → none). ✅ shipped.
+- **Bold input** (6c) → a **bold-mode toggle**, word-level (click words to bold in bold mode). ✅ locked 2026-07-10.
+- **Auto-bold precedence** (6c) → *your bold wins per block* (manual bold suppresses auto-bold on that
+  block only). ✅ locked 2026-07-10.
+
+**Open decisions (confirm at 6b kickoff):**
 - **Note placement** — freestanding note block anywhere in the list (recommended: simplest, most
   flexible) vs. only as an indented child of a contract block.
-- **Number toggle UX** — a single cycle button (none → bullet → number → none) vs. two separate
-  toggles. Recommend the cycle button (fewer controls in a dense row).
 
 ## Hard guardrails (do not violate)
 - Overlays (the detail drawer) render `position:fixed` OUTSIDE the card's `overflow:hidden`

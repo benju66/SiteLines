@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { hashText } from './hashText'
-import { mergeUp, partitionsSource, reindent, seedEditorBlocks, segmentSource, setKind, setList, splitBlock, MAX_INDENT } from './scopeEdit'
+import { mergeUp, partitionsSource, reindent, seedEditorBlocks, segmentSource, setKind, setList, splitBlock, toggleBold, MAX_INDENT } from './scopeEdit'
 import type { ScopeBlockOverride, ScopeOverride } from '@/types'
 
 const SOURCE = 'GENERAL REQUIREMENTS. Furnish all labor and material. Comply with 8.125% retainage.'
@@ -67,6 +67,26 @@ describe('splitBlock', () => {
     expect(splitBlock(blocks, 0, 0)).toBe(blocks)
     expect(splitBlock(blocks, 0, 3)).toBe(blocks)
   })
+
+  it('re-maps bold indices to the two halves (first keeps < cut, second offset by −cut)', () => {
+    const blocks: ScopeBlockOverride[] = [{ kind: 'para', indent: 0, text: 'one two three four five', bold: [0, 2, 4] }]
+    const out = splitBlock(blocks, 0, 2)
+    expect(out).toEqual([
+      { kind: 'para', indent: 0, text: 'one two', bold: [0] },
+      { kind: 'para', indent: 0, text: 'three four five', bold: [0, 2] },
+    ])
+    expect(partitionsSource(out, 'one two three four five')).toBe(true)
+  })
+
+  it('drops the bold key on a half that ends up with no bold words', () => {
+    const blocks: ScopeBlockOverride[] = [{ kind: 'para', indent: 0, text: 'one two three four', bold: [0, 1] }]
+    const out = splitBlock(blocks, 0, 2)
+    expect(out).toEqual([
+      { kind: 'para', indent: 0, text: 'one two', bold: [0, 1] },
+      { kind: 'para', indent: 0, text: 'three four' },
+    ])
+    expect('bold' in out[1]).toBe(false)
+  })
 })
 
 describe('mergeUp', () => {
@@ -84,6 +104,20 @@ describe('mergeUp', () => {
     const blocks = [para('one two three four')]
     const round = mergeUp(splitBlock(blocks, 0, 2), 1)
     expect(round.map((b) => b.text).join(' ')).toBe('one two three four')
+  })
+
+  it('re-maps bold indices — prev kept, cur appended offset by prev word count', () => {
+    const blocks: ScopeBlockOverride[] = [
+      { kind: 'para', indent: 0, text: 'one two', bold: [1] },
+      { kind: 'para', indent: 0, text: 'three four five', bold: [0, 2] },
+    ]
+    expect(mergeUp(blocks, 1)).toEqual([{ kind: 'para', indent: 0, text: 'one two three four five', bold: [1, 2, 4] }])
+  })
+
+  it('a split-then-merge round-trips the bold set exactly', () => {
+    const blocks: ScopeBlockOverride[] = [{ kind: 'para', indent: 0, text: 'one two three four five', bold: [0, 2, 4] }]
+    const round = mergeUp(splitBlock(blocks, 0, 2), 1)
+    expect(round).toEqual(blocks)
   })
 })
 
@@ -135,6 +169,44 @@ describe('setList', () => {
     const styled = setList(setList(blocks, 0, 'number'), 0, 'bullet')
     expect(partitionsSource(styled, source)).toBe(true)
     expect(styled.map((b) => b.text)).toEqual(blocks.map((b) => b.text))
+  })
+})
+
+describe('toggleBold', () => {
+  it('adds a word index and keeps the set sorted', () => {
+    const blocks = [para('one two three four')]
+    const out = toggleBold(toggleBold(blocks, 0, 2), 0, 0)
+    expect(out).toEqual([{ kind: 'para', indent: 0, text: 'one two three four', bold: [0, 2] }])
+  })
+
+  it('removes an already-bold word, dropping the key when the set empties', () => {
+    const blocks: ScopeBlockOverride[] = [{ kind: 'para', indent: 0, text: 'one two three', bold: [1] }]
+    const out = toggleBold(blocks, 0, 1)
+    expect(out).toEqual([para('one two three')])
+    expect('bold' in out[0]).toBe(false)
+  })
+
+  it('is a no-op for an out-of-range word index or block index', () => {
+    const blocks = [para('one two')]
+    expect(toggleBold(blocks, 0, 2)).toBe(blocks) // wordIndex === word count
+    expect(toggleBold(blocks, 0, -1)).toBe(blocks)
+    expect(toggleBold(blocks, 5, 0)).toBe(blocks)
+  })
+
+  it('does NOT change the partition — bold is pure decoration, never stored words', () => {
+    const source = 'Furnish all labor and material.'
+    const blocks = segmentSource(source)
+    expect(partitionsSource(blocks, source)).toBe(true)
+    const bolded = toggleBold(toggleBold(blocks, 0, 0), 0, 2)
+    expect(partitionsSource(bolded, source)).toBe(true)
+    expect(bolded.map((b) => b.text)).toEqual(blocks.map((b) => b.text))
+  })
+
+  it('rides through setKind / reindent / setList untouched (words do not move)', () => {
+    const blocks: ScopeBlockOverride[] = [{ kind: 'para', indent: 0, text: 'one two three', bold: [0, 2] }]
+    expect(setKind(blocks, 0, 'heading')[0].bold).toEqual([0, 2])
+    expect(reindent(blocks, 0, 1)[0].bold).toEqual([0, 2])
+    expect(setList(blocks, 0, 'bullet')[0].bold).toEqual([0, 2])
   })
 })
 

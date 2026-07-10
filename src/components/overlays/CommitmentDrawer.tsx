@@ -14,9 +14,9 @@ import { TOOLS } from '@/data/tools'
 import { applyScopeOverride, computeOrdinals } from '@/lib/applyScopeOverride'
 import { formatMoney, statusTone } from '@/lib/derive'
 import { hashText } from '@/lib/hashText'
-import { SUBHEADER_LABEL } from '@/lib/parseScope'
 import type { ScopeBlock } from '@/lib/parseScope'
-import { mergeUp, partitionsSource, reindent, seedEditorBlocks, setKind, setList, splitBlock } from '@/lib/scopeEdit'
+import { proseEmphasis } from '@/lib/proseEmphasis'
+import { mergeUp, partitionsSource, reindent, seedEditorBlocks, setKind, setList, splitBlock, toggleBold } from '@/lib/scopeEdit'
 import { overrideKey } from '@/lib/userDataSource'
 import { commitmentBillingsSorted, commitmentChangeOrdersSorted, commitmentSovByCostCode } from '@/selectors'
 import { useApp } from '@/state/AppContext'
@@ -36,6 +36,9 @@ const sectionLabel: CSSProperties = {
 }
 const cellLabel: CSSProperties = { fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--tx-faint)' }
 const money: CSSProperties = { fontFamily: mono, fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }
+// The one emphasis style, shared by the auto-bolded sub-labels AND manual word-level
+// bold (Phase 6c) so both render identically — one token source, no ad-hoc hex.
+const strong: CSSProperties = { fontWeight: 650, color: 'var(--tx-primary)' }
 
 /** Signed money — an explicit + on positive CO amounts (− reads as a credit). */
 const signedMoney = (n: number) => (n > 0 ? '+' : '') + formatMoney(n)
@@ -334,6 +337,9 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
   const [blocks, setBlocks] = useState<ScopeBlockOverride[]>(() => seedEditorBlocks(source, override))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Bold mode (Phase 6c): while on, a word-click toggles that word's bold instead of
+  // splitting the line. Presentation only — bold marks EXISTING words, never typed text.
+  const [boldMode, setBoldMode] = useState(false)
 
   const edit = (fn: (b: ScopeBlockOverride[]) => ScopeBlockOverride[]) => setBlocks((b) => fn(b))
 
@@ -363,7 +369,10 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
   return (
     <div style={{ border: '1px solid var(--bd-2)', borderRadius: 9, padding: 10, background: 'var(--fill-1)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.4px', color: 'var(--tx-tertiary)', textTransform: 'uppercase' }}>Editing structure</span>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.4px', color: boldMode ? 'var(--accent)' : 'var(--tx-tertiary)', textTransform: 'uppercase' }}>
+          {boldMode ? 'Bold mode' : 'Editing structure'}
+        </span>
+        <BoldToggle active={boldMode} onClick={() => setBoldMode((m) => !m)} />
         <div style={{ flex: 1 }} />
         <EditorBtn onClick={save} disabled={busy} primary>
           {busy ? 'Saving…' : 'Save'}
@@ -376,7 +385,9 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
         </EditorBtn>
       </div>
       <div style={{ fontSize: 10.5, color: 'var(--tx-faint)', lineHeight: 1.5, marginBottom: 8 }}>
-        The words are locked — you only restructure. Click a word to break the line before it.
+        {boldMode
+          ? 'Click any word to bold or unbold it — the words stay locked. Click B again to go back to restructuring.'
+          : 'The words are locked — you only restructure. Click a word to break the line before it.'}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {(() => {
@@ -389,11 +400,13 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
               block={b}
               ordinal={ordinals[i]}
               canMerge={i > 0}
+              boldMode={boldMode}
               onSplit={(wi) => edit((bl) => splitBlock(bl, i, wi))}
               onMerge={() => edit((bl) => mergeUp(bl, i))}
               onKind={(k) => edit((bl) => setKind(bl, i, k))}
               onIndent={(d) => edit((bl) => reindent(bl, i, d))}
               onList={(l) => edit((bl) => setList(bl, i, l))}
+              onBold={(wi) => edit((bl) => toggleBold(bl, i, wi))}
             />
           ))
         })()}
@@ -403,10 +416,13 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
   )
 }
 
-/** One editable block: a control cluster + the block's words as split targets. */
-function EditorBlockRow({ block, ordinal, canMerge, onSplit, onMerge, onKind, onIndent, onList }: { block: ScopeBlockOverride; ordinal?: number; canMerge: boolean; onSplit: (wordIndex: number) => void; onMerge: () => void; onKind: (kind: ScopeBlockOverride['kind']) => void; onIndent: (delta: number) => void; onList: (list: ScopeBlockOverride['list']) => void }) {
+/** One editable block: a control cluster + the block's words. Out of bold mode a
+ *  word-click splits the line before it (Phase 5c); in bold mode a word-click toggles
+ *  that word's bold (Phase 6c). Bold words preview bold live on paragraphs. */
+function EditorBlockRow({ block, ordinal, canMerge, boldMode, onSplit, onMerge, onKind, onIndent, onList, onBold }: { block: ScopeBlockOverride; ordinal?: number; canMerge: boolean; boldMode: boolean; onSplit: (wordIndex: number) => void; onMerge: () => void; onKind: (kind: ScopeBlockOverride['kind']) => void; onIndent: (delta: number) => void; onList: (list: ScopeBlockOverride['list']) => void; onBold: (wordIndex: number) => void }) {
   const words = block.text.split(' ')
   const isHeading = block.kind === 'heading'
+  const boldSet = new Set(block.bold ?? [])
   // The list-style cycle (Phase 6a): plain → bullet → number → plain. Presentation
   // only, and rendered on paragraphs — disabled on a heading (unaffected by lists).
   const nextList: ScopeBlockOverride['list'] = block.list === 'bullet' ? 'number' : block.list === 'number' ? undefined : 'bullet'
@@ -433,18 +449,28 @@ function EditorBlockRow({ block, ordinal, canMerge, onSplit, onMerge, onKind, on
       {/* Live list marker (Phase 6a) — mirrors the saved outline; headings ignore lists. */}
       {!isHeading && block.list && <ListMarker list={block.list} ordinal={ordinal} />}
       <div style={{ display: 'flex', flexWrap: 'wrap', fontSize: isHeading ? 11 : 12.5, fontWeight: isHeading ? 700 : 400, lineHeight: 1.55, color: isHeading ? 'var(--tx-tertiary)' : '#3c434c', minWidth: 0 }}>
-        {words.map((w, wi) => (
-          <button
-            key={wi}
-            type="button"
-            className={wi > 0 ? 'sl-splitword' : undefined}
-            title={wi > 0 ? 'Break line before this word' : undefined}
-            onClick={wi > 0 ? () => onSplit(wi) : undefined}
-            style={{ font: 'inherit', color: 'inherit', background: 'none', border: 'none', padding: '0 2px', margin: 0, cursor: wi > 0 ? 'pointer' : 'default', borderRadius: 3 }}
-          >
-            {w}
-          </button>
-        ))}
+        {words.map((w, wi) => {
+          const isBold = boldSet.has(wi)
+          // In bold mode every word toggles bold; otherwise word 0 is inert and words
+          // 1+ split the line before them (Phase 5c behavior, unchanged).
+          const clickable = boldMode || wi > 0
+          const handleClick = boldMode ? () => onBold(wi) : wi > 0 ? () => onSplit(wi) : undefined
+          const title = boldMode ? (isBold ? 'Click to unbold this word' : 'Click to bold this word') : wi > 0 ? 'Break line before this word' : undefined
+          return (
+            <button
+              key={wi}
+              type="button"
+              className={boldMode ? 'sl-boldword' : wi > 0 ? 'sl-splitword' : undefined}
+              title={title}
+              onClick={handleClick}
+              // Bold previews live on paragraphs (headings are already bold; a lighter
+              // 650 would fight their 700 weight, so leave headings alone).
+              style={{ font: 'inherit', color: 'inherit', background: 'none', border: 'none', padding: '0 2px', margin: 0, cursor: clickable ? 'pointer' : 'default', borderRadius: 3, fontWeight: isBold && !isHeading ? 650 : undefined }}
+            >
+              {w}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
@@ -461,6 +487,42 @@ function IconBtn({ title, onClick, disabled, active, children }: { title: string
       style={{ width: 20, height: 20, fontSize: 11, fontWeight: 700, borderRadius: 5, border: '1px solid var(--bd-1)', background: active ? 'var(--fill-3)' : '#fff', color: disabled ? 'var(--tx-faint-2)' : 'var(--tx-secondary)', cursor: disabled ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', padding: 0, lineHeight: 1 }}
     >
       {children}
+    </button>
+  )
+}
+
+/**
+ * The bold-mode toggle (Phase 6c): a serif "B" in the editor header. Active (dark)
+ * = bold mode on, so a word-click bolds instead of splitting. A mode switch, not a
+ * per-block control, so it lives in the toolbar and drives every row.
+ */
+function BoldToggle({ active, onClick }: { active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      title={active ? 'Bold mode on — click words to bold; click to restructure again' : 'Bold mode — click to bold individual words'}
+      style={{
+        fontFamily: 'Georgia, "Times New Roman", serif',
+        fontSize: 12.5,
+        fontWeight: 700,
+        fontStyle: 'italic',
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        border: active ? 'none' : '1px solid var(--bd-1)',
+        background: active ? 'var(--accent)' : '#fff',
+        color: active ? '#fff' : 'var(--tx-secondary)',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 0,
+        lineHeight: 1,
+      }}
+    >
+      B
     </button>
   )
 }
@@ -523,13 +585,13 @@ function ScopeOutline({ blocks }: { blocks: ScopeBlock[] }) {
             return (
               <div key={i} style={{ display: 'flex', gap: 8, margin: i === 0 ? 0 : '5px 0 0', paddingLeft: indentPx(b.indent) }}>
                 <ListMarker list={b.list} ordinal={b.ordinal} />
-                <span style={{ minWidth: 0, fontSize: 12.5, lineHeight: 1.55, color: '#3c434c' }}>{renderProse(b.text)}</span>
+                <span style={{ minWidth: 0, fontSize: 12.5, lineHeight: 1.55, color: '#3c434c' }}>{renderProse(b.text, b.bold)}</span>
               </div>
             )
           }
           return (
             <p key={i} style={{ margin: i === 0 ? 0 : '8px 0 0', paddingLeft: indentPx(b.indent), fontSize: 12.5, lineHeight: 1.55, color: '#3c434c' }}>
-              {renderProse(b.text)}
+              {renderProse(b.text, b.bold)}
             </p>
           )
         }
@@ -578,30 +640,14 @@ function ScopeOutline({ blocks }: { blocks: ScopeBlock[] }) {
 }
 
 /**
- * Render a prose block, bolding inline Title-case sub-labels ("Kitchen
- * Cabinets:", "Hardware:") — the sub-headers Procore's ordered lists collapse to
- * once the sync strips their numbering. Pure emphasis, never a structural split,
- * so a mis-detected label is harmless. Applied to prose blocks only (numbered
- * GENERAL REQUIREMENTS clauses render elsewhere and keep their colons unbolded).
+ * Render a prose block's emphasis (Phase 6c). The bold decision — manual word-level
+ * bold wins per block and suppresses the automatic Title-case sub-label bolding —
+ * lives in the pure, tested `proseEmphasis`; here we just map its segments to nodes,
+ * wrapping strong runs in the shared `<strong>` style. Applied to prose blocks only
+ * (numbered GENERAL REQUIREMENTS clauses render elsewhere; headings are already bold).
  */
-function renderProse(text: string): ReactNode[] {
-  const re = new RegExp(SUBHEADER_LABEL.source, 'g')
-  const nodes: ReactNode[] = []
-  let last = 0
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text)) !== null) {
-    const label = m[1]
-    const start = m.index + m[0].length - label.length // skip the leading separator char
-    if (start > last) nodes.push(text.slice(last, start))
-    nodes.push(
-      <strong key={start} style={{ fontWeight: 650, color: 'var(--tx-primary)' }}>
-        {label}
-      </strong>,
-    )
-    last = start + label.length
-  }
-  if (last < text.length) nodes.push(text.slice(last))
-  return nodes
+function renderProse(text: string, bold?: number[]): ReactNode[] {
+  return proseEmphasis(text, bold).map((seg, i) => (seg.strong ? <strong key={i} style={strong}>{seg.text}</strong> : seg.text))
 }
 
 /** Loading / error / empty wrapper for a lazily-loaded drawer section. */

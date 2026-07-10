@@ -100,6 +100,11 @@ button {
   background: var(--fill-3);
   box-shadow: inset 2px 0 0 var(--accent);
 }
+/* Bold-mode word target (Commitments Phase 6c): a plain highlight (no left rule —
+   this toggles the word's bold, it doesn't break the line before it). */
+.sl-boldword:hover {
+  background: var(--fill-3);
+}
 .sl-icon-btn:hover {
   background: var(--fill-1);
 }

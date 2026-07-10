@@ -56,6 +56,13 @@ describe('applyScopeOverride', () => {
     expect(r.blocks).toEqual(parseScope(SOURCE))
   })
 
+  it('carries a block’s bold word indices through to the rendered blocks (Phase 6c)', () => {
+    const override = overrideFor(SOURCE, [{ kind: 'para', indent: 0, text: 'Furnish all labor and material.', bold: [0, 2] }])
+    const r = applyScopeOverride(SOURCE, override)
+    expect(r.source).toBe('override')
+    expect(r.blocks).toEqual([{ kind: 'para', marker: null, text: 'Furnish all labor and material.', bullets: [], indent: 0, bold: [0, 2] }])
+  })
+
   it('carries a block’s list style through to the rendered blocks (with ordinals)', () => {
     const override = overrideFor(SOURCE, [
       { kind: 'para', indent: 0, text: 'GENERAL REQUIREMENTS', list: 'bullet' },

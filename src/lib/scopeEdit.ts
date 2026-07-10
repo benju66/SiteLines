@@ -102,32 +102,71 @@ export function seedEditorBlocks(source: string, override?: ScopeOverride): Scop
 }
 
 /**
+ * Set a block's presentation-only `bold` word indices (Phase 6c), dropping the key
+ * entirely when the set is empty (rather than storing `[]`) so "absent = no manual
+ * bold" stays canonical. Used by the ops below to re-attach re-mapped bold sets.
+ */
+function withBold(b: ScopeBlockOverride, bold: number[]): ScopeBlockOverride {
+  if (bold.length === 0) {
+    const next = { ...b }
+    delete next.bold
+    return next
+  }
+  return { ...b, bold }
+}
+
+/**
  * Split block `index` so a new block starts at word `wordIndex` (1-based count of
  * words that stay in the first block). Both halves keep the original kind + indent;
  * out-of-range cuts (0 or ≥ word count) are no-ops. Concatenation is preserved
- * because the words are only regrouped, never changed.
+ * because the words are only regrouped, never changed. Bold indices (Phase 6c) are
+ * re-mapped so emphasis follows the words: the first half keeps indices `< wordIndex`,
+ * the second keeps indices `≥ wordIndex` offset by `− wordIndex`.
  */
 export function splitBlock(blocks: ScopeBlockOverride[], index: number, wordIndex: number): ScopeBlockOverride[] {
   const b = blocks[index]
   if (!b) return blocks
   const words = b.text.split(' ')
   if (wordIndex <= 0 || wordIndex >= words.length) return blocks
-  const first: ScopeBlockOverride = { ...b, text: words.slice(0, wordIndex).join(' ') }
-  const second: ScopeBlockOverride = { ...b, text: words.slice(wordIndex).join(' ') }
+  const bold = b.bold ?? []
+  const first = withBold({ ...b, text: words.slice(0, wordIndex).join(' ') }, bold.filter((i) => i < wordIndex))
+  const second = withBold({ ...b, text: words.slice(wordIndex).join(' ') }, bold.filter((i) => i >= wordIndex).map((i) => i - wordIndex))
   return [...blocks.slice(0, index), first, second, ...blocks.slice(index + 1)]
 }
 
 /**
  * Merge block `index` into the previous block (text joined with a single space).
  * The result keeps the PREVIOUS block's kind + indent. No-op on the first block or
- * an out-of-range index. Concatenation is preserved.
+ * an out-of-range index. Concatenation is preserved. Bold indices (Phase 6c) follow
+ * their words: `prev`'s indices are kept, then `cur`'s are appended offset by `prev`'s
+ * word count.
  */
 export function mergeUp(blocks: ScopeBlockOverride[], index: number): ScopeBlockOverride[] {
   if (index <= 0 || index >= blocks.length) return blocks
   const prev = blocks[index - 1]
   const cur = blocks[index]
-  const merged: ScopeBlockOverride = { ...prev, text: `${prev.text} ${cur.text}` }
+  const offset = prev.text.split(' ').length
+  const bold = [...(prev.bold ?? []), ...(cur.bold ?? []).map((i) => i + offset)]
+  const merged = withBold({ ...prev, text: `${prev.text} ${cur.text}` }, bold)
   return [...blocks.slice(0, index - 1), merged, ...blocks.slice(index + 1)]
+}
+
+/**
+ * Toggle word `wordIndex`'s bold on block `index` (Phase 6c). Presentation only: it
+ * only records WHICH existing words render bold (never changes `text`), so
+ * `partitionsSource` is invariant across this op. The index set is kept sorted + in
+ * range; toggling off the last bold word drops the `bold` key. No-op for an
+ * out-of-range block or word index.
+ */
+export function toggleBold(blocks: ScopeBlockOverride[], index: number, wordIndex: number): ScopeBlockOverride[] {
+  const b = blocks[index]
+  if (!b) return blocks
+  if (wordIndex < 0 || wordIndex >= b.text.split(' ').length) return blocks
+  const current = b.bold ?? []
+  const next = current.includes(wordIndex)
+    ? current.filter((i) => i !== wordIndex)
+    : [...current, wordIndex].sort((x, y) => x - y)
+  return blocks.map((x, i) => (i === index ? withBold(x, next) : x))
 }
 
 /** Set block `index`'s kind (heading ⇄ para). */

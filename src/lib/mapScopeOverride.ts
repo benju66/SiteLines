@@ -29,13 +29,22 @@ export function coerceBlocks(value: unknown): ScopeBlockOverride[] {
   const out: ScopeBlockOverride[] = []
   for (const b of value) {
     if (!b || typeof b !== 'object') continue
-    const { kind, indent, text, list } = b as Record<string, unknown>
+    const { kind, indent, text, list, bold } = b as Record<string, unknown>
     if (kind !== 'para' && kind !== 'heading') continue
     if (typeof text !== 'string') continue
     const depth = typeof indent === 'number' && Number.isFinite(indent) ? Math.max(0, Math.trunc(indent)) : 0
     const block: ScopeBlockOverride = { kind, indent: depth, text }
     // Presentation-only list style (Phase 6a); drop any other value to undefined.
     if (list === 'bullet' || list === 'number') block.list = list
+    // Presentation-only bold word indices (Phase 6c): clean to a sorted set of
+    // unique, in-range, non-negative integers; drop the field if nothing survives.
+    if (Array.isArray(bold)) {
+      const wordCount = text.split(' ').length
+      const clean = Array.from(new Set(bold.filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n < wordCount))).sort(
+        (x, y) => x - y,
+      )
+      if (clean.length > 0) block.bold = clean
+    }
     out.push(block)
   }
   return out
