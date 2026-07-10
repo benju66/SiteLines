@@ -407,6 +407,11 @@ interface ScopeBlockOverride {
 > stored blocks reconstruct to the complete verbatim contract prose (no marker glyphs in `text`), styles
 > persist across refresh, ordinals compute 1·2·3, and Reset-to-auto deleted the row (table left clean;
 > `get_advisors` shows no table/RLS findings). **No SQL change** (`blocks` is already `jsonb`).
+> **Polish (2026-07-10):** the editor now previews the bullet/ordinal **inline live** as you toggle
+> (matching how heading + indent already previewed), via a shared `ListMarker` + the extracted pure
+> `computeOrdinals` (one counting rule for both the renderer and the editor, so they can't drift; ordinal
+> column widened for two digits). Verified live (`:5175`) — toggling recomputes ordinals reactively
+> (removing a number renumbers the run 2→1) before any save. 171 tests.
 - **Scope:** add `list?: 'bullet' | 'number'` to the block model + `ScopeBlock`; render bullets and
   computed ordinals in `ScopeOutline`; a pure tested ordinal helper; editor controls to toggle a
   block's list style (per `EditorBlockRow`). **No safety-model change** — `partitionsSource` is

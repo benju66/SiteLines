@@ -11,7 +11,7 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { TOOLS } from '@/data/tools'
-import { applyScopeOverride } from '@/lib/applyScopeOverride'
+import { applyScopeOverride, computeOrdinals } from '@/lib/applyScopeOverride'
 import { formatMoney, statusTone } from '@/lib/derive'
 import { hashText } from '@/lib/hashText'
 import { SUBHEADER_LABEL } from '@/lib/parseScope'
@@ -257,6 +257,32 @@ const INDENT_STEP = 16
 const indentPx = (indent?: number) => Math.min(Math.max(indent ?? 0, 0), 6) * INDENT_STEP
 
 /**
+ * The presentation-only list marker (Phase 6a): a `•` for a bullet, the computed
+ * ordinal for a numbered block. Shared by the rendered outline AND the editor's live
+ * preview so the two never diverge. `minWidth` fits a two-digit ordinal ("10.").
+ */
+function ListMarker({ list, ordinal }: { list: 'bullet' | 'number'; ordinal?: number }) {
+  const isNum = list === 'number'
+  return (
+    <span
+      aria-hidden={!isNum}
+      style={{
+        flex: 'none',
+        textAlign: isNum ? 'right' : 'left',
+        minWidth: isNum ? 20 : 10,
+        fontFamily: isNum ? mono : undefined,
+        fontSize: isNum ? 11.5 : 12.5,
+        fontWeight: isNum ? 650 : 400,
+        lineHeight: 1.55,
+        color: isNum ? 'var(--tx-tertiary)' : 'var(--tx-faint)',
+      }}
+    >
+      {isNum ? `${ordinal ?? ''}.` : '•'}
+    </span>
+  )
+}
+
+/**
  * A commitment scope field: a saved structure override when present + fresh, else
  * the parser outline (Phase 5b). A stale override (its source text changed in
  * Procore since it was saved) falls back to the parser and shows a banner. Renders
@@ -353,18 +379,24 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
         The words are locked — you only restructure. Click a word to break the line before it.
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {blocks.map((b, i) => (
-          <EditorBlockRow
-            key={i}
-            block={b}
-            canMerge={i > 0}
-            onSplit={(wi) => edit((bl) => splitBlock(bl, i, wi))}
-            onMerge={() => edit((bl) => mergeUp(bl, i))}
-            onKind={(k) => edit((bl) => setKind(bl, i, k))}
-            onIndent={(d) => edit((bl) => reindent(bl, i, d))}
-            onList={(l) => edit((bl) => setList(bl, i, l))}
-          />
-        ))}
+        {(() => {
+          // Live ordinals via the shared rule, so a numbered block previews its real
+          // number (1·2·3) as you toggle — matching the saved outline exactly.
+          const ordinals = computeOrdinals(blocks)
+          return blocks.map((b, i) => (
+            <EditorBlockRow
+              key={i}
+              block={b}
+              ordinal={ordinals[i]}
+              canMerge={i > 0}
+              onSplit={(wi) => edit((bl) => splitBlock(bl, i, wi))}
+              onMerge={() => edit((bl) => mergeUp(bl, i))}
+              onKind={(k) => edit((bl) => setKind(bl, i, k))}
+              onIndent={(d) => edit((bl) => reindent(bl, i, d))}
+              onList={(l) => edit((bl) => setList(bl, i, l))}
+            />
+          ))
+        })()}
       </div>
       {error && <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.45, color: tone.danger.c }}>{error}</div>}
     </div>
@@ -372,7 +404,7 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
 }
 
 /** One editable block: a control cluster + the block's words as split targets. */
-function EditorBlockRow({ block, canMerge, onSplit, onMerge, onKind, onIndent, onList }: { block: ScopeBlockOverride; canMerge: boolean; onSplit: (wordIndex: number) => void; onMerge: () => void; onKind: (kind: ScopeBlockOverride['kind']) => void; onIndent: (delta: number) => void; onList: (list: ScopeBlockOverride['list']) => void }) {
+function EditorBlockRow({ block, ordinal, canMerge, onSplit, onMerge, onKind, onIndent, onList }: { block: ScopeBlockOverride; ordinal?: number; canMerge: boolean; onSplit: (wordIndex: number) => void; onMerge: () => void; onKind: (kind: ScopeBlockOverride['kind']) => void; onIndent: (delta: number) => void; onList: (list: ScopeBlockOverride['list']) => void }) {
   const words = block.text.split(' ')
   const isHeading = block.kind === 'heading'
   // The list-style cycle (Phase 6a): plain → bullet → number → plain. Presentation
@@ -398,6 +430,8 @@ function EditorBlockRow({ block, canMerge, onSplit, onMerge, onKind, onIndent, o
           ›
         </IconBtn>
       </div>
+      {/* Live list marker (Phase 6a) — mirrors the saved outline; headings ignore lists. */}
+      {!isHeading && block.list && <ListMarker list={block.list} ordinal={ordinal} />}
       <div style={{ display: 'flex', flexWrap: 'wrap', fontSize: isHeading ? 11 : 12.5, fontWeight: isHeading ? 700 : 400, lineHeight: 1.55, color: isHeading ? 'var(--tx-tertiary)' : '#3c434c', minWidth: 0 }}>
         {words.map((w, wi) => (
           <button
@@ -486,25 +520,9 @@ function ScopeOutline({ blocks }: { blocks: ScopeBlock[] }) {
           // A presentation-only list marker (Phase 6a): a leading `•` for a bullet,
           // the computed ordinal for a numbered block — drawn here, never in `text`.
           if (b.list) {
-            const isNum = b.list === 'number'
-            const marker = isNum ? `${b.ordinal ?? ''}.` : '•'
             return (
               <div key={i} style={{ display: 'flex', gap: 8, margin: i === 0 ? 0 : '5px 0 0', paddingLeft: indentPx(b.indent) }}>
-                <span
-                  aria-hidden={!isNum}
-                  style={{
-                    flex: 'none',
-                    textAlign: isNum ? 'right' : 'left',
-                    minWidth: isNum ? 18 : 10,
-                    fontFamily: isNum ? mono : undefined,
-                    fontSize: isNum ? 11.5 : 12.5,
-                    fontWeight: isNum ? 650 : 400,
-                    lineHeight: 1.55,
-                    color: isNum ? 'var(--tx-tertiary)' : 'var(--tx-faint)',
-                  }}
-                >
-                  {marker}
-                </span>
+                <ListMarker list={b.list} ordinal={b.ordinal} />
                 <span style={{ minWidth: 0, fontSize: 12.5, lineHeight: 1.55, color: '#3c434c' }}>{renderProse(b.text)}</span>
               </div>
             )

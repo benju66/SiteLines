@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { annotateOrdinals, applyScopeOverride } from './applyScopeOverride'
+import { annotateOrdinals, applyScopeOverride, computeOrdinals } from './applyScopeOverride'
 import { hashText } from './hashText'
 import { parseScope, type ScopeBlock } from './parseScope'
 import type { ScopeOverride } from '@/types'
@@ -107,5 +107,20 @@ describe('annotateOrdinals', () => {
   it('is a no-op on parser output (no list blocks)', () => {
     const parsed = parseScope(SOURCE)
     expect(annotateOrdinals(parsed)).toEqual(parsed)
+  })
+})
+
+describe('computeOrdinals', () => {
+  // The shared primitive behind both the renderer and the editor's live preview.
+  const L = (indent: number, list?: 'bullet' | 'number') => ({ indent, list })
+
+  it('counts a run, restarts nested runs, and resets after a break', () => {
+    expect(computeOrdinals([L(0, 'number'), L(0, 'number'), L(0, 'number')])).toEqual([1, 2, 3])
+    expect(computeOrdinals([L(0, 'number'), L(1, 'number'), L(1, 'number'), L(0, 'number'), L(1, 'number')])).toEqual([1, 1, 2, 2, 1])
+    expect(computeOrdinals([L(0, 'number'), L(0, 'number'), L(0), L(0, 'number')])).toEqual([1, 2, undefined, 1])
+  })
+
+  it('returns undefined for bullet and plain blocks', () => {
+    expect(computeOrdinals([L(0, 'bullet'), L(0), L(1, 'bullet')])).toEqual([undefined, undefined, undefined])
   })
 })

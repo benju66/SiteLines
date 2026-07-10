@@ -31,26 +31,36 @@ export interface ScopeRender {
 }
 
 /**
- * Assign each `list:'number'` block its display ordinal (Phase 6a). Presentation
- * only — the number is computed here at render, never stored in `text`. A counter
- * runs per `indent` level: consecutive numbered blocks at the same level count
- * 1·2·3; a numbered block restarts any deeper runs beneath it (nested lists restart
- * under each parent); and any non-number block (prose, heading, bullet) breaks — and
- * so resets — the run at its own level and deeper. Pure + deterministic. Blocks that
- * aren't `list:'number'` pass through untouched.
+ * The list ordinal for each block, or `undefined` for non-number blocks (Phase 6a).
+ * The shared counting rule — used by BOTH the renderer (`annotateOrdinals`) and the
+ * editor's live preview, so the two can never drift. Presentation only; reads only
+ * `indent` + `list`. A counter runs per `indent` level: consecutive numbered blocks
+ * at the same level count 1·2·3; a numbered block restarts any deeper runs beneath it
+ * (nested lists restart under each parent); and any non-number block (prose, heading,
+ * bullet) breaks — and so resets — the run at its own level and deeper. Deterministic.
  */
-export function annotateOrdinals(blocks: ScopeBlock[]): ScopeBlock[] {
+export function computeOrdinals(blocks: ReadonlyArray<{ indent?: number; list?: 'bullet' | 'number' }>): (number | undefined)[] {
   const counters: number[] = [] // counters[d] = running count at indent depth d
   return blocks.map((b) => {
     const depth = Math.max(0, b.indent ?? 0)
     if (b.list === 'number') {
       counters.length = depth + 1 // a shallower number restarts any deeper runs
       counters[depth] = (counters[depth] ?? 0) + 1
-      return { ...b, ordinal: counters[depth] }
+      return counters[depth]
     }
     counters.length = depth // a non-number block breaks the run at its level (and below)
-    return b
+    return undefined
   })
+}
+
+/**
+ * Annotate each `list:'number'` block with its display ordinal (Phase 6a) via the
+ * shared `computeOrdinals` rule. Blocks that aren't `list:'number'` pass through
+ * untouched (same reference).
+ */
+export function annotateOrdinals(blocks: ScopeBlock[]): ScopeBlock[] {
+  const ordinals = computeOrdinals(blocks)
+  return blocks.map((b, i) => (ordinals[i] !== undefined ? { ...b, ordinal: ordinals[i] } : b))
 }
 
 /** Map the flat override block list onto the parser's ScopeBlock render shape,
