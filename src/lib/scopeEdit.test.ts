@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { hashText } from './hashText'
-import { mergeUp, partitionsSource, reindent, seedEditorBlocks, segmentSource, setKind, setList, splitBlock, toggleBold, MAX_INDENT } from './scopeEdit'
+import { addNote, dropEmptyNotes, mergeUp, partitionsSource, reindent, removeNote, seedEditorBlocks, segmentSource, setKind, setList, setNoteText, splitBlock, toggleBold, MAX_INDENT } from './scopeEdit'
 import type { ScopeBlockOverride, ScopeOverride } from '@/types'
 
 const SOURCE = 'GENERAL REQUIREMENTS. Furnish all labor and material. Comply with 8.125% retainage.'
 
 const para = (text: string, indent = 0): ScopeBlockOverride => ({ kind: 'para', indent, text })
+const note = (text: string, indent = 0): ScopeBlockOverride => ({ kind: 'para', indent, text, source: 'user' })
 
 describe('segmentSource', () => {
   it('detects an ALL-CAPS heading and sentence-splits the prose after it', () => {
@@ -119,6 +120,17 @@ describe('mergeUp', () => {
     const round = mergeUp(splitBlock(blocks, 0, 2), 1)
     expect(round).toEqual(blocks)
   })
+
+  it('refuses a cross-source merge (note ↔ contract) — a no-op (Phase 6b)', () => {
+    const noteThenContract = [note('my note'), para('a b')]
+    expect(mergeUp(noteThenContract, 1)).toBe(noteThenContract) // contract into a note
+    const contractThenNote = [para('a b'), note('my note')]
+    expect(mergeUp(contractThenNote, 1)).toBe(contractThenNote) // note into contract
+  })
+
+  it('still merges two notes together (both free text)', () => {
+    expect(mergeUp([note('one'), note('two')], 1)).toEqual([note('one two')])
+  })
 })
 
 describe('setKind + reindent', () => {
@@ -141,6 +153,21 @@ describe('partitionsSource', () => {
   })
   it('is false when the words differ from the source', () => {
     expect(partitionsSource([para('a b typed-in-word')], 'a b')).toBe(false)
+  })
+
+  // Phase 6b — the one safety-model change: notes are excluded before the assertion.
+  it('EXCLUDES user notes — a note added anywhere still passes (its text is ignored)', () => {
+    const blocks = [note('My reminder: confirm crane'), para('a b'), note('another note'), para('c')]
+    expect(partitionsSource(blocks, 'a b c')).toBe(true)
+  })
+
+  it('still FAILS when a CONTRACT block was altered, even if notes are present', () => {
+    // A note can never be an escape hatch: altering contract words still breaks the check.
+    expect(partitionsSource([note('anything at all'), para('a b typed-in-word'), para('c')], 'a b c')).toBe(false)
+  })
+
+  it('is true for notes-only blocks against an empty source', () => {
+    expect(partitionsSource([note('just my own note')], '')).toBe(true)
   })
 })
 
@@ -207,6 +234,44 @@ describe('toggleBold', () => {
     expect(setKind(blocks, 0, 'heading')[0].bold).toEqual([0, 2])
     expect(reindent(blocks, 0, 1)[0].bold).toEqual([0, 2])
     expect(setList(blocks, 0, 'bullet')[0].bold).toEqual([0, 2])
+  })
+})
+
+describe('notes (Phase 6b)', () => {
+  const CONTRACT = 'a b c'
+
+  it('addNote inserts a fresh empty note after the index (and can prepend with -1)', () => {
+    const blocks = [para('a b'), para('c')]
+    expect(addNote(blocks, 0)).toEqual([para('a b'), note(''), para('c')])
+    expect(addNote(blocks, -1)[0]).toEqual(note(''))
+    expect(addNote(blocks, 99)).toEqual([para('a b'), para('c'), note('')]) // clamps to end
+    // Adding a note never disturbs the contract partition.
+    expect(partitionsSource(addNote(blocks, 0), CONTRACT)).toBe(true)
+  })
+
+  it('setNoteText writes ONLY on a note — a no-op on a contract block', () => {
+    const blocks = [para('a b c'), note('')]
+    expect(setNoteText(blocks, 1, 'my clarification')).toEqual([para('a b c'), note('my clarification')])
+    expect(setNoteText(blocks, 0, 'HACK the contract')).toBe(blocks) // contract text is immutable
+    expect(partitionsSource(setNoteText(blocks, 1, 'anything'), CONTRACT)).toBe(true)
+  })
+
+  it('removeNote deletes ONLY a note — a no-op on a contract block', () => {
+    const blocks = [para('a b'), note('my note'), para('c')]
+    expect(removeNote(blocks, 1)).toEqual([para('a b'), para('c')])
+    expect(removeNote(blocks, 0)).toBe(blocks) // contract words can't be deleted this way
+  })
+
+  it('dropEmptyNotes removes whitespace-only notes, keeps filled notes + all contract blocks', () => {
+    const blocks = [para('a b'), note(''), note('   '), note('real note'), para('c')]
+    expect(dropEmptyNotes(blocks)).toEqual([para('a b'), note('real note'), para('c')])
+  })
+
+  it('a note round-trips through save-shape: dropEmptyNotes keeps it + partition still holds', () => {
+    const edited = setNoteText(addNote([para('a b'), para('c')], 1), 2, 'confirm crane availability')
+    const saved = dropEmptyNotes(edited)
+    expect(saved).toEqual([para('a b'), para('c'), note('confirm crane availability')])
+    expect(partitionsSource(saved, CONTRACT)).toBe(true)
   })
 })
 

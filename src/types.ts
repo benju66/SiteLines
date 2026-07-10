@@ -352,6 +352,11 @@ export interface ScopeBlockOverride {
   // the block's space-split words (`text.split(' ')`) to render bold. Absent/empty =
   // no manual bold. Which words, NEVER markup in `text`, so the partition invariant is
   // untouched (same safe model as `list`); split/merge re-map these indices.
+  source?: 'user' // Phase 6b — present = a user-authored NOTE (free text the owner
+  // typed, a clarification/reminder), absent = contract words (a verbatim slice of the
+  // source). Notes are the ONLY place typing is allowed; they are EXCLUDED from the
+  // words-locked partition assertion (see partitionsSource) and rendered clearly marked
+  // as the owner's addition — so the contract's language can never be shown altered.
 }
 
 /**

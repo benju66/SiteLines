@@ -340,7 +340,7 @@ STOP for sign-off before applying (ref `jxesfirpghwpfmfjlfng`).
 - **Exit criteria:** typecheck + tests + build; live — restructure a real commitment's wall,
   save, refresh → the structure persists and still reads the contract's words. ✅ met.
 
-### Phase 6 — scope list formatting + bold + your-own-notes (🚧 6a + 6c DONE 2026-07-10 · 6b PLANNED)
+### Phase 6 — scope list formatting + bold + your-own-notes (✅ 6a + 6b + 6c DONE 2026-07-10)
 **Plain-English:** make a formatted scope read like a real list — bullet points, (opt-in) numbered
 items, and **bold** emphasis on words that matter — and let the owner pin their **own** notes into a
 commitment's scope, shown clearly marked as additions, while the executed contract's words stay locked
@@ -431,19 +431,21 @@ interface ScopeBlockOverride {
 - **Exit criteria:** typecheck + tests + build; seed (`:5174`) + live (`:5175`) — mark blocks as
   bullet/number, save, refresh → styles persist and render; contract words unchanged. STOP. ✅ met.
 
-#### Phase 6b — your-own-notes (the typing path + the one safety-model change) — 📋 PLANNED 2026-07-10
-> **Kickoff:** [2026-07-10 - Commitments Phase 6b Kickoff](../kickoffs/2026-07-10%20-%20Commitments%20Phase%206b%20Kickoff.md).
-> Note placement **locked** (2026-07-10): a freestanding note block, addable anywhere at any indent.
-- **Scope:** add `source?: 'user'` note blocks — an "Add note" action creating an editable note block,
-  a **text input** in the editor (the ONLY place typing is allowed; contract blocks stay read-only),
-  note delete/indent/list-style; `partitionsSource` filters out `source:'user'` before asserting;
-  `ScopeOutline` renders notes with the tinted "Your note" treatment. Co-located tests (partition
-  ignores notes; a note round-trips; contract-only blocks still assert).
-- **Approval gates:** ⚠️ This is the one change to the words-locked safety model — the hard guardrail
-  below. No SQL gate.
-- **Exit criteria:** typecheck + tests + build; live (`:5175`) — add a note to a real commitment,
-  save, refresh → the note persists marked as yours and the contract words remain verbatim; a save
-  still fails if a contract block's words were somehow altered. STOP.
+#### Phase 6b — your-own-notes (the typing path + the one safety-model change) — ✅ DONE + VERIFIED 2026-07-10
+> **Shipped.** `source?: 'user'` on `ScopeBlockOverride` + `ScopeBlock` (freestanding note, addable
+> anywhere at any indent). The one safety-model change: `partitionsSource` filters to contract blocks
+> (`source !== 'user'`) before asserting `normalize(join) === normalize(source)`, so notes (free text)
+> are excluded from the contract partition — the guarantee that contract *language* can never be shown
+> altered is intact. Pure ops in [scopeEdit.ts](../../src/lib/scopeEdit.ts): `addNote` · `setNoteText`
+> (the ONLY op that writes `text`, and only on a note) · `removeNote` (notes only) · `dropEmptyNotes`
+> (drops blank notes on save) · a cross-`source` merge guard in `mergeUp`. `coerceBlocks` validates
+> `source` (keeps only literal `'user'`; a note's `text` may be empty). Editor ([CommitmentDrawer.tsx](../../src/components/overlays/CommitmentDrawer.tsx)):
+> a "+ Add note" action + a `<textarea>` note row (the only place typing is allowed) with delete /
+> indent / list; contract rows unchanged. `ScopeOutline` renders notes with the tinted "Your note"
+> treatment (`tone.info`). **201 tests green**; typecheck + build clean; seed (`:5174`) round-trip
+> verified — note persists marked as yours, contract words verbatim, empty note dropped, note
+> indents/deletes, cross-source merge refused (unit-tested; no UI path alters contract words). Kickoff:
+> [2026-07-10 - Commitments Phase 6b Kickoff](../kickoffs/archive/2026-07-10%20-%20Commitments%20Phase%206b%20Kickoff.md).
 
 #### Phase 6c — bold word-level emphasis, presentation-only — ✅ DONE + VERIFIED 2026-07-10
 > **Shipped.** `bold?: number[]` (space-split word indices) on `ScopeBlockOverride` + `ScopeBlock`

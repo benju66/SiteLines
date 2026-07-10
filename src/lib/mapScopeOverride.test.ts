@@ -67,6 +67,20 @@ describe('coerceBlocks', () => {
     const notArray = coerceBlocks([{ kind: 'para', indent: 0, text: 'one two', bold: 'nope' }])
     expect('bold' in notArray[0]).toBe(false)
   })
+
+  it("keeps a note's source:'user' and allows empty note text (Phase 6b)", () => {
+    expect(coerceBlocks([{ kind: 'para', indent: 0, text: 'my note', source: 'user' }])).toEqual([{ kind: 'para', indent: 0, text: 'my note', source: 'user' }])
+    // An empty note (a just-added, not-yet-typed note) is a valid block, not dropped.
+    expect(coerceBlocks([{ kind: 'para', indent: 0, text: '', source: 'user' }])).toEqual([{ kind: 'para', indent: 0, text: '', source: 'user' }])
+  })
+
+  it('drops an invalid source value to undefined (only literal user) (Phase 6b)', () => {
+    const dropped = coerceBlocks([{ kind: 'para', indent: 0, text: 'x', source: 'admin' }])
+    expect(dropped).toEqual([{ kind: 'para', indent: 0, text: 'x' }])
+    expect('source' in dropped[0]).toBe(false)
+    const bool = coerceBlocks([{ kind: 'para', indent: 0, text: 'y', source: true }])
+    expect('source' in bool[0]).toBe(false)
+  })
 })
 
 describe('mapScopeOverride', () => {

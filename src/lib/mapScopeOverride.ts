@@ -29,11 +29,15 @@ export function coerceBlocks(value: unknown): ScopeBlockOverride[] {
   const out: ScopeBlockOverride[] = []
   for (const b of value) {
     if (!b || typeof b !== 'object') continue
-    const { kind, indent, text, list, bold } = b as Record<string, unknown>
+    const { kind, indent, text, list, bold, source } = b as Record<string, unknown>
     if (kind !== 'para' && kind !== 'heading') continue
     if (typeof text !== 'string') continue
     const depth = typeof indent === 'number' && Number.isFinite(indent) ? Math.max(0, Math.trunc(indent)) : 0
     const block: ScopeBlockOverride = { kind, indent: depth, text }
+    // A user-authored note (Phase 6b): keep `source` only when it's literally 'user';
+    // drop any other value. A note's `text` is free (may be empty) — the string check
+    // above already allows ''; notes are never validated against the source partition.
+    if (source === 'user') block.source = 'user'
     // Presentation-only list style (Phase 6a); drop any other value to undefined.
     if (list === 'bullet' || list === 'number') block.list = list
     // Presentation-only bold word indices (Phase 6c): clean to a sorted set of

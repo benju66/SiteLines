@@ -1,14 +1,18 @@
 // Pure block-editing operations for the scope-structure editor (Commitments,
-// Phase 5c). The editor's safety invariant is that the WORDS ARE LOCKED — every
-// operation only restructures, never edits text — so the block list is always a
-// partition of the normalized source. That means for every op below:
+// Phase 5c). The editor's safety invariant is that the CONTRACT WORDS ARE LOCKED —
+// every operation on a contract block only restructures, never edits text — so the
+// contract blocks are always a partition of the normalized source. That means for
+// every op below, over the contract blocks (`source !== 'user'`):
 //
-//   normalizeScope(blocks.map(b => b.text).join(' ')) is invariant.
+//   normalizeScope(contractBlocks.map(b => b.text).join(' ')) is invariant.
 //
-// The four editing powers (owner-locked): split a block at a word boundary · mark
-// a block heading/para · indent/outdent · merge into the previous block. Plus the
-// initial seed (a structured start when there's no override) and the on-save
-// partition check. All pure + deterministic (no clock); the provider does the I/O.
+// The restructuring powers (owner-locked): split a block at a word boundary · mark
+// a block heading/para · indent/outdent · merge into the previous block · list style
+// (6a) · word-level bold (6c). Phase 6b adds the ONE typing path — user-authored
+// NOTES (`source:'user'` free text): they are excluded from the partition, so `addNote`
+// / `setNoteText` / `removeNote` never touch the contract words. Plus the initial seed
+// (a structured start when there's no override) and the on-save partition check. All
+// pure + deterministic (no clock); the provider does the I/O.
 
 import { hashText, normalizeScope } from '@/lib/hashText'
 import type { ScopeBlockOverride, ScopeOverride } from '@/types'
@@ -139,12 +143,16 @@ export function splitBlock(blocks: ScopeBlockOverride[], index: number, wordInde
  * The result keeps the PREVIOUS block's kind + indent. No-op on the first block or
  * an out-of-range index. Concatenation is preserved. Bold indices (Phase 6c) follow
  * their words: `prev`'s indices are kept, then `cur`'s are appended offset by `prev`'s
- * word count.
+ * word count. Phase 6b — a cross-`source` merge is refused (a no-op): merging a note
+ * into contract words would splice free text into the contract partition, and merging
+ * contract words into a note would drop them out of it — either way the partition would
+ * break. A merge only joins two contract blocks, or two notes.
  */
 export function mergeUp(blocks: ScopeBlockOverride[], index: number): ScopeBlockOverride[] {
   if (index <= 0 || index >= blocks.length) return blocks
   const prev = blocks[index - 1]
   const cur = blocks[index]
+  if (prev.source !== cur.source) return blocks
   const offset = prev.text.split(' ').length
   const bold = [...(prev.bold ?? []), ...(cur.bold ?? []).map((i) => i + offset)]
   const merged = withBold({ ...prev, text: `${prev.text} ${cur.text}` }, bold)
@@ -200,12 +208,69 @@ export function reindent(blocks: ScopeBlockOverride[], index: number, delta: num
   return blocks.map((x, i) => (i === index ? { ...x, indent } : x))
 }
 
+// ── Your-own-notes (Phase 6b) — the one typing path. Notes are `source:'user'` free
+// text, excluded from the partition (see partitionsSource) and shown clearly marked.
+
+/** True for a user-authored note block (Phase 6b). */
+export const isNote = (b: ScopeBlockOverride): boolean => b.source === 'user'
+
 /**
- * The load-bearing safety check, asserted on save: do these blocks still spell out
- * exactly the source text (ignoring whitespace)? True for anything the ops above
- * produce; a false here means a bug leaked typed text in, so the caller refuses the
- * save rather than let the rendered scope diverge from the executed contract.
+ * Insert a fresh, empty note (`source:'user'`) after block `index` (Phase 6b). Pass
+ * `-1` to prepend. Notes are freestanding — addable anywhere, at indent 0 — so this
+ * just splices a blank note in; the words-locked partition is unaffected because a note
+ * carries no contract words. The caller types into it via `setNoteText`.
+ */
+export function addNote(blocks: ScopeBlockOverride[], index: number): ScopeBlockOverride[] {
+  const note: ScopeBlockOverride = { kind: 'para', indent: 0, text: '', source: 'user' }
+  const at = Math.min(Math.max(index + 1, 0), blocks.length)
+  return [...blocks.slice(0, at), note, ...blocks.slice(at)]
+}
+
+/**
+ * Set a note's text (Phase 6b) — the ONLY op that writes `text`, and ONLY on a
+ * `source:'user'` block. A no-op on a contract block (or an out-of-range index), so
+ * typing can never reach the contract words. Text is stored verbatim as typed.
+ */
+export function setNoteText(blocks: ScopeBlockOverride[], index: number, text: string): ScopeBlockOverride[] {
+  const b = blocks[index]
+  if (!b || !isNote(b)) return blocks
+  return blocks.map((x, i) => (i === index ? { ...x, text } : x))
+}
+
+/**
+ * Remove note `index` (Phase 6b) — ONLY a `source:'user'` block. A no-op on a contract
+ * block, so the words-locked partition can never lose contract words this way (deleting
+ * contract words is not an editor power; only restructuring is).
+ */
+export function removeNote(blocks: ScopeBlockOverride[], index: number): ScopeBlockOverride[] {
+  const b = blocks[index]
+  if (!b || !isNote(b)) return blocks
+  return blocks.filter((_, i) => i !== index)
+}
+
+/**
+ * Drop notes whose text is empty/whitespace-only (Phase 6b), applied before save so a
+ * stray "Add note" click can't persist a blank row. Contract blocks are never touched.
+ */
+export function dropEmptyNotes(blocks: ScopeBlockOverride[]): ScopeBlockOverride[] {
+  return blocks.filter((b) => !isNote(b) || b.text.trim() !== '')
+}
+
+/**
+ * The load-bearing safety check, asserted on save: do the CONTRACT blocks still spell
+ * out exactly the source text (ignoring whitespace)? True for anything the ops above
+ * produce; a false here means a bug leaked typed text into the contract, so the caller
+ * refuses the save rather than let the rendered contract scope diverge from what was
+ * executed.
+ *
+ * Phase 6b — the one safety-model change: user-authored notes (`source: 'user'`) are
+ * free text, so they are EXCLUDED from the partition before the check. Only the
+ * contract blocks must reconstruct the source; the assertion's spirit — the drawer can
+ * never show altered *contract* language — is unchanged. `setNoteText` is the only op
+ * that writes `text`, and only on a note, so a note can never be an escape hatch for
+ * editing the contract words.
  */
 export function partitionsSource(blocks: ScopeBlockOverride[], source: string): boolean {
-  return normalizeScope(blocks.map((b) => b.text).join(' ')) === normalizeScope(source)
+  const contract = blocks.filter((b) => b.source !== 'user')
+  return normalizeScope(contract.map((b) => b.text).join(' ')) === normalizeScope(source)
 }

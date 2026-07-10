@@ -16,7 +16,7 @@ import { formatMoney, statusTone } from '@/lib/derive'
 import { hashText } from '@/lib/hashText'
 import type { ScopeBlock } from '@/lib/parseScope'
 import { proseEmphasis } from '@/lib/proseEmphasis'
-import { mergeUp, partitionsSource, reindent, seedEditorBlocks, setKind, setList, splitBlock, toggleBold } from '@/lib/scopeEdit'
+import { addNote, dropEmptyNotes, mergeUp, partitionsSource, reindent, removeNote, seedEditorBlocks, setKind, setList, setNoteText, splitBlock, toggleBold } from '@/lib/scopeEdit'
 import { overrideKey } from '@/lib/userDataSource'
 import { commitmentBillingsSorted, commitmentChangeOrdersSorted, commitmentSovByCostCode } from '@/selectors'
 import { useApp } from '@/state/AppContext'
@@ -357,13 +357,16 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
   }
 
   const save = () => {
-    // The safety assertion: the pure ops guarantee this, so a failure means a bug —
-    // refuse the save rather than let the rendered scope diverge from the contract.
-    if (!partitionsSource(blocks, source)) {
+    // Drop blank notes (a stray "Add note" click) before saving so they never persist.
+    const cleaned = dropEmptyNotes(blocks)
+    // The safety assertion: the pure ops guarantee the CONTRACT blocks still spell out
+    // the source (notes are excluded), so a failure means a bug — refuse the save rather
+    // than let the rendered contract scope diverge from what was executed.
+    if (!partitionsSource(cleaned, source)) {
       setError('Safety check failed: the structure no longer matches the contract words. Not saved.')
       return
     }
-    void run(() => saveOverride({ commitmentId, field, blocks, sourceHash: hashText(source) }))
+    void run(() => saveOverride({ commitmentId, field, blocks: cleaned, sourceHash: hashText(source) }))
   }
 
   return (
@@ -387,7 +390,7 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
       <div style={{ fontSize: 10.5, color: 'var(--tx-faint)', lineHeight: 1.5, marginBottom: 8 }}>
         {boldMode
           ? 'Click any word to bold or unbold it — the words stay locked. Click B again to go back to restructuring.'
-          : 'The words are locked — you only restructure. Click a word to break the line before it.'}
+          : 'The words are locked — you only restructure. Click a word to break the line before it. Add your own notes below.'}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {(() => {
@@ -407,10 +410,22 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
               onIndent={(d) => edit((bl) => reindent(bl, i, d))}
               onList={(l) => edit((bl) => setList(bl, i, l))}
               onBold={(wi) => edit((bl) => toggleBold(bl, i, wi))}
+              onNoteText={(t) => edit((bl) => setNoteText(bl, i, t))}
+              onDelete={() => edit((bl) => removeNote(bl, i))}
             />
           ))
         })()}
       </div>
+      {/* Add note (Phase 6b): appends an empty note — the ONE place typing is allowed.
+          The contract words stay locked; notes render clearly marked as your additions. */}
+      <button
+        type="button"
+        onClick={() => edit((bl) => addNote(bl, bl.length - 1))}
+        className="sl-add-note"
+        style={{ marginTop: 6, width: '100%', fontFamily: 'inherit', fontSize: 11, fontWeight: 600, padding: '6px 10px', borderRadius: 6, border: `1px dashed ${tone.info.bd}`, background: tone.info.bg, color: tone.info.c, cursor: 'pointer' }}
+      >
+        + Add note
+      </button>
       {error && <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.45, color: tone.danger.c }}>{error}</div>}
     </div>
   )
@@ -418,14 +433,49 @@ function ScopeStructureEditor({ commitmentId, field, source, override, onClose }
 
 /** One editable block: a control cluster + the block's words. Out of bold mode a
  *  word-click splits the line before it (Phase 5c); in bold mode a word-click toggles
- *  that word's bold (Phase 6c). Bold words preview bold live on paragraphs. */
-function EditorBlockRow({ block, ordinal, canMerge, boldMode, onSplit, onMerge, onKind, onIndent, onList, onBold }: { block: ScopeBlockOverride; ordinal?: number; canMerge: boolean; boldMode: boolean; onSplit: (wordIndex: number) => void; onMerge: () => void; onKind: (kind: ScopeBlockOverride['kind']) => void; onIndent: (delta: number) => void; onList: (list: ScopeBlockOverride['list']) => void; onBold: (wordIndex: number) => void }) {
-  const words = block.text.split(' ')
+ *  that word's bold (Phase 6c). Bold words preview bold live on paragraphs. A user note
+ *  (Phase 6b, `source:'user'`) renders instead as a tinted, labelled text input — the
+ *  ONE place typing is allowed — with indent / list / delete but no split/heading/bold. */
+function EditorBlockRow({ block, ordinal, canMerge, boldMode, onSplit, onMerge, onKind, onIndent, onList, onBold, onNoteText, onDelete }: { block: ScopeBlockOverride; ordinal?: number; canMerge: boolean; boldMode: boolean; onSplit: (wordIndex: number) => void; onMerge: () => void; onKind: (kind: ScopeBlockOverride['kind']) => void; onIndent: (delta: number) => void; onList: (list: ScopeBlockOverride['list']) => void; onBold: (wordIndex: number) => void; onNoteText: (text: string) => void; onDelete: () => void }) {
   const isHeading = block.kind === 'heading'
-  const boldSet = new Set(block.bold ?? [])
   // The list-style cycle (Phase 6a): plain → bullet → number → plain. Presentation
   // only, and rendered on paragraphs — disabled on a heading (unaffected by lists).
   const nextList: ScopeBlockOverride['list'] = block.list === 'bullet' ? 'number' : block.list === 'number' ? undefined : 'bullet'
+
+  if (block.source === 'user') {
+    const noteListTitle = block.list === 'bullet' ? 'Bulleted — click to number' : block.list === 'number' ? 'Numbered — click to remove' : 'No list — click to bullet'
+    return (
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: tone.info.bg, border: `1px solid ${tone.info.bd}`, borderRadius: 7, paddingTop: 6, paddingBottom: 6, paddingRight: 8, paddingLeft: 8 + indentPx(block.indent) }}>
+        <div style={{ display: 'flex', gap: 3, flex: 'none' }}>
+          <IconBtn title="Remove note" onClick={onDelete}>
+            ×
+          </IconBtn>
+          <IconBtn title={noteListTitle} onClick={() => onList(nextList)} active={block.list != null}>
+            {block.list === 'number' ? '1.' : '•'}
+          </IconBtn>
+          <IconBtn title="Outdent" onClick={() => onIndent(-1)} disabled={block.indent <= 0}>
+            ‹
+          </IconBtn>
+          <IconBtn title="Indent" onClick={() => onIndent(1)}>
+            ›
+          </IconBtn>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase', color: tone.info.c }}>Your note</span>
+          <textarea
+            value={block.text}
+            onChange={(e) => onNoteText(e.target.value)}
+            placeholder="Type your note…"
+            rows={2}
+            style={{ font: 'inherit', fontSize: 12.5, lineHeight: 1.5, color: '#3c434c', background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 5, padding: '5px 7px', resize: 'vertical', width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  const words = block.text.split(' ')
+  const boldSet = new Set(block.bold ?? [])
   const listTitle = isHeading ? 'List style applies to paragraphs' : block.list === 'bullet' ? 'Bulleted — click to number' : block.list === 'number' ? 'Numbered — click to remove' : 'No list — click to bullet'
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 7, paddingTop: 6, paddingBottom: 6, paddingRight: 8, paddingLeft: 8 + indentPx(block.indent) }}>
@@ -578,6 +628,20 @@ function ScopeOutline({ blocks }: { blocks: ScopeBlock[] }) {
   return (
     <div>
       {blocks.map((b, i) => {
+        if (b.source === 'user') {
+          // A user-authored note (Phase 6b): a tinted, clearly-labelled "Your note" row
+          // so it never reads as the subcontractor's committed scope. Honors indent + any
+          // list marker; `renderProse` still bolds the note's own words. Not contract text.
+          return (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', margin: i === 0 ? 0 : '6px 0 0', paddingLeft: indentPx(b.indent) }}>
+              {b.list && <ListMarker list={b.list} ordinal={b.ordinal} />}
+              <div style={{ flex: 1, minWidth: 0, background: tone.info.bg, border: `1px solid ${tone.info.bd}`, borderRadius: 6, padding: '5px 8px' }}>
+                <span style={{ display: 'block', fontSize: 9, fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase', color: tone.info.c, marginBottom: 2 }}>Your note</span>
+                <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#3c434c' }}>{renderProse(b.text, b.bold)}</span>
+              </div>
+            </div>
+          )
+        }
         if (b.kind === 'para') {
           // A presentation-only list marker (Phase 6a): a leading `•` for a bullet,
           // the computed ordinal for a numbered block — drawn here, never in `text`.

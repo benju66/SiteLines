@@ -105,6 +105,10 @@ button {
 .sl-boldword:hover {
   background: var(--fill-3);
 }
+/* "Add note" button (Commitments Phase 6b): a subtle darkening on hover. */
+.sl-add-note:hover {
+  filter: brightness(0.97);
+}
 .sl-icon-btn:hover {
   background: var(--fill-1);
 }

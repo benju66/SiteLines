@@ -64,10 +64,10 @@ export function annotateOrdinals(blocks: ScopeBlock[]): ScopeBlock[] {
 }
 
 /** Map the flat override block list onto the parser's ScopeBlock render shape,
- *  carrying the presentation-only `list` style + `bold` indices through and computing
- *  ordinals. */
+ *  carrying the presentation-only `list` style + `bold` indices + note `source`
+ *  through and computing ordinals. */
 function overrideToBlocks(blocks: ScopeBlockOverride[]): ScopeBlock[] {
-  return annotateOrdinals(blocks.map((b) => ({ kind: b.kind, marker: null, text: b.text, bullets: [], indent: b.indent, list: b.list, bold: b.bold })))
+  return annotateOrdinals(blocks.map((b) => ({ kind: b.kind, marker: null, text: b.text, bullets: [], indent: b.indent, list: b.list, bold: b.bold, source: b.source })))
 }
 
 export function applyScopeOverride(source: string, override?: ScopeOverride): ScopeRender {
