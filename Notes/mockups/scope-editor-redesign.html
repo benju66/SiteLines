@@ -1,0 +1,523 @@
+<style>
+  :root {
+    --bg: #eaedf1;
+    --panel: #ffffff;
+    --ink: #1a1d21;
+    --ink-2: #4b525c;
+    --ink-3: #7b828c;
+    --faint: #9298a1;
+    --faint-2: #a2a8b0;
+    --bd-1: #e2e5e9;
+    --bd-2: #dbdfe5;
+    --fill-1: #f4f5f7;
+    --fill-3: #eef0f3;
+    --accent: #e8590c;          /* Sitelines safety-orange */
+    --note-bg: #eaf1f8;         /* tone.info */
+    --note-bd: #c3d5e8;
+    --note-ink: #2f5f8a;
+    --good-ink: #2c7a4f;        /* tone.ok */
+    --good-bg: #e7f4ec;
+    --good-bd: #bfe3cd;
+    --warn-ink: #8a6300;        /* tone.warn */
+    --warn-bg: #fbf1d8;
+    --warn-bd: #efd89a;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --shadow: 0 1px 2px rgba(20,24,30,.05), 0 8px 24px rgba(20,24,30,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121419;
+      --panel: #1b1e24;
+      --ink: #e9ecf0;
+      --ink-2: #b8bec8;
+      --ink-3: #8c94a0;
+      --faint: #727a86;
+      --faint-2: #626a76;
+      --bd-1: #2b2f37;
+      --bd-2: #343a44;
+      --fill-1: #20242b;
+      --fill-3: #262b33;
+      --accent: #ff7c40;
+      --note-bg: #172636;
+      --note-bd: #2f4a68;
+      --note-ink: #9cc4ee;
+      --good-ink: #6bc08d;
+      --good-bg: #16271e;
+      --good-bd: #2b4a37;
+      --warn-ink: #d6ab52;
+      --warn-bg: #2a2416;
+      --warn-bd: #4a3f22;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#eaedf1; --panel:#fff; --ink:#1a1d21; --ink-2:#4b525c; --ink-3:#7b828c; --faint:#9298a1; --faint-2:#a2a8b0;
+    --bd-1:#e2e5e9; --bd-2:#dbdfe5; --fill-1:#f4f5f7; --fill-3:#eef0f3; --accent:#e8590c;
+    --note-bg:#eaf1f8; --note-bd:#c3d5e8; --note-ink:#2f5f8a; --good-ink:#2c7a4f; --good-bg:#e7f4ec; --good-bd:#bfe3cd;
+    --warn-ink:#8a6300; --warn-bg:#fbf1d8; --warn-bd:#efd89a; --shadow:0 1px 2px rgba(20,24,30,.05),0 8px 24px rgba(20,24,30,.06);
+  }
+  :root[data-theme="dark"] {
+    --bg:#121419; --panel:#1b1e24; --ink:#e9ecf0; --ink-2:#b8bec8; --ink-3:#8c94a0; --faint:#727a86; --faint-2:#626a76;
+    --bd-1:#2b2f37; --bd-2:#343a44; --fill-1:#20242b; --fill-3:#262b33; --accent:#ff7c40;
+    --note-bg:#172636; --note-bd:#2f4a68; --note-ink:#9cc4ee; --good-ink:#6bc08d; --good-bg:#16271e; --good-bd:#2b4a37;
+    --warn-ink:#d6ab52; --warn-bg:#2a2416; --warn-bd:#4a3f22; --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .wrap {
+    font-family: var(--sans);
+    color: var(--ink);
+    background:
+      radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 60%),
+      var(--bg);
+    min-height: 100vh;
+    padding: 28px 20px 56px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .inner { max-width: 1000px; margin: 0 auto; }
+
+  .page-head { margin-bottom: 22px; }
+  .eyebrow {
+    font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 8px;
+  }
+  h1 {
+    font-size: clamp(21px, 3.4vw, 27px); font-weight: 680; letter-spacing: -.01em;
+    margin: 0 0 8px; text-wrap: balance; line-height: 1.15;
+  }
+  .lede { font-size: 14px; line-height: 1.55; color: var(--ink-3); max-width: 62ch; margin: 0; }
+  .lede strong { color: var(--ink-2); font-weight: 600; }
+
+  .safe {
+    display: flex; gap: 9px; align-items: flex-start;
+    margin: 16px 0 20px; padding: 10px 13px;
+    background: var(--good-bg); border: 1px solid var(--good-bd); border-radius: 10px;
+    font-size: 12.5px; line-height: 1.5; color: var(--good-ink); max-width: 62ch;
+  }
+  .safe b { font-weight: 700; }
+
+  .compare { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+  .col { flex: 1 1 452px; min-width: 300px; max-width: 480px; }
+  .col-head { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+  .tag { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; }
+  .tag.today { color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-bd); }
+  .tag.new { color: var(--good-ink); background: var(--good-bg); border: 1px solid var(--good-bd); }
+  .col-head .sub { font-size: 12px; color: var(--ink-3); }
+
+  .drawer {
+    background: var(--panel); border: 1px solid var(--bd-2); border-radius: 12px;
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  .drawer-top {
+    display: flex; align-items: center; gap: 8px; padding: 11px 13px;
+    border-bottom: 1px solid var(--bd-1); background: var(--fill-1);
+  }
+  .drawer-top .field { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+  .editor-body { padding: 12px 13px 14px; }
+
+  /* ── shared block text ─────────────────────────────────────────── */
+  .wtext { font-size: 12.5px; line-height: 1.55; color: var(--ink-2); }
+  .wtext.heading { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--ink-3); text-transform: uppercase; }
+  strong.b { font-weight: 680; color: var(--ink); }
+
+  /* ══ CURRENT (today) ══════════════════════════════════════════════ */
+  .cur-hdr { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .cur-hdr .label { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
+  .cur-hdr .label.bold { color: var(--accent); }
+  .btoggle {
+    width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--bd-1); background: var(--panel);
+    font-family: Georgia, "Times New Roman", serif; font-weight: 700; font-style: italic; font-size: 12.5px;
+    color: var(--ink-2); cursor: pointer; display: grid; place-items: center; padding: 0;
+  }
+  .btoggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .spacer { flex: 1; }
+  .tbtn { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--bd-1); background: var(--panel); color: var(--ink-2); cursor: pointer; }
+  .tbtn.primary { background: #1a1d21; color: #fff; border-color: #1a1d21; }
+  .cur-help { font-size: 10.5px; color: var(--faint); line-height: 1.5; margin-bottom: 8px; }
+  .cur-help .k { color: var(--ink-3); }
+
+  .cur-row { display: flex; gap: 8px; align-items: flex-start; background: var(--panel); border: 1px solid var(--bd-1); border-radius: 7px; padding: 6px 8px; margin-bottom: 4px; }
+  .glyphs { display: flex; gap: 3px; flex: none; }
+  .gbtn { width: 20px; height: 20px; font-size: 11px; font-weight: 700; border-radius: 5px; border: 1px solid var(--bd-1); background: var(--panel); color: var(--ink-2); cursor: pointer; display: grid; place-items: center; padding: 0; line-height: 1; }
+  .gbtn.on { background: var(--fill-3); }
+  .gbtn:disabled { color: var(--faint-2); cursor: default; }
+  .cur-words { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; }
+  .marker { flex: none; font-size: 12px; color: var(--faint); margin-right: 4px; font-family: var(--mono); }
+  .wbtn { font: inherit; font-size: 12.5px; line-height: 1.55; color: var(--ink-2); background: none; border: none; padding: 0 2px; margin: 0; cursor: pointer; border-radius: 3px; }
+  .wbtn.hd { font-size: 11px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; }
+  .wbtn.bold { font-weight: 680; color: var(--ink); }
+  .cur-words.split .wbtn:not(:first-child):hover { background: var(--fill-3); box-shadow: inset 2px 0 0 var(--accent); }
+  .cur-words.boldmode .wbtn:hover { background: var(--fill-3); }
+  .addnote { width: 100%; margin-top: 6px; font-size: 11px; font-weight: 600; padding: 6px 10px; border-radius: 6px; border: 1px dashed var(--note-bd); background: var(--note-bg); color: var(--note-ink); cursor: pointer; }
+  .addnote:hover { filter: brightness(.98); }
+
+  /* note row (current) */
+  .cur-note { display: flex; gap: 8px; align-items: flex-start; background: var(--note-bg); border: 1px solid var(--note-bd); border-radius: 7px; padding: 6px 8px; margin-bottom: 4px; }
+  .cur-note .ncol { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+  .ynote-lbl { font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--note-ink); }
+  .cur-note textarea, .prop-note textarea {
+    font: inherit; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); background: var(--panel);
+    border: 1px solid var(--bd-1); border-radius: 5px; padding: 5px 7px; resize: vertical; width: 100%; min-height: 40px;
+  }
+
+  /* ══ PROPOSED ═════════════════════════════════════════════════════ */
+  .prop-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .prop-hdr .title { font-size: 12px; font-weight: 650; color: var(--ink-2); }
+  .prop-hdr .hint { font-size: 11px; color: var(--faint); }
+  .prop-list { position: relative; }
+  .pline { position: relative; display: flex; align-items: flex-start; gap: 4px; border-radius: 6px; padding: 3px 4px 3px 2px; }
+  .pline:hover { background: var(--fill-1); }
+  .handle {
+    flex: none; width: 18px; height: 22px; display: grid; place-items: center; border-radius: 5px;
+    color: var(--faint-2); cursor: grab; opacity: 0; transition: opacity .12s; font-size: 13px; background: none; border: none; padding: 0;
+  }
+  .pline:hover .handle, .handle.open { opacity: 1; }
+  .handle:hover { background: var(--fill-3); color: var(--ink-3); }
+  .p-body { flex: 1; min-width: 0; padding: 1px 0; }
+  .p-marker { color: var(--faint); font-family: var(--mono); font-size: 12px; margin-right: 6px; }
+  .p-words { display: inline; }
+  .p-word { color: var(--ink-2); }
+  .p-word.bold { font-weight: 680; color: var(--ink); }
+  .p-line-text.heading .p-word { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--ink-3); text-transform: uppercase; }
+  .p-gap { display: inline-block; width: 4px; position: relative; cursor: text; }
+  .p-gap::before {
+    content: ""; position: absolute; left: 1px; top: -1px; bottom: -1px; width: 2px; border-radius: 2px;
+    background: var(--accent); opacity: 0; transition: opacity .1s;
+  }
+  .p-gap:hover::before { opacity: 1; }
+  .p-gap:hover::after {
+    content: "Split line here"; position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+    white-space: nowrap; font-size: 10px; font-weight: 600; color: #fff; background: #1a1d21; padding: 3px 6px; border-radius: 5px; z-index: 5;
+  }
+  .p-line-text { cursor: text; }
+
+  .p-menu {
+    position: absolute; z-index: 20; top: 26px; left: 18px; min-width: 168px;
+    background: var(--panel); border: 1px solid var(--bd-2); border-radius: 9px; box-shadow: var(--shadow); padding: 5px;
+  }
+  .p-menu button { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; font: inherit; font-size: 12.5px; color: var(--ink-2); background: none; border: none; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+  .p-menu button:hover { background: var(--fill-1); }
+  .p-menu button .mi { width: 18px; text-align: center; color: var(--ink-3); font-size: 12px; }
+  .p-menu button.on { color: var(--accent); }
+  .p-menu button.danger { color: #b23c0e; }
+  .p-menu .msep { height: 1px; background: var(--bd-1); margin: 4px 2px; }
+
+  .bold-chip {
+    position: fixed; z-index: 40; display: none; align-items: center; gap: 6px;
+    background: #1a1d21; color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 600;
+    box-shadow: 0 6px 20px rgba(0,0,0,.3); cursor: pointer; transform: translate(-50%, -120%);
+  }
+  .bold-chip b { font-family: Georgia, serif; font-style: italic; font-size: 13px; }
+
+  .prop-note { display: flex; gap: 8px; align-items: flex-start; background: var(--note-bg); border: 1px solid var(--note-bd); border-radius: 8px; padding: 7px 9px; margin-top: 4px; }
+  .prop-note .ncol { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+  .prop-note .nhead { display: flex; align-items: center; justify-content: space-between; }
+  .xbtn { background: none; border: none; color: var(--note-ink); cursor: pointer; font-size: 14px; line-height: 1; opacity: .7; padding: 2px 4px; }
+  .xbtn:hover { opacity: 1; }
+  .p-add { margin-top: 8px; display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 7px; border: 1px solid var(--note-bd); background: var(--note-bg); color: var(--note-ink); cursor: pointer; }
+  .p-add:hover { filter: brightness(.98); }
+
+  /* try list */
+  .try { margin-top: 12px; font-size: 12px; color: var(--ink-3); line-height: 1.6; }
+  .try h4 { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); margin: 0 0 5px; }
+  .try li { margin-bottom: 2px; }
+  .try ul { margin: 0; padding-left: 17px; }
+  .try code { font-family: var(--mono); font-size: 11px; background: var(--fill-3); padding: 1px 5px; border-radius: 4px; color: var(--ink-2); }
+
+  .foot { margin-top: 30px; font-size: 12px; color: var(--faint); line-height: 1.6; max-width: 62ch; }
+  .foot b { color: var(--ink-3); }
+
+  @media (max-width: 640px) {
+    .col { max-width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <div class="inner">
+    <div class="page-head">
+      <p class="eyebrow">Sitelines · Commitments · Scope editor</p>
+      <h1>Reshaping a scope, two ways</h1>
+      <p class="lede">The same placeholder scope, in <strong>today's editor</strong> and a <strong>proposed one</strong>. Both do the exact same three jobs — fix line breaks, format lines, bold words, add your own notes — but the proposed side borrows the feel of tools you already use (Notion, Linear): no modes, plain text you can select, controls that appear when you need them.</p>
+    </div>
+
+    <div class="safe">
+      <span aria-hidden="true">🔒</span>
+      <span><b>Both are equally safe.</b> You still can't change the subcontractor's contract words — you only regroup and annotate them. Typing is possible in <b>one place only</b>: your own notes, which always render clearly marked as yours.</span>
+    </div>
+
+    <div class="compare">
+      <div class="col">
+        <div class="col-head">
+          <span class="tag today">Today</span>
+          <span class="sub">what's currently shipped</span>
+        </div>
+        <div class="drawer">
+          <div class="drawer-top"><span class="field">Inclusions</span></div>
+          <div class="editor-body" id="curMount"></div>
+        </div>
+        <div class="try">
+          <h4>Try it</h4>
+          <ul>
+            <li>Click any <b>word</b> to break the line before it.</li>
+            <li>Click <b>B</b> to enter “bold mode”, then click words to bold them. <span style="color:var(--warn-ink)">(notice the click now does something different)</span></li>
+            <li>Decode the row icons: <code>⤴ H • ‹ ›</code></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="col-head">
+          <span class="tag new">Proposed</span>
+          <span class="sub">Notion-feel, same safe engine</span>
+        </div>
+        <div class="drawer">
+          <div class="drawer-top"><span class="field">Inclusions</span></div>
+          <div class="editor-body" id="propMount"></div>
+        </div>
+        <div class="try">
+          <h4>Try it</h4>
+          <ul>
+            <li>Hover between two words → click the caret to split. No word-buttons.</li>
+            <li><b>Select</b> some words → a <b>Bold</b> chip appears. No mode.</li>
+            <li>Hover a line → click the <b>⠿</b> handle for labeled formatting.</li>
+            <li>Click <b>+ Add note</b> and just type — it feels like normal writing.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <p class="foot">This is a throwaway mockup for reacting to — placeholder text, not wired to real data. Nothing here changes the app. <b>The point:</b> same capabilities, same safety guarantee, but the proposed version has zero modes, no cryptic glyphs, and interactions you already know. Tell me what feels right and what doesn't, and I'll turn the winners into a real plan.</p>
+  </div>
+</div>
+
+<div class="bold-chip" id="boldChip"><b>B</b> Bold</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var SEED = [
+    { text: "DRYWALL AND PAINT SCOPE OF WORK", kind: "heading", list: null, indent: 0, bold: [], source: null },
+    { text: "Furnish all labor, material, and equipment for the following.", kind: "para", list: null, indent: 0, bold: [], source: null },
+    { text: "Gypsum board assemblies at all units and common areas.", kind: "para", list: "number", indent: 0, bold: [], source: null },
+    { text: "Level 4 finish at exposed walls and ceilings.", kind: "para", list: "number", indent: 0, bold: [], source: null },
+    { text: "Field painting of all gypsum surfaces, two coats.", kind: "para", list: "number", indent: 0, bold: [], source: null }
+  ];
+  function clone(arr){ return arr.map(function(b){ return { text:b.text, kind:b.kind, list:b.list, indent:b.indent, bold:b.bold.slice(), source:b.source }; }); }
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  // ── shared pure-ish ops (mirror the real engine's spirit) ──
+  function splitBlock(blocks, i, w){
+    var b=blocks[i]; var words=b.text.split(" ");
+    if(w<=0||w>=words.length) return;
+    var first={text:words.slice(0,w).join(" "), kind:b.kind, list:b.list, indent:b.indent, source:b.source,
+               bold:b.bold.filter(function(x){return x<w;})};
+    var second={text:words.slice(w).join(" "), kind:b.kind, list:b.list, indent:b.indent, source:b.source,
+                bold:b.bold.filter(function(x){return x>=w;}).map(function(x){return x-w;})};
+    blocks.splice(i,1,first,second);
+  }
+  function mergeUp(blocks,i){
+    if(i<=0) return; var prev=blocks[i-1], cur=blocks[i];
+    if(prev.source!==cur.source) return;
+    var off=prev.text.split(" ").length;
+    prev.text=prev.text+" "+cur.text;
+    prev.bold=prev.bold.concat(cur.bold.map(function(x){return x+off;}));
+    blocks.splice(i,1);
+  }
+  function toggleWord(blocks,i,w){
+    var b=blocks[i]; var k=b.bold.indexOf(w);
+    if(k>=0) b.bold.splice(k,1); else { b.bold.push(w); b.bold.sort(function(a,c){return a-c;}); }
+  }
+  function cycleList(b){ b.list = b.list==="bullet" ? "number" : b.list==="number" ? null : "bullet"; }
+
+  // ═══════════════════════ CURRENT ═══════════════════════
+  var curState = { blocks: clone(SEED), boldMode: false };
+  var curMount = document.getElementById("curMount");
+
+  function renderCurrent(){
+    var s=curState; curMount.innerHTML="";
+    // header
+    var hdr=document.createElement("div"); hdr.className="cur-hdr";
+    var lab=document.createElement("span"); lab.className="label"+(s.boldMode?" bold":""); lab.textContent=s.boldMode?"Bold mode":"Editing structure"; hdr.appendChild(lab);
+    var bt=document.createElement("button"); bt.className="btoggle"+(s.boldMode?" on":""); bt.textContent="B"; bt.title="Toggle bold mode";
+    bt.onclick=function(){ s.boldMode=!s.boldMode; renderCurrent(); }; hdr.appendChild(bt);
+    var sp=document.createElement("div"); sp.className="spacer"; hdr.appendChild(sp);
+    ["Save","Cancel","Reset to auto"].forEach(function(t,idx){ var b=document.createElement("button"); b.className="tbtn"+(idx===0?" primary":""); b.textContent=t; b.onclick=function(){ if(t==="Reset to auto"){ curState={blocks:clone(SEED),boldMode:false}; renderCurrent(); } }; hdr.appendChild(b); });
+    curMount.appendChild(hdr);
+    // helper
+    var help=document.createElement("div"); help.className="cur-help";
+    help.innerHTML = s.boldMode
+      ? 'Click any word to <span class="k">bold or unbold</span> it — the words stay locked. Click B to go back to restructuring.'
+      : 'The words are locked — you only restructure. <span class="k">Click a word to break the line before it.</span> Add your own notes below.';
+    curMount.appendChild(help);
+
+    s.blocks.forEach(function(b,i){
+      if(b.source==="user"){ curMount.appendChild(curNote(b,i)); return; }
+      var row=document.createElement("div"); row.className="cur-row";
+      var g=document.createElement("div"); g.className="glyphs";
+      g.appendChild(gbtn("⤴","Merge into previous line", i===0, function(){ mergeUp(s.blocks,i); renderCurrent(); }));
+      g.appendChild(gbtn("H", b.kind==="heading"?"Make a paragraph":"Make a heading", false, function(){ b.kind=b.kind==="heading"?"para":"heading"; renderCurrent(); }, b.kind==="heading"));
+      g.appendChild(gbtn(b.list==="number"?"1.":"•", "Cycle list style", b.kind==="heading", function(){ cycleList(b); renderCurrent(); }, b.list!=null && b.kind!=="heading"));
+      g.appendChild(gbtn("‹","Outdent", b.indent<=0, function(){ b.indent=Math.max(0,b.indent-1); renderCurrent(); }));
+      g.appendChild(gbtn("›","Indent", false, function(){ b.indent=Math.min(6,b.indent+1); renderCurrent(); }));
+      row.appendChild(g);
+      var wrap=document.createElement("div"); wrap.className="cur-words "+(s.boldMode?"boldmode":"split");
+      wrap.style.paddingLeft=(b.indent*14)+"px";
+      if(b.list && b.kind!=="heading"){ var m=document.createElement("span"); m.className="marker"; m.textContent=b.list==="number"?"1.":"•"; wrap.appendChild(m); }
+      b.text.split(" ").forEach(function(w,wi){
+        var wb=document.createElement("button");
+        wb.className="wbtn"+(b.kind==="heading"?" hd":"")+(b.bold.indexOf(wi)>=0 && b.kind!=="heading"?" bold":"");
+        wb.textContent=w;
+        wb.onclick=function(){
+          if(s.boldMode){ toggleWord(s.blocks,i,wi); }
+          else if(wi>0){ splitBlock(s.blocks,i,wi); }
+          renderCurrent();
+        };
+        wrap.appendChild(wb);
+        if(wi<b.text.split(" ").length-1) wrap.appendChild(document.createTextNode(" "));
+      });
+      row.appendChild(wrap);
+      curMount.appendChild(row);
+    });
+
+    var add=document.createElement("button"); add.className="addnote"; add.textContent="+ Add note";
+    add.onclick=function(){ s.blocks.push({text:"",kind:"para",list:null,indent:0,bold:[],source:"user"}); renderCurrent(); setTimeout(function(){ var tas=curMount.querySelectorAll("textarea"); if(tas.length) tas[tas.length-1].focus(); },0); };
+    curMount.appendChild(add);
+  }
+  function gbtn(txt,title,disabled,fn,on){ var b=document.createElement("button"); b.className="gbtn"+(on?" on":""); b.textContent=txt; b.title=title; b.disabled=!!disabled; if(!disabled) b.onclick=fn; return b; }
+  function curNote(b,i){
+    var row=document.createElement("div"); row.className="cur-note";
+    var g=document.createElement("div"); g.className="glyphs";
+    g.appendChild(gbtn("×","Remove note",false,function(){ curState.blocks.splice(i,1); renderCurrent(); }));
+    g.appendChild(gbtn(b.list==="number"?"1.":"•","Cycle list style",false,function(){ cycleList(b); renderCurrent(); }, b.list!=null));
+    g.appendChild(gbtn("‹","Outdent", b.indent<=0, function(){ b.indent=Math.max(0,b.indent-1); renderCurrent(); }));
+    g.appendChild(gbtn("›","Indent", false, function(){ b.indent=Math.min(6,b.indent+1); renderCurrent(); }));
+    row.appendChild(g);
+    var col=document.createElement("div"); col.className="ncol";
+    var lbl=document.createElement("span"); lbl.className="ynote-lbl"; lbl.textContent="Your note"; col.appendChild(lbl);
+    var ta=document.createElement("textarea"); ta.value=b.text; ta.placeholder="Type your note…"; ta.oninput=function(){ b.text=ta.value; }; col.appendChild(ta);
+    row.appendChild(col); return row;
+  }
+
+  // ═══════════════════════ PROPOSED ═══════════════════════
+  var propState = { blocks: clone(SEED) };
+  var propMount = document.getElementById("propMount");
+  var openMenu = -1;
+
+  function renderProposed(){
+    var s=propState; propMount.innerHTML="";
+    var hdr=document.createElement("div"); hdr.className="prop-hdr";
+    var t=document.createElement("span"); t.className="title"; t.textContent="Edit scope"; hdr.appendChild(t);
+    var h=document.createElement("span"); h.className="hint"; h.textContent="— select to bold · hover a line for options"; hdr.appendChild(h);
+    propMount.appendChild(hdr);
+
+    var list=document.createElement("div"); list.className="prop-list";
+    s.blocks.forEach(function(b,i){
+      if(b.source==="user"){ list.appendChild(propNote(b,i)); return; }
+      var line=document.createElement("div"); line.className="pline";
+      // handle
+      var hb=document.createElement("button"); hb.className="handle"+(openMenu===i?" open":""); hb.textContent="⠿"; hb.title="Format this line";
+      hb.onclick=function(e){ e.stopPropagation(); openMenu = openMenu===i?-1:i; renderProposed(); };
+      line.appendChild(hb);
+      var body=document.createElement("div"); body.className="p-body"; body.style.paddingLeft=(b.indent*16)+"px";
+      var textEl=document.createElement("div"); textEl.className="p-line-text "+(b.kind==="heading"?"heading":""); textEl.dataset.line=i;
+      if(b.list && b.kind!=="heading"){ var mk=document.createElement("span"); mk.className="p-marker"; mk.textContent=b.list==="number"?"1.":"•"; textEl.appendChild(mk); }
+      var words=b.text.split(" ");
+      words.forEach(function(w,wi){
+        var span=document.createElement("span"); span.className="p-word"+(b.bold.indexOf(wi)>=0 && b.kind!=="heading"?" bold":""); span.textContent=w; span.dataset.w=wi; textEl.appendChild(span);
+        if(wi<words.length-1){
+          var gap=document.createElement("span"); gap.className="p-gap"; gap.title="";
+          gap.innerHTML="&nbsp;";
+          gap.onclick=function(ev){ ev.stopPropagation(); splitBlock(s.blocks,i,wi+1); renderProposed(); };
+          textEl.appendChild(gap);
+        }
+      });
+      body.appendChild(textEl);
+      line.appendChild(body);
+      if(openMenu===i) line.appendChild(propMenu(b,i));
+      list.appendChild(line);
+    });
+    propMount.appendChild(list);
+
+    var add=document.createElement("button"); add.className="p-add"; add.innerHTML="<span>+</span> Add note";
+    add.onclick=function(){ s.blocks.push({text:"",kind:"para",list:null,indent:0,bold:[],source:"user"}); openMenu=-1; renderProposed(); setTimeout(function(){ var tas=propMount.querySelectorAll("textarea"); if(tas.length) tas[tas.length-1].focus(); },0); };
+    propMount.appendChild(add);
+  }
+
+  function propMenu(b,i){
+    var m=document.createElement("div"); m.className="p-menu";
+    function item(icon,label,on,fn,danger){ var btn=document.createElement("button"); if(on) btn.className="on"; if(danger) btn.className="danger"; btn.innerHTML='<span class="mi">'+icon+'</span>'+label; btn.onclick=function(e){ e.stopPropagation(); fn(); openMenu=-1; renderProposed(); }; return btn; }
+    m.appendChild(item("H", b.kind==="heading"?"Paragraph":"Heading", b.kind==="heading", function(){ b.kind=b.kind==="heading"?"para":"heading"; }));
+    m.appendChild(item("•","Bullet list", b.list==="bullet", function(){ b.list=b.list==="bullet"?null:"bullet"; }));
+    m.appendChild(item("1.","Numbered list", b.list==="number", function(){ b.list=b.list==="number"?null:"number"; }));
+    var sep=document.createElement("div"); sep.className="msep"; m.appendChild(sep);
+    m.appendChild(item("→","Indent", false, function(){ b.indent=Math.min(6,b.indent+1); }));
+    m.appendChild(item("←","Outdent", false, function(){ b.indent=Math.max(0,b.indent-1); }));
+    if(i>0){ var sep2=document.createElement("div"); sep2.className="msep"; m.appendChild(sep2); m.appendChild(item("⤴","Join with line above", false, function(){ mergeUp(propState.blocks,i); })); }
+    return m;
+  }
+
+  function propNote(b,i){
+    var wrap=document.createElement("div"); wrap.className="prop-note";
+    var col=document.createElement("div"); col.className="ncol";
+    var head=document.createElement("div"); head.className="nhead";
+    var lbl=document.createElement("span"); lbl.className="ynote-lbl"; lbl.textContent="✎ Your note"; head.appendChild(lbl);
+    var x=document.createElement("button"); x.className="xbtn"; x.textContent="×"; x.title="Remove note"; x.onclick=function(){ propState.blocks.splice(i,1); renderProposed(); }; head.appendChild(x);
+    col.appendChild(head);
+    var ta=document.createElement("textarea"); ta.value=b.text; ta.placeholder="Type your note…"; ta.oninput=function(){ b.text=ta.value; }; col.appendChild(ta);
+    wrap.appendChild(col); return wrap;
+  }
+
+  // close proposed menu on outside click
+  document.addEventListener("click", function(e){ if(openMenu>=0 && !e.target.closest(".p-menu") && !e.target.closest(".handle")){ openMenu=-1; renderProposed(); } });
+
+  // ── selection → bold chip (proposed only) ──
+  var chip=document.getElementById("boldChip");
+  var chipTargets=null;
+  function hideChip(){ chip.style.display="none"; chipTargets=null; }
+  document.addEventListener("selectionchange", function(){
+    var sel=window.getSelection();
+    if(!sel || sel.isCollapsed || sel.rangeCount===0){ hideChip(); return; }
+    var range=sel.getRangeAt(0);
+    var anchorEl = range.commonAncestorContainer;
+    if(anchorEl.nodeType===3) anchorEl=anchorEl.parentElement;
+    var textEl = anchorEl && anchorEl.closest ? anchorEl.closest(".p-line-text") : null;
+    if(!textEl){ hideChip(); return; }
+    var li = parseInt(textEl.dataset.line,10);
+    var b = propState.blocks[li];
+    if(b.kind==="heading"){ hideChip(); return; }
+    // which word spans intersect the selection?
+    var words=textEl.querySelectorAll(".p-word"); var hit=[];
+    words.forEach(function(sp){ if(range.intersectsNode(sp)) hit.push(parseInt(sp.dataset.w,10)); });
+    if(!hit.length){ hideChip(); return; }
+    chipTargets={ line: li, words: hit };
+    var rect=range.getBoundingClientRect();
+    chip.style.left=(rect.left+rect.width/2)+"px";
+    chip.style.top=(rect.top-6)+"px";
+    var allBold=hit.every(function(w){ return b.bold.indexOf(w)>=0; });
+    chip.innerHTML="<b>B</b> "+(allBold?"Unbold":"Bold");
+    chip.style.display="inline-flex";
+  });
+  chip.addEventListener("mousedown", function(e){
+    e.preventDefault();
+    if(!chipTargets) return;
+    var b=propState.blocks[chipTargets.line];
+    var allBold=chipTargets.words.every(function(w){ return b.bold.indexOf(w)>=0; });
+    chipTargets.words.forEach(function(w){
+      var k=b.bold.indexOf(w);
+      if(allBold){ if(k>=0) b.bold.splice(k,1); }
+      else if(k<0){ b.bold.push(w); }
+    });
+    b.bold.sort(function(a,c){return a-c;});
+    window.getSelection().removeAllRanges();
+    hideChip(); renderProposed();
+  });
+  window.addEventListener("scroll", hideChip, true);
+
+  renderCurrent();
+  renderProposed();
+})();
+</script>
