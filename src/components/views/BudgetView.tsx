@@ -13,12 +13,15 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { formatMoney } from '@/lib/derive'
+import { fuzzyMatchesAny } from '@/lib/fuzzy'
 import { boughtOut, budgetByDivision, budgetForecast, budgetTotals, buyoutGaps, commitmentsByCostCode, costCodeKey, costTypeMix, financialView, overBudget, scoped, sortedBudgetGroups } from '@/selectors'
 import type { BudgetDivisionGroup, BudgetForecast, BudgetSort, BudgetSortCol, CostCodeCommitment, CostTypeSlice, OverBudgetResult } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useSiteData } from '@/state/DataContext'
 import { mono, projectMeta, tone } from '@/theme/tokens'
 import type { BudgetLine, Commitment } from '@/types'
+import { Highlight } from '@/components/ui/Highlight'
+import { TableSearch } from '@/components/ui/TableSearch'
 
 // Seven columns. Widths are resizable; these defaults are mirrored in the CSS-var
 // fallback so rows render before the effect runs. `sort` = null → not sortable.
@@ -102,6 +105,7 @@ export function BudgetView() {
 
   const [sort, setSort] = useState<BudgetSort | null>(null)
   const [overBudgetOnly, setOverBudgetOnly] = useState(false)
+  const [query, setQuery] = useState('')
   // Which cost codes have their subcontract cross-link revealed (transient UI,
   // like sort/overBudgetOnly — not persisted in AppState). Keyed by cost-code prefix.
   const [expandedCostCodes, setExpandedCostCodes] = useState<Set<string>>(new Set())
@@ -112,7 +116,12 @@ export function BudgetView() {
   const kpiByLabel = (label: string) => kpis.find((k) => k.label === label)?.value ?? ''
 
   const lines = scoped(budgetLines, state.project)
-  const shownLines = overBudgetOnly ? lines.filter((l) => l.projectedOverUnder < 0) : lines
+  // Two filters compose: the over-budget toggle, then the fuzzy search (cost code
+  // number/name or division). Searching the `division` field means a division-name
+  // hit surfaces all of that division's lines. `preSearch` drives the "N of M" count.
+  const q = query.trim()
+  const preSearch = overBudgetOnly ? lines.filter((l) => l.projectedOverUnder < 0) : lines
+  const shownLines = q ? preSearch.filter((l) => fuzzyMatchesAny(query, [l.costCode, l.division])) : preSearch
   const groups = sortedBudgetGroups(budgetByDivision(shownLines), sort)
   const totals = budgetTotals(shownLines)
 
@@ -191,7 +200,7 @@ export function BudgetView() {
   const kpisCollapsed = state.budgetKpisCollapsed
   const analysisCollapsed = state.budgetAnalysisCollapsed
   const forecastCollapsed = state.budgetForecastCollapsed
-  const isExpanded = (division: string) => overBudgetOnly || state.expandedBudgetDivisions.has(division)
+  const isExpanded = (division: string) => overBudgetOnly || !!q || state.expandedBudgetDivisions.has(division)
 
   return (
     <div style={{ padding: '18px 22px 20px' }}>
@@ -271,8 +280,9 @@ export function BudgetView() {
           )}
 
           {/* toolbar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 2px 9px' }}>
-            <span style={{ fontSize: 12, color: 'var(--tx-tertiary)' }}>Click a division to drill in · a column header to sort · a code’s subcontract badge to see the commitment(s) behind it.</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 2px 9px', flexWrap: 'wrap' }}>
+            <TableSearch value={query} onChange={setQuery} placeholder="Filter cost codes…" width={200} count={{ shown: shownLines.length, total: preSearch.length }} />
+            <span style={{ fontSize: 12, color: 'var(--tx-tertiary)', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Click a division to drill in · a header to sort · a code’s subcontract badge for the commitment(s) behind it.</span>
             <span style={{ marginLeft: 'auto' }} />
             <button
               type="button"
@@ -289,7 +299,7 @@ export function BudgetView() {
 
           {shownLines.length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--tx-faint)', fontSize: 13 }}>
-              No over-budget lines — every cost code is on or under budget.
+              {q ? <>No cost codes match “{q}”.</> : 'No over-budget lines — every cost code is on or under budget.'}
             </div>
           ) : (
             <div style={{ background: '#fff', border: '1px solid var(--bd-2)', borderRadius: 9, overflow: 'hidden' }}>
@@ -345,12 +355,13 @@ export function BudgetView() {
                       expandedCostCodes={expandedCostCodes}
                       onToggleCostCode={toggleCostCode}
                       onOpenCommitment={openCommitment}
+                      query={query}
                     />
                   ))}
 
                   {/* grand total */}
                   <div style={{ ...rowBase, padding: '11px 16px', background: '#f9fafb', borderTop: '1px solid var(--bd-2)' }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{overBudgetOnly ? 'Total — over-budget exposure' : 'Total — all divisions'}</span>
+                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{q ? 'Total — matching lines' : overBudgetOnly ? 'Total — over-budget exposure' : 'Total — all divisions'}</span>
                     <Money v={totals.budget} strong />
                     <Money v={totals.committed} strong />
                     <PctCell budget={totals.budget} committed={totals.committed} strong />
@@ -403,6 +414,7 @@ function DivisionSection({
   expandedCostCodes,
   onToggleCostCode,
   onOpenCommitment,
+  query,
 }: {
   group: BudgetDivisionGroup
   expanded: boolean
@@ -411,6 +423,7 @@ function DivisionSection({
   expandedCostCodes: Set<string>
   onToggleCostCode: (code: string) => void
   onOpenCommitment: (c: Commitment) => void
+  query?: string
 }) {
   // A cost code can span two lines (Material + Subcontract); show the cross-link
   // affordance on the FIRST line of each code only (tracked while mapping).
@@ -433,7 +446,7 @@ function DivisionSection({
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
           <span aria-hidden style={{ display: 'inline-block', width: 9, flex: 'none', fontSize: 10, color: 'var(--tx-faint)', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .12s ease' }}>▸</span>
-          <span style={{ fontSize: 13, fontWeight: 680, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{divName(group.division)}</span>
+          <span style={{ fontSize: 13, fontWeight: 680, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><Highlight text={divName(group.division)} query={query} /></span>
           <span style={{ fontFamily: mono, fontSize: 10, fontWeight: 650, color: 'var(--tx-secondary)', background: 'var(--fill-3)', border: '1px solid var(--bd-1)', borderRadius: 20, padding: '1px 7px', flex: 'none' }}>{group.lines.length}</span>
         </span>
         <Money v={group.budget} strong />
@@ -454,7 +467,7 @@ function DivisionSection({
           const open = owns && expandedCostCodes.has(key)
           return (
             <Fragment key={`${l.costCode}|${l.costType}`}>
-              <LineRow line={l} link={owns ? link : null} expanded={open} onToggle={() => onToggleCostCode(key)} />
+              <LineRow line={l} link={owns ? link : null} expanded={open} onToggle={() => onToggleCostCode(key)} query={query} />
               {open && link && <CommitmentSubRows links={link} onOpen={onOpenCommitment} />}
             </Fragment>
           )
@@ -463,13 +476,13 @@ function DivisionSection({
   )
 }
 
-function LineRow({ line, link, expanded, onToggle }: { line: BudgetLine; link: CostCodeCommitment[] | null; expanded: boolean; onToggle: () => void }) {
+function LineRow({ line, link, expanded, onToggle, query }: { line: BudgetLine; link: CostCodeCommitment[] | null; expanded: boolean; onToggle: () => void; query?: string }) {
   const [ccnum, ccname] = codeParts(line.costCode)
   return (
     <div className="sl-hover-row" style={{ ...rowBase, padding: '9px 16px', borderBottom: '1px solid var(--bd-row)' }}>
       <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, paddingLeft: 19 }}>
-        <span style={{ fontFamily: mono, fontSize: 11.5, fontWeight: 650, color: 'var(--tx-primary)', flex: 'none' }}>{ccnum}</span>
-        <span style={{ fontSize: 12.5, color: 'var(--tx-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={ccname}>{ccname}</span>
+        <span style={{ fontFamily: mono, fontSize: 11.5, fontWeight: 650, color: 'var(--tx-primary)', flex: 'none' }}><Highlight text={ccnum} query={query} /></span>
+        <span style={{ fontSize: 12.5, color: 'var(--tx-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={ccname}><Highlight text={ccname} query={query} /></span>
         <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: '.3px', textTransform: 'uppercase', color: 'var(--tx-faint)', border: '1px solid var(--bd-1)', borderRadius: 4, padding: '1px 5px', flex: 'none' }}>{line.costType}</span>
         {link && <SubcontractChip count={link.length} expanded={expanded} onToggle={onToggle} />}
       </span>

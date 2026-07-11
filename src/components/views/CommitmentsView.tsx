@@ -13,12 +13,15 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { formatMoney, statusTone } from '@/lib/derive'
+import { fuzzyMatchesAny } from '@/lib/fuzzy'
 import { commitmentRollup, commitmentsSorted, scoped } from '@/selectors'
 import type { CommitmentSort, CommitmentSortCol } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useSiteData } from '@/state/DataContext'
 import { mono, tone } from '@/theme/tokens'
 import type { Commitment } from '@/types'
+import { Highlight } from '@/components/ui/Highlight'
+import { TableSearch } from '@/components/ui/TableSearch'
 
 // Eight columns. `sort` = null → not sortable (the identity column keeps the
 // deterministic default order instead).
@@ -96,10 +99,15 @@ export function CommitmentsView() {
   const { commitments } = useSiteData()
 
   const [sort, setSort] = useState<CommitmentSort | null>(null)
+  const [query, setQuery] = useState('')
 
   const rows = scoped(commitments, state.project)
   const rollup = commitmentRollup(rows)
   const sorted = commitmentsSorted(rows, sort)
+  const q = query.trim()
+  const shown = q ? sorted.filter((c) => fuzzyMatchesAny(query, [c.number, c.title, c.vendor, c.type, c.status])) : sorted
+  // KPI cards summarize the whole project; the table total reflects what's shown.
+  const totals = q ? commitmentRollup(shown) : rollup
 
   // Header click cycles: default order → column default dir → opposite → default order.
   const onSort = (col: CommitmentSortCol) =>
@@ -138,8 +146,11 @@ export function CommitmentsView() {
         </div>
       ) : (
         <>
-          <div style={{ margin: '16px 2px 9px', fontSize: 12, color: 'var(--tx-tertiary)' }}>
-            Click a row to open its detail · a column header to sort · financials are the latest pay application (“—” = no billing yet).
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '16px 2px 9px' }}>
+            <TableSearch value={query} onChange={setQuery} placeholder="Filter commitments…" count={{ shown: shown.length, total: rows.length }} />
+            <span style={{ fontSize: 12, color: 'var(--tx-tertiary)', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              Click a row to open its detail · a column header to sort · “—” = no billing yet.
+            </span>
           </div>
 
           <div style={{ background: '#fff', border: '1px solid var(--bd-2)', borderRadius: 9, overflow: 'hidden' }}>
@@ -183,21 +194,27 @@ export function CommitmentsView() {
                   })}
                 </div>
 
-                {sorted.map((c) => (
-                  <CommitmentRow key={c.id} c={c} onOpen={() => patch({ commitment: c })} />
-                ))}
+                {shown.length === 0 ? (
+                  <div style={{ padding: 40, textAlign: 'center', color: 'var(--tx-faint)', fontSize: 13 }}>No commitments match “{q}”.</div>
+                ) : (
+                  <>
+                    {shown.map((c) => (
+                      <CommitmentRow key={c.id} c={c} query={query} onOpen={() => patch({ commitment: c })} />
+                    ))}
 
-                {/* totals */}
-                <div style={{ ...rowBase, padding: '11px 16px', background: '#f9fafb', borderTop: '1px solid var(--bd-2)' }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 700 }}>Total — {rollup.count} commitments</span>
-                  <span />
-                  <span />
-                  <Money v={rollup.revised} />
-                  <Money v={rollup.billed} />
-                  <Money v={rollup.retainage} />
-                  <PctCell pct={rollup.pctComplete} />
-                  <span />
-                </div>
+                    {/* totals — reflect the filtered set when searching */}
+                    <div style={{ ...rowBase, padding: '11px 16px', background: '#f9fafb', borderTop: '1px solid var(--bd-2)' }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700 }}>Total — {totals.count} {q ? 'matching' : 'commitments'}</span>
+                      <span />
+                      <span />
+                      <Money v={totals.revised} />
+                      <Money v={totals.billed} />
+                      <Money v={totals.retainage} />
+                      <PctCell pct={totals.pctComplete} />
+                      <span />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -207,7 +224,7 @@ export function CommitmentsView() {
   )
 }
 
-function CommitmentRow({ c, onOpen }: { c: Commitment; onOpen: () => void }) {
+function CommitmentRow({ c, query, onOpen }: { c: Commitment; query?: string; onOpen: () => void }) {
   const missing = !c.hasRequisition
   return (
     <div
@@ -224,13 +241,13 @@ function CommitmentRow({ c, onOpen }: { c: Commitment; onOpen: () => void }) {
       style={{ ...rowBase, padding: '9px 16px', borderBottom: '1px solid var(--bd-row)', cursor: 'pointer' }}
     >
       <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
-        <span style={{ fontFamily: mono, fontSize: 11.5, fontWeight: 650, color: 'var(--tx-primary)', flex: 'none' }}>{c.number}</span>
+        <span style={{ fontFamily: mono, fontSize: 11.5, fontWeight: 650, color: 'var(--tx-primary)', flex: 'none' }}><Highlight text={c.number} query={query} /></span>
         <span style={{ fontSize: 12.5, color: 'var(--tx-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={c.title}>
-          {c.title}
+          <Highlight text={c.title} query={query} />
         </span>
       </span>
       <span style={{ fontSize: 12.5, color: 'var(--tx-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }} title={c.vendor}>
-        {c.vendor || '—'}
+        {c.vendor ? <Highlight text={c.vendor} query={query} /> : '—'}
       </span>
       <span
         style={{

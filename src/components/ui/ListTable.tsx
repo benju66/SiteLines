@@ -7,6 +7,7 @@ import { TOOLS } from '@/data/tools'
 import { mono, urgency as urgencyMap } from '@/theme/tokens'
 import type { Item } from '@/types'
 import { CodeBadge, ProjectTag, StatusPill, UrgencyDot, YouPill } from './primitives'
+import { Highlight } from './Highlight'
 
 const GRID = '12px 46px minmax(120px,1fr) 104px 132px 98px'
 
@@ -45,8 +46,9 @@ export function ListTableHeader({ whoLabel, rightLabel }: { whoLabel: string; ri
  * A single record row.
  * - `isHome`: the project tag sets the global scope (vs. opening detail).
  * - `showPill`: register mode shows the status pill above the date subline.
+ * - `query`: active register filter — highlights matching chars (title/num/party).
  */
-export function RecordRow({ record, isHome, showPill }: { record: Item; isHome: boolean; showPill: boolean }) {
+export function RecordRow({ record, isHome, showPill, query }: { record: Item; isHome: boolean; showPill: boolean; query?: string }) {
   const { patch } = useApp()
   const u = urgencyMap[record.urgency]
   const openDetail = () => patch({ detail: { tool: record.tool, record } })
@@ -60,8 +62,8 @@ export function RecordRow({ record, isHome, showPill }: { record: Item; isHome: 
       <UrgencyDot urgency={record.urgency} title={record.status?.label} />
       <CodeBadge code={TOOLS[record.tool].code} />
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 530, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{record.title}</div>
-        <div style={{ fontFamily: mono, fontSize: 10.5, color: 'var(--tx-faint)', marginTop: 1 }}>{record.num}</div>
+        <div style={{ fontSize: 13, fontWeight: 530, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><Highlight text={record.title} query={query} /></div>
+        <div style={{ fontFamily: mono, fontSize: 10.5, color: 'var(--tx-faint)', marginTop: 1 }}><Highlight text={record.num} query={query} /></div>
       </div>
       <ProjectTag project={record.project} onClick={isHome ? () => patch({ project: record.project }) : openDetail} />
       <div style={{ minWidth: 0 }}>
@@ -70,7 +72,7 @@ export function RecordRow({ record, isHome, showPill }: { record: Item; isHome: 
             <YouPill />
           </span>
         ) : (
-          <span style={{ fontSize: 12.5, color: 'var(--tx-secondary)' }}>{record.who}</span>
+          <span style={{ fontSize: 12.5, color: 'var(--tx-secondary)' }}><Highlight text={record.who} query={query} /></span>
         )}
       </div>
       <div style={{ textAlign: 'right', minWidth: 0 }}>

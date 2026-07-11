@@ -323,6 +323,9 @@ button {
 .sl-palette-row:hover {
   background: var(--fill-1);
 }
+.sl-table-search::placeholder {
+  color: var(--tx-faint-2);
+}
 
 /* Budget drill-down (Budget Insights): division hover + resizable-column handle */
 .sl-budget-divhead:hover {

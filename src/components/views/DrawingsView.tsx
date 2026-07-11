@@ -5,12 +5,16 @@
 // default = all expanded). Each row exposes an "Open PDF ↗" link (new tab) as
 // the interim view — the in-app zoomable viewer + revision picker are Phase 2.
 
+import { useState } from 'react'
 import type { CSSProperties } from 'react'
+import { fuzzyMatch, fuzzyMatchesAny } from '@/lib/fuzzy'
 import { groupByDiscipline } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useSiteData } from '@/state/DataContext'
 import { mono, projectMeta, tone as toneMap } from '@/theme/tokens'
 import type { Drawing } from '@/types'
+import { Highlight } from '@/components/ui/Highlight'
+import { TableSearch } from '@/components/ui/TableSearch'
 
 // 7 data columns + a trailing action cell:
 // Drawing Number · Title · Revision · Drawing Date · Received Date · Set · Status · (Open PDF)
@@ -110,7 +114,7 @@ function OpenPdf({ url }: { url: string | null }) {
   )
 }
 
-function SheetRow({ sheet, onOpen }: { sheet: Drawing; onOpen: (s: Drawing) => void }) {
+function SheetRow({ sheet, query, onOpen }: { sheet: Drawing; query?: string; onOpen: (s: Drawing) => void }) {
   return (
     <div
       className="sl-hover-row"
@@ -135,16 +139,16 @@ function SheetRow({ sheet, onOpen }: { sheet: Drawing; onOpen: (s: Drawing) => v
       }}
     >
       <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 650, color: 'var(--tx-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {sheet.number || '—'}
+        {sheet.number ? <Highlight text={sheet.number} query={query} /> : '—'}
       </span>
       <span style={{ fontSize: 13, fontWeight: 530, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={sheet.title}>
-        {sheet.title || '—'}
+        {sheet.title ? <Highlight text={sheet.title} query={query} /> : '—'}
       </span>
       <span style={{ fontFamily: mono, fontSize: 11.5, color: 'var(--tx-secondary)' }}>{sheet.revision || '—'}</span>
       <span style={cellFaint}>{sheet.drawingDate ?? '—'}</span>
       <span style={cellFaint}>{sheet.receivedDate ?? '—'}</span>
       <span style={{ fontSize: 11.5, color: 'var(--tx-tertiary)', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={sheet.set ?? undefined}>
-        {sheet.set ?? '—'}
+        {sheet.set ? <Highlight text={sheet.set} query={query} /> : '—'}
       </span>
       <span style={{ minWidth: 0 }}>
         <StatusTag status={sheet.status} />
@@ -160,6 +164,7 @@ export function DrawingsView() {
   const { state, patch } = useApp()
   const { drawings } = useSiteData()
   const groups = groupByDiscipline(drawings)
+  const [query, setQuery] = useState('')
 
   const openViewer = (sheet: Drawing) => patch({ viewer: sheet })
 
@@ -179,65 +184,85 @@ export function DrawingsView() {
     )
   }
 
+  // Filter within each discipline (number/title/set/revision); if the discipline
+  // NAME itself matches, keep all its sheets. Empty groups drop out.
+  const q = query.trim()
+  const visible = groups
+    .map((g) => {
+      if (!q) return { g, sheets: g.sheets }
+      const disciplineHit = fuzzyMatch(query, g.discipline) !== null
+      const sheets = disciplineHit ? g.sheets : g.sheets.filter((s) => fuzzyMatchesAny(query, [s.number, s.title, s.set, s.revision]))
+      return { g, sheets }
+    })
+    .filter((v) => v.sheets.length > 0)
+  const shownCount = visible.reduce((n, v) => n + v.sheets.length, 0)
+
   return (
     <div>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 22px 9px' }}>
+        <TableSearch value={query} onChange={setQuery} placeholder="Filter drawings…" count={{ shown: shownCount, total: drawings.length }} />
+      </div>
       <ColumnHeader />
-      {groups.map((g) => {
-        const collapsed = state.collapsedDisciplines.has(g.discipline)
-        return (
-          <section key={g.discipline}>
-            <button
-              type="button"
-              onClick={() => toggle(g.discipline)}
-              aria-expanded={!collapsed}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '11px 22px',
-                background: 'var(--fill-2)',
-                border: 'none',
-                borderBottom: '1px solid var(--bd-2)',
-                cursor: 'pointer',
-                textAlign: 'left',
-                fontFamily: 'inherit',
-              }}
-            >
-              <span
-                aria-hidden
+      {visible.length === 0 ? (
+        <div style={{ padding: 48, textAlign: 'center', color: 'var(--tx-faint)', fontSize: 13 }}>No drawings match “{q}”.</div>
+      ) : (
+        visible.map(({ g, sheets }) => {
+          const collapsed = q ? false : state.collapsedDisciplines.has(g.discipline) // force-expand while searching
+          return (
+            <section key={g.discipline}>
+              <button
+                type="button"
+                onClick={() => toggle(g.discipline)}
+                aria-expanded={!collapsed}
                 style={{
-                  display: 'inline-block',
-                  width: 10,
-                  fontSize: 10,
-                  color: 'var(--tx-faint)',
-                  transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)',
-                  transition: 'transform .12s ease',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '11px 22px',
+                  background: 'var(--fill-2)',
+                  border: 'none',
+                  borderBottom: '1px solid var(--bd-2)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontFamily: 'inherit',
                 }}
               >
-                ▸
-              </span>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: disciplineColor(g.discipline), flex: 'none' }} />
-              <span style={{ fontSize: 13.5, fontWeight: 680, color: 'var(--tx-primary)' }}>{g.discipline}</span>
-              <span
-                style={{
-                  fontFamily: mono,
-                  fontSize: 10.5,
-                  fontWeight: 650,
-                  color: 'var(--tx-secondary-2)',
-                  background: 'var(--fill-3)',
-                  border: '1px solid var(--bd-1)',
-                  borderRadius: 20,
-                  padding: '1px 8px',
-                }}
-              >
-                {g.sheets.length}
-              </span>
-            </button>
-            {!collapsed && g.sheets.map((s) => <SheetRow key={s.id} sheet={s} onOpen={openViewer} />)}
-          </section>
-        )
-      })}
+                <span
+                  aria-hidden
+                  style={{
+                    display: 'inline-block',
+                    width: 10,
+                    fontSize: 10,
+                    color: 'var(--tx-faint)',
+                    transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)',
+                    transition: 'transform .12s ease',
+                  }}
+                >
+                  ▸
+                </span>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: disciplineColor(g.discipline), flex: 'none' }} />
+                <span style={{ fontSize: 13.5, fontWeight: 680, color: 'var(--tx-primary)' }}><Highlight text={g.discipline} query={query} /></span>
+                <span
+                  style={{
+                    fontFamily: mono,
+                    fontSize: 10.5,
+                    fontWeight: 650,
+                    color: 'var(--tx-secondary-2)',
+                    background: 'var(--fill-3)',
+                    border: '1px solid var(--bd-1)',
+                    borderRadius: 20,
+                    padding: '1px 8px',
+                  }}
+                >
+                  {q ? `${sheets.length} / ${g.sheets.length}` : g.sheets.length}
+                </span>
+              </button>
+              {!collapsed && sheets.map((s) => <SheetRow key={s.id} sheet={s} query={query} onOpen={openViewer} />)}
+            </section>
+          )
+        })
+      )}
     </div>
   )
 }
