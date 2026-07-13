@@ -122,6 +122,22 @@ is rare (2 events) → opportunistic.
 | 1 | Change Events own view (like Budget/Commitments) — `sitelines_change_events` view + `ChangeEvent` seam + rollup KPIs (total/open exposure · open/closed/void) + scope & funding-bucket breakdown + enriched sortable register (CE # · title · scope · type · reason · est. cost · status) | ✅ Shipped (2026-07-13) — [view](sync/views/sitelines_change_events.sql) applied (`security_invoker`, no re-sync); typecheck + **240 tests** + build green; seed (`:5174`) + live (`:5175`) reconcile — **open exposure $19,395.00 = `sitelines_budget_pending` to the penny**; 165 events (6 open · 143 closed · 16 void); advisors clean on the view; `ballInCourt` untouched. Committed on `change-events-phase-1` |
 | 2 | Detail drawer + cross-links — `sitelines_change_event_line_items` view + `ChangeEventLineItem` seam + `changeEvent` on `AppState` + a `ChangeEventDrawer` overlay: priced line items grouped by cost code, the **commitment each change hits** (click → opens `CommitmentDrawer`), the **Budget-pending tie-back**, RFI-origin as a static "From RFI" chip (clickable nav deferred — 2 events) | ✅ Shipped (2026-07-13) — [view](sync/views/sitelines_change_event_line_items.sql) applied (`security_invoker`, no re-sync); typecheck + **243 tests** + build green; seed (`:5174`) + live (`:5175`) verified — **242 lines · 180→40 subs · every event's line sum = `est_cost` exactly**; CE #8 → SC-25-117-051 opens the real Commitment drawer; advisors clean. Committed on `change-events-phase-1` |
 
+### Parallel workstream: Invoicing (pay-application register)
+Enrich **Invoicing** from a bare register into a project-wide **pay-application register** —
+its own plan: [Notes/plans/Invoicing-Plan.md](Notes/plans/Invoicing-Plan.md). The money-out
+surface: 200 subcontractor pay apps across 49 commitments (Approved + 1 Under Review), the AIA
+G702 billing history that currently only lives per-commitment. **No re-sync**
+(`procore_requisitions_master` already synced; owner-side `procore_payment_applications_master`
+has just 1 row → a note). Chosen (owner, 2026-07-13) over Change Orders (owner COs total only
+$34K, no synced change-event trace). **Load-bearing rule:** cumulative G702 fields are summed
+over the **latest pay app per commitment** (not all rows) → billed $15,285,899 · retainage
+$622,877, tying to Commitments.
+
+| Phase | Surface | Status |
+|-------|---------|--------|
+| 1 | Invoicing own view — `sitelines_invoices` view (one row/requisition + G702 summary + `is_latest`) + `Invoice` seam + rollup KPIs (billed to date · retainage · this period · # under review) + enriched sortable register (vendor · pay app # · period · this period · billed · retainage · % · status) | ✅ Shipped (2026-07-13) — [view](sync/views/sitelines_invoices.sql) applied (`security_invoker`, no re-sync); typecheck + **251 tests** + build green; seed (`:5174`) + live (`:5175`) reconcile — **billed $15,285,899 + retainage $622,877 = Commitments** (isLatest-gated); 200 pay apps · 49 subs · 1 under review; advisors clean. Committed on `change-events-phase-1` |
+| 2 | G702 detail drawer (no new SQL) — `invoice` on `AppState` + an `InvoiceDrawer`: the G702 cover sheet (original → net COs → revised · billed · retainage breakdown · balance to finish) + **click-through to the commitment** it bills + owner-pay-app note | ⬜ Planned |
+
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**
 with its own plan: [Notes/plans/Procore-Data-Seam-Plan.md](Notes/plans/Procore-Data-Seam-Plan.md).

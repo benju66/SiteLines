@@ -15,6 +15,7 @@ export type ViewType =
   | 'budget'
   | 'commitments'
   | 'changeEvents'
+  | 'invoicing'
   | 'photos'
   | 'dailyLog'
   | 'drawings'
@@ -273,6 +274,42 @@ export interface ChangeEventLineItem {
   description: string // the line's scope text
   commitmentNumber: string // contract_number, e.g. "SC-25-117-220" ('' when none)
   commitmentId: string | null // "commitments:<procore id>" when it resolves to a commitment, else null
+}
+
+/**
+ * One pay application / requisition (Invoicing, Phase 1) — a subcontractor's
+ * invoice against a commitment. Reference data — NOT a court `Item`, never in My
+ * Court (like `Commitment`/`ChangeEvent`); the thin `Item` feed for invoicing still
+ * powers My Court / search / links. Loaded in the main snapshot (200 rows for OP
+ * III), not lazily. Raw DOLLARS; the selector layer formats and rolls up (never
+ * stored — DATA_CONTRACT §6). CUMULATIVE G702 fields (`billedToDate`, `retainage`)
+ * are cumulative-to-this-pay-app — the rollup sums them over `isLatest` rows only
+ * (the most recent pay app per commitment), NEVER across all rows. `commitmentId`
+ * matches `Commitment.id` for the drawer's Invoice → Commitment cross-link.
+ */
+export interface Invoice {
+  project: Project // 'opiii' for v1 (only OP III is synced)
+  id: string // "invoicing:<requisition id>"
+  number: string // pay-app number (invoice_number, else number)
+  vendor: string // vendor_name ('' for the owner pay app)
+  contract: string // contract_name
+  commitmentId: string | null // "commitments:<commitment id>" — matches Commitment.id; null when none
+  period: string // billing period, e.g. "05/01/26 - 05/31/26"
+  billingDate: string | null // ISO date ("2026-06-05") — kept raw so the register sorts
+  // chronologically (ISO sorts lexically); the view formats it at render (formatShortDate)
+  status: string // "Approved" | "Under Review"
+  final: boolean // marked the final pay app
+  isLatest: boolean // the most recent pay app for its commitment (gates the rollup's cumulative sums)
+  thisPeriod: number // current_payment_due (net due this period, net of retainage)
+  billedToDate: number // total_completed_and_stored_to_date (cumulative gross)
+  retainage: number // total_retainage (cumulative held)
+  pctComplete: number // 0..1
+  // G702 cover sheet (the Phase-2 drawer; carried now so Phase 2 needs no new view):
+  original: number // original_contract_sum
+  revised: number // contract_sum_to_date
+  netChangeByCOs: number // net_change_by_change_orders
+  earnedLessRetainage: number // total_earned_less_retainage
+  balanceToFinish: number // balance_to_finish_including_retainage
 }
 
 /**

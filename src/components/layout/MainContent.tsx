@@ -9,6 +9,7 @@ import { DirectoryView } from '@/components/views/DirectoryView'
 import { BudgetView } from '@/components/views/BudgetView'
 import { DrawingsView } from '@/components/views/DrawingsView'
 import { FinancialView } from '@/components/views/FinancialView'
+import { InvoicingView } from '@/components/views/InvoicingView'
 import { MyCourtView } from '@/components/views/MyCourtView'
 import { OverviewView } from '@/components/views/OverviewView'
 import { PhotosView } from '@/components/views/PhotosView'
@@ -24,6 +25,7 @@ const VIEWS: Record<ViewType, ComponentType> = {
   budget: BudgetView,
   commitments: CommitmentsView,
   changeEvents: ChangeEventsView,
+  invoicing: InvoicingView,
   photos: PhotosView,
   dailyLog: DailyLogView,
   overview: OverviewView,

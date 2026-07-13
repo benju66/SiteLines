@@ -27,7 +27,7 @@ export const TOOLS: Record<ToolKey, ToolMeta> = {
   budget: { label: 'Budget', code: 'BUD', view: 'budget', group: 1, desc: 'Cost control by division.' },
   commitments: { label: 'Commitments', code: 'COM', view: 'commitments', group: 1, desc: 'Subcontracts and purchase orders.' },
   changeOrders: { label: 'Change Orders', code: 'CO', view: 'list', group: 1, whoLabel: 'Waiting on', rightLabel: 'Status', desc: 'Executed and pending contract changes.' },
-  invoicing: { label: 'Invoicing', code: 'INV', view: 'list', group: 1, whoLabel: 'Waiting on', rightLabel: 'Amount', desc: 'Pay applications in and out.' },
+  invoicing: { label: 'Invoicing', code: 'INV', view: 'invoicing', group: 1, desc: 'Pay applications in and out.' },
 }
 
 export const GROUPS: NavGroup[] = [

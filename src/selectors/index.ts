@@ -11,7 +11,7 @@ import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
+import type { BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Invoice, Item, Project, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -1087,4 +1087,94 @@ export function changeEventLineGroups(lineItems: ChangeEventLineItem[]): ChangeE
     return au - bu || Math.abs(b.amount) - Math.abs(a.amount) || compareDrawingNumber(a.costCode, b.costCode)
   })
   return groups
+}
+
+// ---- Invoicing pay-application register (Invoicing, Phase 1) ----
+
+/** Totals for the Invoicing KPI cards. CUMULATIVE G702 fields (billed, retainage)
+ *  are summed over the LATEST pay app per commitment (`isLatest`) — summing all
+ *  rows would double-count, since each pay app's figures are cumulative-to-date. */
+export interface InvoiceRollup {
+  count: number // all pay apps
+  underReview: number // # Under Review (needs approval)
+  subs: number // distinct commitments billed (isLatest rows)
+  billedToDate: number // Σ isLatest.billedToDate — ties to Commitments' billed
+  retainageHeld: number // Σ isLatest.retainage — ties to Commitments' retainage
+  thisPeriod: number // Σ isLatest.thisPeriod — the current cycle's net billing
+}
+
+/** Roll pay apps up for the KPI cards. Deterministic, pure — no clock. The
+ *  isLatest gate is the correctness crux: cumulative fields sum over latest-per-
+ *  commitment only. */
+export function invoiceRollup(invoices: Invoice[]): InvoiceRollup {
+  let underReview = 0
+  let subs = 0
+  let billedToDate = 0
+  let retainageHeld = 0
+  let thisPeriod = 0
+  for (const inv of invoices) {
+    if (inv.status === 'Under Review') underReview++
+    if (inv.isLatest) {
+      subs++
+      billedToDate += inv.billedToDate
+      retainageHeld += inv.retainage
+      thisPeriod += inv.thisPeriod
+    }
+  }
+  return { count: invoices.length, underReview, subs, billedToDate, retainageHeld, thisPeriod }
+}
+
+/** A sortable column of the Invoicing register. */
+export type InvoiceSortCol = 'vendor' | 'period' | 'thisPeriod' | 'billed' | 'retainage' | 'pct' | 'status'
+export interface InvoiceSort {
+  col: InvoiceSortCol
+  dir: 'asc' | 'desc'
+}
+
+/** Deterministic tiebreak: billing date desc (newest first), then id. */
+const byInvoiceRecency = (a: Invoice, b: Invoice) => {
+  const da = a.billingDate ?? ''
+  const db = b.billingDate ?? ''
+  // billingDate is preformatted ("Jun 5, 2026"); fall back to id for a total order.
+  return db < da ? -1 : db > da ? 1 : a.id < b.id ? 1 : a.id > b.id ? -1 : 0
+}
+
+function invoiceMetric(inv: Invoice, col: InvoiceSortCol): number | string {
+  switch (col) {
+    case 'vendor':
+      return inv.vendor
+    case 'period':
+      return inv.billingDate ?? ''
+    case 'thisPeriod':
+      return inv.thisPeriod
+    case 'billed':
+      return inv.billedToDate
+    case 'retainage':
+      return inv.retainage
+    case 'pct':
+      return inv.pctComplete
+    case 'status':
+      return inv.status
+  }
+}
+
+/**
+ * The register order. `null` = the default: most recent pay app first (billing
+ * date desc), id-tiebroken. An explicit sort orders by that column (strings
+ * case-insensitive); ties fall back to recency so the result stays deterministic.
+ * Pure — the input is copied, never mutated.
+ */
+export function invoicesSorted(invoices: Invoice[], sort: InvoiceSort | null): Invoice[] {
+  const rows = [...invoices]
+  if (!sort) return rows.sort(byInvoiceRecency)
+  const sign = sort.dir === 'asc' ? 1 : -1
+  // 'period' sorts by the real billing date via the recency comparator, not the
+  // preformatted string (which wouldn't sort chronologically).
+  if (sort.col === 'period') return rows.sort((a, b) => -sign * byInvoiceRecency(a, b) || byInvoiceRecency(a, b))
+  return rows.sort((a, b) => {
+    const x = invoiceMetric(a, sort.col)
+    const y = invoiceMetric(b, sort.col)
+    const cmp = typeof x === 'string' ? strCompare(x, y as string) : x - (y as number)
+    return cmp * sign || byInvoiceRecency(a, b)
+  })
 }
