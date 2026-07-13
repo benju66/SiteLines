@@ -503,15 +503,23 @@ def enrich_commitments_with_detail(token: str, commitments, line_item_rows: list
     return True
 
 
-# Which pay apps get their G703 SOV line items pulled (Invoicing Phase 4). Each pull
-# is ONE extra GET on the per-requisition detail endpoint, so this bounds the added
-# rate-limit load on top of the nightly run.
-#   'latest' — the most recent pay app per commitment (~49 for OP III): the current
-#              "what's billed per line" for every sub, at low cost. RECOMMENDED default.
+# Which pay apps are IN SCOPE for G703 SOV line items (Invoicing Phase 4/4.1).
+#   'off'    — skip requisition SOV enrichment entirely (existing lines are left
+#              intact — the table is never touched, so nothing is re-pulled or purged).
+#   'latest' — the most recent pay app per commitment (~49 for OP III). RECOMMENDED.
 #   'all'    — every pay app (200): full per-period per-line history. A deliberate
-#              off-hours BACKFILL only — 200 GETs risks Procore's spike cooldown (the
-#              51 commitment GETs already do); do NOT run 'all' near the nightly ceiling.
+#              off-hours BACKFILL only (200 detail GETs risks Procore's spike cooldown).
+# Phase 4.1 makes this INCREMENTAL: within the chosen scope, only pay apps we don't
+# already have — or that aren't yet Approved (an Approved pay app's SOV is immutable) —
+# get a detail GET, so a steady nightly run pulls ~1-2, not ~49. Previously-synced pay
+# apps' lines are kept (accumulating per-period history), never purged.
 REQUISITION_DETAIL_SCOPE = 'latest'
+
+# A pay app's schedule of values is frozen once it reaches one of these statuses, so a
+# pay app we've already captured in one of them never needs another detail GET. Matched
+# case-insensitively so it works on the raw Procore value ('approved') or the cleaned
+# label ('Approved') — whichever the record carries at the point of the check.
+STABLE_REQUISITION_STATUSES = {'approved'}
 
 
 def _latest_requisition_per_commitment(requisitions):
@@ -532,10 +540,13 @@ def _latest_requisition_per_commitment(requisitions):
     return list(latest.values())
 
 
-def enrich_requisitions_with_detail(token: str, requisitions, line_item_rows: list, project_id) -> bool:
+def enrich_requisitions_with_detail(token: str, requisitions, line_item_rows: list, project_id, covered=None, pulled_ids=None) -> bool:
     """Fetch each pay app's DETAIL (show) endpoint to recover its G703 SOV line items,
-    into line_item_rows. Which pay apps are fetched is bounded by
-    REQUISITION_DETAIL_SCOPE ('latest' per commitment, or 'all').
+    into line_item_rows. Scope is bounded by REQUISITION_DETAIL_SCOPE ('latest'/'all');
+    `covered` (the set of requisition ids we already have lines for) makes it
+    INCREMENTAL — a pay app already captured AND in a stable (Approved) status is
+    skipped, so a steady run pulls only the new/still-editable ones. `pulled_ids`
+    collects the ids actually fetched (so the caller replaces only those, not all).
 
     The requisition list/show endpoints carry the G702 cover-sheet `summary` only. The
     G703 continuation sheet is the `/requisitions/{id}/detail` sub-resource (verified
@@ -552,24 +563,28 @@ def enrich_requisitions_with_detail(token: str, requisitions, line_item_rows: li
     enrich_commitments_with_detail. Compliant, minimum-necessary: one extra GET per pay
     app in scope, jittered for the spike rate-limit window (research §7).
     """
-    if not requisitions:
+    if not requisitions or REQUISITION_DETAIL_SCOPE == 'off':
         return True
     scoped = _latest_requisition_per_commitment(requisitions) if REQUISITION_DETAIL_SCOPE == 'latest' else requisitions
+    # Incremental: skip a pay app we already have IF it's in a frozen (Approved) status.
+    def needs_pull(r):
+        rid = str(r.get('id'))
+        stable = str(r.get('status') or '').strip().lower() in STABLE_REQUISITION_STATUSES
+        return not (covered is not None and rid in covered and stable)
+    to_pull = [r for r in scoped if isinstance(r, dict) and r.get('id') and needs_pull(r)]
     logging.info(
-        'Requisition SOV enrichment: pulling detail for %s of %s pay apps (scope=%s).',
-        len(scoped), len(requisitions), REQUISITION_DETAIL_SCOPE,
+        'Requisition SOV enrichment: %s of %s scoped pay apps need a detail pull (scope=%s, incremental).',
+        len(to_pull), len(scoped), REQUISITION_DETAIL_SCOPE,
     )
-    for r in scoped:
-        if not isinstance(r, dict):
-            continue
+    for r in to_pull:
         rid = r.get('id')
-        if not rid:
-            continue
         # The G703 lines are the `/detail` sub-resource — a LIST, not a field on the
         # requisition show (which has no line items). project_id required.
         detail = get_json(token, f'{BASE_API_URL}/rest/v1.0/requisitions/{rid}/detail?project_id={project_id}')
         if detail is None:
             return False
+        if pulled_ids is not None:
+            pulled_ids.add(str(rid))
         if isinstance(detail, list):
             for item in detail:
                 if not isinstance(item, dict) or not item.get('id'):
@@ -584,6 +599,48 @@ def enrich_requisitions_with_detail(token: str, requisitions, line_item_rows: li
                 line_item_rows.append(item)
         time.sleep(random.uniform(0.5, 1.5))  # jitter between detail calls (research §7)
     return True
+
+
+def requisition_lines_coverage(engine, project_id) -> set:
+    """The set of requisition ids (as str) that already have synced SOV lines for the
+    project — so enrich_requisitions_with_detail can skip pay apps we've captured."""
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        rows = conn.execute(text(
+            "SELECT DISTINCT raw->>'requisition_id' AS rid "
+            "FROM procore_requisition_line_items_master WHERE project_id = :pid"
+        ), {'pid': project_id}).fetchall()
+    return {row[0] for row in rows if row[0]}
+
+
+def write_requisition_lines(engine, project_id, rows, pulled_ids, run_ts) -> None:
+    """Incremental write (Phase 4.1): replace the SOV lines of ONLY the pay apps pulled
+    this run (delete + re-insert, so a changed pay app's removed lines drop), leaving
+    every previously-synced pay app's lines intact. Deliberately NO project-wide purge —
+    a skipped pay app's lines are still valid, and past pay apps accumulate their SOV."""
+    if not pulled_ids:
+        logging.info('Requisition SOV: no pay app needed a pull — line items unchanged.')
+        return
+    # Reuse MasterTable.add to clean + key + serialize the rows exactly like every master.
+    staged = MasterTable('procore_requisition_line_items_master', ['line_item_id', 'project_id'], 'project')
+    staged.add(rows, project_id, run_ts)
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        conn.execute(text(
+            "DELETE FROM procore_requisition_line_items_master "
+            "WHERE project_id = :pid AND raw->>'requisition_id' = ANY(:rids)"
+        ), {'pid': project_id, 'rids': list(pulled_ids)})
+        if staged.rows:
+            df = pd.DataFrame(staged.rows).drop_duplicates(subset=['line_item_id', 'project_id'], keep='last')
+            df.to_sql('_stg_req_li', conn, if_exists='replace', index=False)
+            conn.execute(text(
+                'INSERT INTO procore_requisition_line_items_master (line_item_id, project_id, raw, synced_at) '
+                'SELECT line_item_id, project_id, raw::jsonb, synced_at FROM _stg_req_li '
+                'ON CONFLICT (line_item_id, project_id) DO UPDATE '
+                'SET raw = EXCLUDED.raw, synced_at = EXCLUDED.synced_at'
+            ))
+            conn.execute(text('DROP TABLE IF EXISTS _stg_req_li'))
+    logging.info('Requisition SOV: replaced lines for %s pulled pay app(s).', len(pulled_ids))
 
 
 def _latest_final_attachments(distributions) -> list:
@@ -803,7 +860,6 @@ def run_pipeline() -> None:
     pccos_tbl = MasterTable('procore_prime_change_orders_master', ['id', 'project_id'], 'project')
     pcos_tbl = MasterTable('procore_potential_change_orders_master', ['id', 'project_id'], 'project')
     requisitions_tbl = MasterTable('procore_requisitions_master', ['id', 'project_id'], 'project')
-    requisition_line_items_tbl = MasterTable('procore_requisition_line_items_master', ['line_item_id', 'project_id'], 'project')
     direct_costs_tbl = MasterTable('procore_direct_costs_master', ['id', 'project_id'], 'project')
     rfis_tbl = MasterTable('procore_rfis_master', ['id', 'project_id'], 'project')
     submittals_tbl = MasterTable('procore_submittals_master', ['id', 'project_id'], 'project')
@@ -826,7 +882,7 @@ def run_pipeline() -> None:
         budget_views_tbl, budget_detail_rows_tbl,
         budget_mods_tbl, budget_meta_tbl, change_events_tbl, ce_line_items_tbl,
         co_packages_tbl, cors_tbl, commitments_tbl, commitment_line_items_tbl, ccos_tbl, prime_contracts_tbl, pay_apps_tbl,
-        pccos_tbl, pcos_tbl, requisitions_tbl, requisition_line_items_tbl, direct_costs_tbl, rfis_tbl, submittals_tbl,
+        pccos_tbl, pcos_tbl, requisitions_tbl, direct_costs_tbl, rfis_tbl, submittals_tbl,
         submittal_approvers_tbl,
         punch_tbl, meetings_tbl, drawings_tbl, specs_tbl, documents_tbl, schedule_tbl,
         weather_logs_tbl, manpower_logs_tbl, notes_logs_tbl,
@@ -845,6 +901,10 @@ def run_pipeline() -> None:
         'Discovered %s projects; %s allowlisted for deep extraction.',
         len(projects), sum(1 for p in projects if int(p.get('id')) in ACTIVE_PROJECT_IDS),
     )
+
+    # Engine is built up front so the per-project loop can do the incremental
+    # requisition-SOV write (Phase 4.1); the final flush loop reuses the same engine.
+    engine = build_engine()
 
     # -- Deep per-project extraction (GATED by the allowlist) --
     for proj in projects:
@@ -975,24 +1035,25 @@ def run_pipeline() -> None:
             pcos_tbl.add(pot, p_id, run_ts)
 
         # Requisitions (sub pay apps) + their G703 SOV line items. The requisition LIST
-        # is complete on its own (Phase 1–3 depend on it) → ALWAYS upserted; enrichment
-        # adds the per-line SOV from each pay app's detail endpoint, and the line-items
-        # table only upserts if EVERY scoped detail fetch succeeded (a partial pull never
-        # triggers the scoped purge). Scope bounded by REQUISITION_DETAIL_SCOPE. Mirrors
-        # the commitments pattern above.
+        # is complete on its own (Phase 1–3 depend on it) → ALWAYS upserted. The SOV
+        # enrichment (Phase 4/4.1) is INCREMENTAL: only new / not-yet-Approved pay apps
+        # get a detail GET (so a steady run pulls ~1-2, not ~49), and only those pulled
+        # pay apps' lines are rewritten — previously-synced lines are kept, never purged.
+        # A partial pull writes nothing (the whole batch is gated on full success).
         reqs = paginated_get(token, f'{BASE_API_URL}/rest/v1.1/requisitions?project_id={p_id}')
         if reqs is not None:
-            req_li_rows: list = []
-            req_detail_ok = enrich_requisitions_with_detail(token, reqs, req_li_rows, p_id)
             requisitions_tbl.add(reqs, p_id, run_ts)
-            if req_detail_ok:
-                requisition_line_items_tbl.add(req_li_rows, p_id, run_ts)
-            else:
-                logging.warning(
-                    'Requisition detail enrichment incomplete for project %s — pay apps '
-                    'upserted (list is complete), but skipping SOV line-items upsert (no purge) '
-                    'so a partial set cannot delete rows.', p_id
-                )
+            if REQUISITION_DETAIL_SCOPE != 'off':
+                covered = requisition_lines_coverage(engine, p_id)
+                req_li_rows: list = []
+                pulled: set = set()
+                if enrich_requisitions_with_detail(token, reqs, req_li_rows, p_id, covered, pulled):
+                    write_requisition_lines(engine, p_id, req_li_rows, pulled, run_ts)
+                else:
+                    logging.warning(
+                        'Requisition SOV enrichment incomplete for project %s — pay apps '
+                        'upserted (list is complete), but SOV line items left unchanged.', p_id
+                    )
 
         dc = paginated_get(token, f'{BASE_API_URL}/rest/v1.1/projects/{p_id}/direct_costs')
         if dc is not None:
@@ -1107,8 +1168,8 @@ def run_pipeline() -> None:
             notes_logs_tbl.add(notes, p_id, run_ts)
 
     # -- Write everything: staging → UPSERT → scoped purge, one txn per table --
+    # (requisition line items are written incrementally in the loop above, not here.)
     logging.info('Connecting to Supabase and writing masters...')
-    engine = build_engine()
     for tbl in company_tables + project_tables:
         tbl.flush(engine)
 
