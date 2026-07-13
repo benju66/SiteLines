@@ -151,7 +151,7 @@ function BucketPanel({ title, buckets }: { title: string; buckets: ChangeEventBu
 }
 
 export function ChangeEventsView() {
-  const { state } = useApp()
+  const { state, patch } = useApp()
   const { changeEvents } = useSiteData()
 
   const [sort, setSort] = useState<ChangeEventSort | null>(null)
@@ -226,7 +226,7 @@ export function ChangeEventsView() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '16px 2px 9px' }}>
             <TableSearch value={query} onChange={setQuery} placeholder="Filter change events…" count={{ shown: shown.length, total: rows.length }} />
             <span style={{ fontSize: 12, color: 'var(--tx-tertiary)', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Estimated cost · “−” = de-scope credit · a column header to sort.
+              Click a row to open its detail · “−” = de-scope credit · a column header to sort.
             </span>
           </div>
 
@@ -276,7 +276,7 @@ export function ChangeEventsView() {
                 ) : (
                   <>
                     {shown.map((e) => (
-                      <ChangeEventRow key={e.id} e={e} query={query} />
+                      <ChangeEventRow key={e.id} e={e} query={query} onOpen={() => patch({ changeEvent: e })} />
                     ))}
 
                     {/* totals — reflect the filtered set when searching; exposure excludes void */}
@@ -299,9 +299,21 @@ export function ChangeEventsView() {
   )
 }
 
-function ChangeEventRow({ e, query }: { e: ChangeEvent; query?: string }) {
+function ChangeEventRow({ e, query, onOpen }: { e: ChangeEvent; query?: string; onOpen: () => void }) {
   return (
-    <div style={{ ...rowBase, padding: '9px 16px', borderBottom: '1px solid var(--bd-row)' }}>
+    <div
+      className="sl-hover-row"
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault()
+          onOpen()
+        }
+      }}
+      style={{ ...rowBase, padding: '9px 16px', borderBottom: '1px solid var(--bd-row)', cursor: 'pointer' }}
+    >
       <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
         <span style={{ fontFamily: mono, fontSize: 11.5, fontWeight: 650, color: 'var(--tx-primary)', flex: 'none' }}>
           <Highlight text={e.number} query={query} />

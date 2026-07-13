@@ -254,6 +254,28 @@ export interface ChangeEvent {
 }
 
 /**
+ * One change-event line item (Change Events, Phase 2) — a priced line on a change
+ * event, carrying its cost code and the commitment it hits. Reference data — NOT a
+ * court `Item`, never in My Court. Loaded in the main snapshot (242 rows for OP III),
+ * not lazily — small enough to ride along (like `CommitmentLineItem`). Raw DOLLARS
+ * (negative = a de-scope credit); the selector layer groups by cost code and
+ * subtotals (never stored — DATA_CONTRACT §6). `commitmentId` resolves the
+ * `contract_number` to a real commitment (matches `Commitment.id`) for the drawer's
+ * Change-Event → Commitment cross-link; null when the line hits no commitment.
+ */
+export interface ChangeEventLineItem {
+  project: Project // 'opiii' for v1
+  id: string // "changeEvents:<ce id>:li:<line item id>" — stable list key
+  changeEventId: string // "changeEvents:<ce id>" — matches ChangeEvent.id (the drawer filter)
+  costCode: string // cost_code_number, e.g. "4-40000.000" ('' → grouped under 'Unassigned')
+  costCodeName: string // cost_code_name
+  amount: number // estimated_cost_amount (± ; credit = negative)
+  description: string // the line's scope text
+  commitmentNumber: string // contract_number, e.g. "SC-25-117-220" ('' when none)
+  commitmentId: string | null // "commitments:<procore id>" when it resolves to a commitment, else null
+}
+
+/**
  * One commitment — a subcontract (SC) or purchase order (PO) with its financial
  * position (Commitments, Phase 1). Reference data — NOT a court `Item` and never
  * enters My Court (like `Drawing`/`BudgetLine`). The commitments master is

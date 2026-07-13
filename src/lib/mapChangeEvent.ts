@@ -6,7 +6,7 @@
 // computes the rollup + breakdowns (never stored — DATA_CONTRACT §6).
 
 import { formatShortDate } from '@/lib/derive'
-import type { ChangeEvent, Project } from '@/types'
+import type { ChangeEvent, ChangeEventLineItem, Project } from '@/types'
 
 /** One row of the sitelines_change_events view (numerics arrive as strings). */
 export interface ChangeEventRow {
@@ -61,5 +61,33 @@ export function mapChangeEvent(row: ChangeEventRow): ChangeEvent {
     originRfi: !!row.origin_rfi,
     description: decodeEntities((row.description ?? '').trim()),
     createdAt: formatShortDate(row.created_at),
+  }
+}
+
+/** One row of the sitelines_change_event_line_items view (numerics arrive as strings). */
+export interface ChangeEventLineItemRow {
+  project: string | null
+  id: string
+  change_event_id: string
+  cost_code: string | null
+  cost_code_name: string | null
+  amount: number | string | null
+  description: string | null
+  commitment_number: string | null
+  commitment_id: string | null
+}
+
+/** Map a change-event-line-item view row to the ChangeEventLineItem contract shape. */
+export function mapChangeEventLineItem(row: ChangeEventLineItemRow): ChangeEventLineItem {
+  return {
+    project: (row.project ?? 'opiii') as Project,
+    id: row.id,
+    changeEventId: row.change_event_id,
+    costCode: (row.cost_code ?? '').trim(),
+    costCodeName: (row.cost_code_name ?? '').trim(),
+    amount: num(row.amount),
+    description: decodeEntities((row.description ?? '').trim()),
+    commitmentNumber: (row.commitment_number ?? '').trim(),
+    commitmentId: row.commitment_id,
   }
 }

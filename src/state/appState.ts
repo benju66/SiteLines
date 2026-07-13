@@ -2,7 +2,7 @@
 // derived from it via selectors — no view owns state. Ports cleanly to the
 // prototype's `state` object.
 
-import type { Commitment, Drawing, Item, ToolKey } from '@/types'
+import type { ChangeEvent, Commitment, Drawing, Item, ToolKey } from '@/types'
 
 export type ProjectScope = 'all' | 'mckenna' | 'opiii'
 export type TypeFilter = 'all' | 'rfi' | 'submittal' | 'co' | 'punch'
@@ -17,6 +17,7 @@ export interface AppState {
   savedView: SavedView // quick filter
   detail: { tool: ToolKey; record: Item } | null // open record drawer
   commitment: Commitment | null // open commitment detail drawer (the clicked register row)
+  changeEvent: ChangeEvent | null // open change-event detail drawer (the clicked register row)
   viewer: Drawing | null // open drawing-sheet viewer overlay (the clicked current sheet)
   submittalViewer: { id: string; name: string; downloadUrl?: string; procoreUrl?: string } | null // open Final-reviewed-submittal PDF viewer (id = "submittals:<id>")
   activity: boolean // activity drawer
@@ -39,6 +40,7 @@ export const initialState: AppState = {
   savedView: 'all',
   detail: null,
   commitment: null,
+  changeEvent: null,
   viewer: null,
   submittalViewer: null,
   activity: false,

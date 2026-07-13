@@ -7,6 +7,7 @@ import { Header } from '@/components/layout/Header'
 import { MainContent } from '@/components/layout/MainContent'
 import { ActivityDrawer } from '@/components/overlays/ActivityDrawer'
 import { CommandPalette } from '@/components/overlays/CommandPalette'
+import { ChangeEventDrawer } from '@/components/overlays/ChangeEventDrawer'
 import { CommitmentDrawer } from '@/components/overlays/CommitmentDrawer'
 import { DrawingViewerOverlay } from '@/components/overlays/DrawingViewerOverlay'
 import { RecordDetailDrawer } from '@/components/overlays/RecordDetailDrawer'
@@ -25,7 +26,7 @@ function useGlobalKeys() {
         e.preventDefault()
         patch((s) => ({ palette: !s.palette, query: '' }))
       } else if (e.key === 'Escape') {
-        patch({ palette: false, detail: null, commitment: null, activity: false, viewer: null, submittalViewer: null })
+        patch({ palette: false, detail: null, commitment: null, changeEvent: null, activity: false, viewer: null, submittalViewer: null })
       }
     }
     window.addEventListener('keydown', onKey)
@@ -116,6 +117,7 @@ export function App() {
       */}
       <RecordDetailDrawer />
       <CommitmentDrawer />
+      <ChangeEventDrawer />
       <DrawingViewerOverlay />
       <SubmittalViewerOverlay />
       <ActivityDrawer />

@@ -11,7 +11,7 @@ import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { BudgetLine, BudgetPending, ChangeEvent, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
+import type { BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -1041,4 +1041,50 @@ export function changeEventsSorted(events: ChangeEvent[], sort: ChangeEventSort 
     const cmp = typeof x === 'string' ? strCompare(x, y as string) : x - (y as number)
     return cmp * sign || byChangeEventNumber(a, b)
   })
+}
+
+// ---- Change Event detail drawer (Change Events, Phase 2) ----
+
+const UNASSIGNED_CODE = 'Unassigned'
+
+/** A change event's priced lines grouped by cost code, for the detail drawer:
+ *  each group is one cost code (code + name) with its lines and a subtotal (± ;
+ *  the subtotals sum to the event's estCost). Lines with no cost code fall under
+ *  'Unassigned'. */
+export interface ChangeEventLineGroup {
+  costCode: string // '' → 'Unassigned'
+  costCodeName: string
+  amount: number // subtotal for the code (± ; credit negative)
+  lineItems: ChangeEventLineItem[]
+}
+
+/**
+ * Group a change event's line items by cost code (drawer schedule). Groups ordered
+ * by |subtotal| desc with 'Unassigned' always last; lines within a group by |amount|
+ * desc (id-tiebroken). Deterministic, pure — the input is never mutated.
+ */
+export function changeEventLineGroups(lineItems: ChangeEventLineItem[]): ChangeEventLineGroup[] {
+  const buckets = new Map<string, ChangeEventLineItem[]>()
+  for (const li of lineItems) {
+    const key = li.costCode || UNASSIGNED_CODE
+    const arr = buckets.get(key)
+    if (arr) arr.push(li)
+    else buckets.set(key, [li])
+  }
+  const groups: ChangeEventLineGroup[] = [...buckets.entries()].map(([costCode, lis]) => {
+    const sorted = [...lis].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    return {
+      costCode: costCode === UNASSIGNED_CODE ? '' : costCode,
+      costCodeName: sorted.find((l) => l.costCodeName)?.costCodeName ?? '',
+      amount: lis.reduce((s, l) => s + l.amount, 0),
+      lineItems: sorted,
+    }
+  })
+  groups.sort((a, b) => {
+    // 'Unassigned' (empty costCode) always sinks last.
+    const au = a.costCode === '' ? 1 : 0
+    const bu = b.costCode === '' ? 1 : 0
+    return au - bu || Math.abs(b.amount) - Math.abs(a.amount) || compareDrawingNumber(a.costCode, b.costCode)
+  })
+  return groups
 }

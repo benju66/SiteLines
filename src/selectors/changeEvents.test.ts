@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { changeEventRollup, changeEventsByScope, changeEventsByType, changeEventsSorted } from '@/selectors'
-import type { ChangeEvent } from '@/types'
+import { changeEventLineGroups, changeEventRollup, changeEventsByScope, changeEventsByType, changeEventsSorted } from '@/selectors'
+import type { ChangeEvent, ChangeEventLineItem } from '@/types'
 
 // Minimal deterministic fixture — one of each status, mixed scopes/types, a credit,
 // an unscoped/untyped event, and a Void that must be excluded from every exposure.
@@ -102,5 +102,45 @@ describe('changeEventsSorted', () => {
     const input = [...EVENTS]
     changeEventsSorted(input, { col: 'estCost', dir: 'asc' })
     expect(input.map((e) => e.id)).toEqual(EVENTS.map((e) => e.id))
+  })
+})
+
+describe('changeEventLineGroups', () => {
+  const li = (id: string, costCode: string, amount: number, commitmentId: string | null = null): ChangeEventLineItem => ({
+    project: 'opiii',
+    id,
+    changeEventId: 'changeEvents:1',
+    costCode,
+    costCodeName: costCode ? `${costCode} name` : '',
+    amount,
+    description: 'd',
+    commitmentNumber: commitmentId ? 'SC-1' : '',
+    commitmentId,
+  })
+
+  const LINES = [
+    li('a', '2-22000.000', 30_000, 'commitments:9001'),
+    li('b', '8-84000.000', 12_000, 'commitments:9001'),
+    li('c', '8-84000.000', 40_000, 'commitments:9001'),
+    li('d', '', 4_500), // no cost code → Unassigned
+  ]
+
+  it('groups by cost code with subtotals that sum to the event total', () => {
+    const groups = changeEventLineGroups(LINES)
+    const total = groups.reduce((s, g) => s + g.amount, 0)
+    expect(total).toBe(30_000 + 12_000 + 40_000 + 4_500)
+    const glaze = groups.find((g) => g.costCode === '8-84000.000')
+    expect(glaze?.amount).toBe(52_000)
+    // within a group, lines order by |amount| desc → c (40k) before b (12k)
+    expect(glaze?.lineItems.map((l) => l.id)).toEqual(['c', 'b'])
+  })
+
+  it("orders groups by |subtotal| desc but always sinks 'Unassigned' last", () => {
+    const groups = changeEventLineGroups(LINES)
+    expect(groups.map((g) => g.costCode)).toEqual(['8-84000.000', '2-22000.000', ''])
+  })
+
+  it('is empty-safe', () => {
+    expect(changeEventLineGroups([])).toEqual([])
   })
 })
