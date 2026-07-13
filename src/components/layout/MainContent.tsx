@@ -2,6 +2,7 @@
 
 import { TOOLS } from '@/data/tools'
 import { useApp } from '@/state/AppContext'
+import { ChangeEventsView } from '@/components/views/ChangeEventsView'
 import { CommitmentsView } from '@/components/views/CommitmentsView'
 import { DailyLogView } from '@/components/views/DailyLogView'
 import { DirectoryView } from '@/components/views/DirectoryView'
@@ -22,6 +23,7 @@ const VIEWS: Record<ViewType, ComponentType> = {
   financial: FinancialView,
   budget: BudgetView,
   commitments: CommitmentsView,
+  changeEvents: ChangeEventsView,
   photos: PhotosView,
   dailyLog: DailyLogView,
   overview: OverviewView,

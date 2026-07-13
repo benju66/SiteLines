@@ -14,6 +14,7 @@ export type ViewType =
   | 'financial'
   | 'budget'
   | 'commitments'
+  | 'changeEvents'
   | 'photos'
   | 'dailyLog'
   | 'drawings'
@@ -222,6 +223,34 @@ export interface BudgetPending {
   costCode: string // budget cost_code, or the change-event cost-code name, or 'Unassigned'
   pendingAmount: number // Σ estimated_cost_amount of the cost code's open change-event line items
   openEvents: number // count of open change events touching the cost code
+}
+
+/**
+ * One change event (Change Events, Phase 1) — a POTENTIAL change being tracked and
+ * priced before it becomes a change order. Reference data — NOT a court `Item` and
+ * never enters My Court (like `Commitment`/`BudgetLine`); the thin `Item` feed for
+ * change events (itemsByTool.changeEvents) still powers My Court / search / links.
+ * The header carries scope + funding bucket + reason; `estCost` is the Σ of the
+ * event's line-item estimated costs (raw DOLLARS; negative = a de-scope credit). The
+ * selector layer formats $ / % and computes the rollup + breakdowns (never stored —
+ * DATA_CONTRACT §6). Open events are the source of Budget's pending-change section.
+ */
+export interface ChangeEvent {
+  project: Project // 'opiii' for v1 (only OP III is synced)
+  id: string // "changeEvents:<procore id>" — matches the Item-feed id
+  number: string // display number, e.g. "CE #12"
+  title: string
+  status: string // "Open" | "Closed" | "Void" (initcap of the raw status)
+  scope: string // "In Scope" | "Out of Scope" | "TBD" | '' (event_scope)
+  type: string // funding bucket (event_type): "Allowance" | "FP Contingency/Buyout" |
+  // "Owner Contingency" | "Original Budget" | '' when unset (older events carry none)
+  reason: string // change_order_change_reason, '' when none
+  estCost: number // Σ estimated_cost_amount of the event's line items (± ; credit = negative)
+  lineItems: number // # line items on the event
+  commitments: number // # distinct commitments the event's lines hit (via contract_number)
+  originRfi: boolean // true when the event originated from an RFI (change_event_origin_type)
+  description: string // HTML-stripped flat text
+  createdAt: string | null // preformatted display date (e.g. "Jun 11, 2026")
 }
 
 /**

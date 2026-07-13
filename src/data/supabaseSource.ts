@@ -10,6 +10,7 @@ import { TERMINAL } from '@/lib/ballInCourt'
 import type { DataSource, ItemsByTool, SiteData, Snapshot } from '@/lib/dataSource'
 import { deriveUrgency, formatDueDate, formatMoney, statusTone, timeAgo } from '@/lib/derive'
 import { mapBudgetLine, mapBudgetPending, type BudgetLineRow, type BudgetPendingRow } from '@/lib/mapBudgetLine'
+import { mapChangeEvent, type ChangeEventRow } from '@/lib/mapChangeEvent'
 import { mapCommitment, mapCommitmentBilling, mapCommitmentChangeOrder, mapCommitmentLineItem, type CommitmentRow, type CommitmentBillingRow, type CommitmentChangeOrderRow, type CommitmentLineItemRow } from '@/lib/mapCommitment'
 import { mapDrawing, mapDrawingRevision, type DrawingRow, type DrawingRevisionRow } from '@/lib/mapDrawing'
 import { mapRfiDetail, type RfiDetailRow } from '@/lib/mapRfiDetail'
@@ -136,7 +137,7 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
     name: 'supabase',
     async fetch(): Promise<Snapshot> {
       const now = new Date()
-      const [items, contacts, financials, activity, dailyLogs, drawings, budgetLines, budgetPending, commitments, commitmentLineItems] = await Promise.all([
+      const [items, contacts, financials, activity, dailyLogs, drawings, budgetLines, budgetPending, commitments, commitmentLineItems, changeEvents] = await Promise.all([
         fetchAll<ItemRow>(client, 'sitelines_items'),
         fetchAll<ContactRow>(client, 'sitelines_contacts'),
         fetchAll<FinRow>(client, 'sitelines_financials'),
@@ -147,6 +148,7 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
         fetchAll<BudgetPendingRow>(client, 'sitelines_budget_pending'),
         fetchAll<CommitmentRow>(client, 'sitelines_commitments'),
         fetchAll<CommitmentLineItemRow>(client, 'sitelines_commitment_line_items'),
+        fetchAll<ChangeEventRow>(client, 'sitelines_change_events'),
       ])
 
       const itemsByTool = emptyItemsByTool()
@@ -169,6 +171,7 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
         budgetPending: budgetPending.map(mapBudgetPending),
         commitments: commitments.map(mapCommitment),
         commitmentLineItems: commitmentLineItems.map(mapCommitmentLineItem),
+        changeEvents: changeEvents.map(mapChangeEvent),
       }
       // syncedAt = fetch time for now; a future sitelines_meta view can expose the
       // pipeline's true last-sync timestamp (max synced_at) once it's readable.

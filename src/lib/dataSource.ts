@@ -4,7 +4,7 @@
 // a supabaseDataSource reading the normalization views — the UI never knows
 // the difference.
 
-import type { ActivityEvent, BudgetLine, BudgetPending, Commitment, CommitmentDetail, CommitmentLineItem, Contact, DailyLogEntry, Drawing, DrawingRevision, FinancialSource, Item, ItemDetail, Photo, ToolKey } from '@/types'
+import type { ActivityEvent, BudgetLine, BudgetPending, ChangeEvent, Commitment, CommitmentDetail, CommitmentLineItem, Contact, DailyLogEntry, Drawing, DrawingRevision, FinancialSource, Item, ItemDetail, Photo, ToolKey } from '@/types'
 
 export type ItemsByTool = Record<ToolKey, Item[]>
 
@@ -21,6 +21,7 @@ export interface SiteData {
   budgetPending: BudgetPending[] // pending-change exposure per cost code (reference; the Budget forecast section)
   commitments: Commitment[] // subcontracts / POs with financials (reference; the Commitments register)
   commitmentLineItems: CommitmentLineItem[] // commitment SOV line items (reference; the Budget↔Commitment cross-link + drawer SOV)
+  changeEvents: ChangeEvent[] // potential changes, priced (reference; the Change Events cost-exposure ledger)
 }
 
 export interface Snapshot {

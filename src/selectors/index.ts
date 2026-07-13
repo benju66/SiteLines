@@ -11,7 +11,7 @@ import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { BudgetLine, BudgetPending, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
+import type { BudgetLine, BudgetPending, ChangeEvent, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Item, Project, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -897,4 +897,148 @@ export function budgetForecast(lines: BudgetLine[], pending: BudgetPending[]): B
   )
 
   return { divisions, total: { revised: totalRevised, pending: totalPending, projected: totalRevised + totalPending } }
+}
+
+// ---- Change Events cost-exposure ledger (Change Events, Phase 1) ----
+
+/**
+ * Rollup for the Change Events KPI cards. A change event is a POTENTIAL change,
+ * priced before it becomes a change order; `estCost` can be negative (a de-scope
+ * credit). Counts split by status; exposure sums EXCLUDE Void (dead paper). Open
+ * exposure is what feeds Budget's pending-change section (they must tie).
+ */
+export interface ChangeEventRollup {
+  count: number // all events
+  open: number
+  closed: number
+  voided: number
+  openExposure: number // Σ estCost of OPEN events — ties to Budget's pending section
+  activeExposure: number // Σ estCost of open + closed (excludes Void) — total change in flight/landed
+  outOfScopeExposure: number // Σ estCost of open+closed 'Out of Scope' events — the owner's likely bill
+}
+
+const isVoid = (e: ChangeEvent) => e.status.toLowerCase() === 'void'
+
+/** Roll change events up for the KPI cards. Deterministic, pure — no clock. */
+export function changeEventRollup(events: ChangeEvent[]): ChangeEventRollup {
+  let open = 0
+  let closed = 0
+  let voided = 0
+  let openExposure = 0
+  let activeExposure = 0
+  let outOfScopeExposure = 0
+  for (const e of events) {
+    const s = e.status.toLowerCase()
+    if (s === 'void') {
+      voided++
+      continue // Void is excluded from every exposure sum
+    }
+    if (s === 'open') {
+      open++
+      openExposure += e.estCost
+    } else if (s === 'closed') {
+      closed++
+    }
+    activeExposure += e.estCost
+    if (e.scope === 'Out of Scope') outOfScopeExposure += e.estCost
+  }
+  return { count: events.length, open, closed, voided, openExposure, activeExposure, outOfScopeExposure }
+}
+
+/** One scope/funding bucket for the breakdown bars: label + count + summed exposure. */
+export interface ChangeEventBucket {
+  key: string // the scope or funding-type label; '' → 'Unspecified'
+  count: number
+  exposure: number // Σ estCost of the bucket's events (± ; excludes Void)
+}
+
+const UNSPECIFIED = 'Unspecified'
+
+/** Bucket active (non-Void) events by a key, dropping empties. Shared by scope/type. */
+function bucketBy(events: ChangeEvent[], keyOf: (e: ChangeEvent) => string): Map<string, ChangeEventBucket> {
+  const map = new Map<string, ChangeEventBucket>()
+  for (const e of events) {
+    if (isVoid(e)) continue
+    const key = keyOf(e) || UNSPECIFIED
+    const b = map.get(key) ?? { key, count: 0, exposure: 0 }
+    b.count++
+    b.exposure += e.estCost
+    map.set(key, b)
+  }
+  return map
+}
+
+const SCOPE_ORDER = ['In Scope', 'Out of Scope', 'TBD']
+
+/**
+ * Exposure by scope (In Scope / Out of Scope / TBD) for the breakdown, Void
+ * excluded. Canonical scope order first, then any other scopes by |exposure| desc;
+ * 'Unspecified' always last. Pure — no clock, no mutation.
+ */
+export function changeEventsByScope(events: ChangeEvent[]): ChangeEventBucket[] {
+  return orderedBuckets(bucketBy(events, (e) => e.scope), SCOPE_ORDER)
+}
+
+/**
+ * Exposure by funding bucket (Allowance / Buyout / Owner Contingency / Original
+ * Budget / …) for the breakdown, Void excluded. Ordered by |exposure| desc;
+ * 'Unspecified' always last. Pure — no clock, no mutation.
+ */
+export function changeEventsByType(events: ChangeEvent[]): ChangeEventBucket[] {
+  return orderedBuckets(bucketBy(events, (e) => e.type), [])
+}
+
+/** Order buckets: canonical keys first (in the given order), then the rest by
+ *  |exposure| desc (name-tiebroken); 'Unspecified' sinks to the very bottom. */
+function orderedBuckets(map: Map<string, ChangeEventBucket>, canonical: string[]): ChangeEventBucket[] {
+  const known = canonical.filter((k) => map.has(k)).map((k) => map.get(k) as ChangeEventBucket)
+  const rest = [...map.values()]
+    .filter((b) => !canonical.includes(b.key) && b.key !== UNSPECIFIED)
+    .sort((a, b) => Math.abs(b.exposure) - Math.abs(a.exposure) || strCompare(a.key, b.key))
+  const unspecified = map.get(UNSPECIFIED)
+  return [...known, ...rest, ...(unspecified ? [unspecified] : [])]
+}
+
+/** A sortable column of the Change Events register. */
+export type ChangeEventSortCol = 'scope' | 'type' | 'reason' | 'estCost' | 'status'
+export interface ChangeEventSort {
+  col: ChangeEventSortCol
+  dir: 'asc' | 'desc'
+}
+
+/** Deterministic tiebreak: natural CE-number order, then id. */
+const byChangeEventNumber = (a: ChangeEvent, b: ChangeEvent) =>
+  compareDrawingNumber(a.number, b.number) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+
+function changeEventMetric(e: ChangeEvent, col: ChangeEventSortCol): number | string {
+  switch (col) {
+    case 'scope':
+      return e.scope
+    case 'type':
+      return e.type
+    case 'reason':
+      return e.reason
+    case 'estCost':
+      return e.estCost
+    case 'status':
+      return e.status
+  }
+}
+
+/**
+ * The register order. `null` = the default: largest estimated cost first (adds at
+ * the top, de-scope credits at the bottom), CE-number tiebroken. An explicit sort
+ * orders by that column (strings case-insensitive); ties fall back to the natural
+ * number order so the result stays deterministic. Pure — the input is copied.
+ */
+export function changeEventsSorted(events: ChangeEvent[], sort: ChangeEventSort | null): ChangeEvent[] {
+  const rows = [...events]
+  if (!sort) return rows.sort((a, b) => b.estCost - a.estCost || byChangeEventNumber(a, b))
+  const sign = sort.dir === 'asc' ? 1 : -1
+  return rows.sort((a, b) => {
+    const x = changeEventMetric(a, sort.col)
+    const y = changeEventMetric(b, sort.col)
+    const cmp = typeof x === 'string' ? strCompare(x, y as string) : x - (y as number)
+    return cmp * sign || byChangeEventNumber(a, b)
+  })
 }

@@ -105,6 +105,23 @@ function wholesale; Procore secrets already set (no new-secret gate). Owner-lock
 | 1 | `submittal-file` byte-streaming edge function (auth-gated proxy: Procore token → submittal detail v1.1 → latest `final_attachments` url → stream PDF inline) + `getFinalSubmittalFile` seam (supabase invoke / seed null) | ✅ Shipped + deployed (2026-07-13) — `submittal-file` v1 ACTIVE on `sitelines-sync` (`verify_jwt`+`authenticated`-role gated). Live-verified: unauth/publishable-key → 401; `submittals:63076362` → 200 `application/pdf` `%PDF-` 2.3 MB; no-final `submittals:63205968` → 404 `no_final`. 228 tests green. ⛔ awaiting owner "Approved" to commit |
 | 2 | `SubmittalViewerOverlay` (iframe + blob, loading/error/fallback) + open-from-row wiring in the record drawer + `AppState.submittalViewer` | ✅ Shipped (2026-07-13) — the drawer's Final-reviewed-submittal row opens the stamped PDF in-app (`getFinalSubmittalFile` → Blob → object URL → `<iframe>`), z-60 over the drawer; Download + Open-in-Procore fallbacks; ×/backdrop returns to the drawer, Esc closes all; revokes the object URL on close. Live-verified (`:5175`, logged in): `03 4100-1` Precast → blob PDF renders in-app, no download, no console errors, close returns to drawer. typecheck + 228 tests + build green. ⛔ awaiting owner "Approved" to commit |
 
+### Parallel workstream: Change Events (cost-exposure ledger)
+Enrich **Change Events** from a bare register (CE # · title · blank "Owner" · status) into a
+**cost-exposure ledger** — its own plan: [Notes/plans/Change-Events-Plan.md](Notes/plans/Change-Events-Plan.md).
+Closes the change-money loop: Budget's pending-change section already reads OPEN change
+events, so Change Events is literally its source. **No re-sync** — both masters
+(`procore_change_events_master` 165 events · `procore_change_event_line_items_master` 242
+lines) are already synced; only new read-only Supabase views. Locked (owner, 2026-07-13):
+**cost-exposure lens** (own analytics view like Budget/Commitments, money-first — scope
+In/Out/TBD + funding bucket Allowance/Buyout/Owner-Contingency/Original) **with the drawer +
+cross-links in v1**. The line→commitment cross-link is dense (180 lines → 40 subs); RFI-origin
+is rare (2 events) → opportunistic.
+
+| Phase | Surface | Status |
+|-------|---------|--------|
+| 1 | Change Events own view (like Budget/Commitments) — ⛔ `sitelines_change_events` view + `ChangeEvent` seam + rollup KPIs (total/open exposure · open/closed/void) + scope & funding-bucket breakdown + enriched sortable register (CE # · title · scope · type · reason · est. cost · status). Open exposure must tie to Budget's pending section | 🚧 Built + seed-verified (typecheck + **240 tests** + build green; `:5174` — KPIs/breakdown/sort/credits render, Budget & My Court unaffected). View SQL ([sitelines_change_events.sql](sync/views/sitelines_change_events.sql)) drafted + **read-only validated** (open exposure $19,395.00 = `sitelines_budget_pending` to the penny). ⛔ awaiting owner "Approved" to apply the view + live tie-out; not committed |
+| 2 | Detail drawer + cross-links — ⛔ `sitelines_change_event_line_items` view + `ChangeEventLineItem` seam + `changeEvent` on `AppState` + a `ChangeEventDrawer` overlay: priced line items grouped by cost code, the **commitment each change hits** (click → opens `CommitmentDrawer`), the **Budget-pending tie-back**, RFI-origin opportunistic | ⬜ Planned |
+
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**
 with its own plan: [Notes/plans/Procore-Data-Seam-Plan.md](Notes/plans/Procore-Data-Seam-Plan.md).
