@@ -8,6 +8,7 @@
 // CommitmentDrawer). Reference data; nothing here touches My Court. Dumb UI —
 // formatting happens here.
 
+import { useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { TOOLS } from '@/data/tools'
 import { formatMoney, formatShortDate, statusTone } from '@/lib/derive'
@@ -15,7 +16,7 @@ import { invoiceHistoryFor, invoiceLinesFor } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useSiteData } from '@/state/DataContext'
 import { mono, projectMeta, tone } from '@/theme/tokens'
-import type { Invoice } from '@/types'
+import type { Invoice, InvoiceLineItem } from '@/types'
 import { CodeBadge, ProjectTag, StatusPill } from '@/components/ui/primitives'
 import { Backdrop } from './Backdrop'
 
@@ -55,6 +56,74 @@ function SovFig({ label, v, strong = false }: { label: string; v: number; strong
   )
 }
 
+/** The G703 schedule of values for one pay app — the line-by-line billing, rendered
+ *  inline when a pay app is expanded. Each line: description + % bar + this period /
+ *  to date + scheduled · retainage · balance. */
+function SovLines({ lines }: { lines: InvoiceLineItem[] }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 9 }}>
+      {lines.map((l) => (
+        <div key={l.id} style={{ background: 'var(--fill-1)', border: '1px solid var(--bd-row)', borderRadius: 8, padding: '8px 10px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <span style={{ fontFamily: mono, fontSize: 10, fontWeight: 700, color: 'var(--tx-secondary-2)', background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 4, padding: '0 5px', flex: 'none' }}>{l.itemNumber || '—'}</span>
+            <span style={{ fontSize: 12, color: 'var(--tx-primary)', lineHeight: 1.35, flex: 1, minWidth: 0 }}>{l.description || '—'}</span>
+            <span style={{ fontSize: 10.5, fontFamily: mono, color: 'var(--tx-faint)', flex: 'none' }}>{Math.round(l.pctComplete * 100)}%</span>
+          </div>
+          <div style={{ marginTop: 6, height: 5, borderRadius: 3, background: 'var(--bd-3)', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.min(100, Math.max(0, l.pctComplete * 100))}%`, height: '100%', background: projectMeta.opiii.color }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 7 }}>
+            <SovFig label="This period" v={l.thisPeriod} strong />
+            <div style={{ flex: 1 }} />
+            <SovFig label="To date" v={l.billedToDate} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 5, fontSize: 10.5, color: 'var(--tx-faint)' }}>
+            <span>Scheduled <span style={{ fontFamily: mono, color: 'var(--tx-tertiary)' }}>{formatMoney(l.scheduledValue)}</span></span>
+            <span>Retainage <span style={{ fontFamily: mono, color: 'var(--tx-tertiary)' }}>{formatMoney(l.retainage)}</span></span>
+            <span>Balance <span style={{ fontFamily: mono, color: 'var(--tx-tertiary)' }}>{formatMoney(l.balanceToFinish)}</span></span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** One pay-app row in the accordion: number · period · this-period/to-date · status.
+ *  Expandable (a rotating ▸ + a "view schedule of values" hint) when it has an SOV;
+ *  a plain summary otherwise. The expanded SOV renders as a sibling, below this row. */
+function SummaryRow({ h, hasSov, isOpen, isLatest, onToggle }: { h: Invoice; hasSov: boolean; isOpen: boolean; isLatest: boolean; onToggle?: () => void }) {
+  const pad = hasSov ? 17 : 0
+  const inner = (
+    <>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        {hasSov && (
+          <span aria-hidden style={{ display: 'inline-block', width: 9, fontSize: 10, color: 'var(--tx-faint)', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .12s ease', flex: 'none' }}>▸</span>
+        )}
+        <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 650, color: 'var(--tx-secondary-2)', flex: 'none' }}>{h.number}</span>
+        <span style={{ fontSize: 12, color: 'var(--tx-tertiary)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.period || (formatShortDate(h.billingDate) ?? '—')}</span>
+        {isLatest && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.3px', textTransform: 'uppercase', color: 'var(--tx-faint)', flex: 'none' }}>Current</span>}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 6, paddingLeft: pad }}>
+        <span style={{ fontSize: 11, color: 'var(--tx-tertiary)' }}>This period</span>
+        <span style={{ fontFamily: mono, fontSize: 11.5, color: 'var(--tx-secondary)' }}>{formatMoney(h.thisPeriod)}</span>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 11, color: 'var(--tx-tertiary)' }}>To date</span>
+        <span style={{ fontFamily: mono, fontSize: 11.5, color: 'var(--tx-secondary)' }}>{formatMoney(h.billedToDate)}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, paddingLeft: pad }}>
+        {h.status && <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '.2px', color: h.status === 'Under Review' ? tone.info.c : 'var(--tx-faint)' }}>{h.status}</span>}
+        {hasSov && <span style={{ fontSize: 10, color: 'var(--tx-faint)' }}>· {isOpen ? 'hide' : 'view'} schedule of values</span>}
+      </div>
+    </>
+  )
+  if (!onToggle) return <div style={{ padding: '9px 12px' }}>{inner}</div>
+  return (
+    <button type="button" onClick={onToggle} aria-expanded={isOpen} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '9px 12px', cursor: 'pointer', fontFamily: 'inherit' }}>
+      {inner}
+    </button>
+  )
+}
+
 export function InvoiceDrawer() {
   const { state, patch } = useApp()
   const invoice = state.invoice
@@ -66,12 +135,21 @@ function InvoicePanel({ invoice: inv, onClose }: { invoice: Invoice; onClose: ()
   const { patch } = useApp()
   const { commitments, invoices, invoiceLineItems } = useSiteData()
   const commitment = inv.commitmentId ? commitments.find((c) => c.id === inv.commitmentId) : undefined
-  // The sub's full pay-app chain (current + past) — click one to switch the drawer.
+  // The sub's pay-app chain (current + past), newest first. Each pay app expands to its
+  // own G703 schedule of values inline (accordion). SOV is synced for the latest pay app
+  // per sub, so a past pay app may have none — those rows aren't expandable.
   const history = invoiceHistoryFor(invoices, inv)
-  // This pay app's G703 schedule of values (Phase 5) — synced for the latest pay app
-  // per sub, so a past pay app may have none (shows nothing rather than a stub).
-  const lines = invoiceLinesFor(invoiceLineItems, inv)
-  const sovTotal = lines.reduce((s, l) => s + l.billedToDate, 0)
+  // Auto-expand the pay app the drawer opened on (if it has an SOV).
+  const [expanded, setExpanded] = useState<Set<string>>(() =>
+    invoiceLinesFor(invoiceLineItems, inv).length > 0 ? new Set([inv.id]) : new Set(),
+  )
+  const toggle = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   const openCommitment = () => {
     if (commitment) patch({ invoice: null, commitment })
@@ -137,78 +215,39 @@ function InvoicePanel({ invoice: inv, onClose }: { invoice: Invoice; onClose: ()
             <G702Line label="Balance to finish (incl. retainage)" value={inv.balanceToFinish} />
           </div>
 
-          {/* schedule of values (G703) — the line-by-line billing behind the cover sheet */}
-          {lines.length > 0 && (
-            <>
-              <div style={{ ...sectionLabel, margin: '18px 0 9px', display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span>Schedule of values ({lines.length})</span>
-                <span style={{ fontFamily: mono, fontSize: 10.5, fontWeight: 600, color: 'var(--tx-faint)', textTransform: 'none', letterSpacing: 0 }}>{formatMoney(sovTotal)} to date</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {lines.map((l) => (
-                  <div key={l.id} style={{ background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 9, padding: '10px 12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                      <span style={{ fontFamily: mono, fontSize: 10.5, fontWeight: 700, color: 'var(--tx-secondary-2)', background: 'var(--fill-3)', border: '1px solid var(--bd-1)', borderRadius: 4, padding: '0 5px', flex: 'none' }}>{l.itemNumber || '—'}</span>
-                      <span style={{ fontSize: 12.5, color: 'var(--tx-primary)', lineHeight: 1.35, flex: 1, minWidth: 0 }}>{l.description || '—'}</span>
-                      <span style={{ fontSize: 10.5, fontFamily: mono, color: 'var(--tx-faint)', flex: 'none' }}>{Math.round(l.pctComplete * 100)}%</span>
-                    </div>
-                    {/* % complete bar (hand-rolled, one token source) */}
-                    <div style={{ marginTop: 7, height: 5, borderRadius: 3, background: 'var(--bd-3)', overflow: 'hidden' }}>
-                      <div style={{ width: `${Math.min(100, Math.max(0, l.pctComplete * 100))}%`, height: '100%', background: projectMeta.opiii.color }} />
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 8 }}>
-                      <SovFig label="This period" v={l.thisPeriod} strong />
-                      <div style={{ flex: 1 }} />
-                      <SovFig label="To date" v={l.billedToDate} />
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 5, fontSize: 10.5, color: 'var(--tx-faint)' }}>
-                      <span>Scheduled <span style={{ fontFamily: mono, color: 'var(--tx-tertiary)' }}>{formatMoney(l.scheduledValue)}</span></span>
-                      <span>Retainage <span style={{ fontFamily: mono, color: 'var(--tx-tertiary)' }}>{formatMoney(l.retainage)}</span></span>
-                      <span>Balance <span style={{ fontFamily: mono, color: 'var(--tx-tertiary)' }}>{formatMoney(l.balanceToFinish)}</span></span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* billing history — the sub's current + past pay apps; click to switch */}
-          {history.length > 1 && (
-            <>
-              <div style={{ ...sectionLabel, margin: '18px 0 9px' }}>Billing history ({history.length})</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {history.map((h) => {
-                  const viewing = h.id === inv.id
-                  return (
-                    <button
-                      key={h.id}
-                      type="button"
-                      onClick={() => !viewing && patch({ invoice: h })}
-                      style={{ textAlign: 'left', background: viewing ? tone.info.bg : '#fff', border: `1px solid ${viewing ? tone.info.bd : 'var(--bd-1)'}`, borderRadius: 9, padding: '9px 12px', cursor: viewing ? 'default' : 'pointer', fontFamily: 'inherit' }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                        <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 650, color: 'var(--tx-secondary-2)', flex: 'none' }}>{h.number}</span>
-                        <span style={{ fontSize: 12, color: 'var(--tx-tertiary)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.period || (formatShortDate(h.billingDate) ?? '—')}</span>
-                        {viewing ? (
-                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.3px', textTransform: 'uppercase', color: tone.info.c, flex: 'none' }}>Viewing</span>
-                        ) : h.isLatest ? (
-                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.3px', textTransform: 'uppercase', color: 'var(--tx-faint)', flex: 'none' }}>Current</span>
-                        ) : null}
+          {/* pay applications — each one expands to its own G703 schedule of values
+              inline; the pay app the drawer opened on is expanded by default */}
+          <div style={{ ...sectionLabel, margin: '18px 0 9px' }}>
+            {history.length > 1 ? `Pay applications (${history.length})` : 'Schedule of values'}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {history.map((h) => {
+              const hLines = invoiceLinesFor(invoiceLineItems, h)
+              const hasSov = hLines.length > 0
+              const isOpen = expanded.has(h.id)
+              const opened = h.id === inv.id
+              const sovTotal = hLines.reduce((s, l) => s + l.billedToDate, 0)
+              return (
+                <div key={h.id} style={{ background: opened ? tone.info.bg : '#fff', border: `1px solid ${opened ? tone.info.bd : 'var(--bd-1)'}`, borderRadius: 9, overflow: 'hidden' }}>
+                  <SummaryRow
+                    h={h}
+                    hasSov={hasSov}
+                    isOpen={isOpen}
+                    isLatest={h.isLatest}
+                    onToggle={hasSov ? () => toggle(h.id) : undefined}
+                  />
+                  {hasSov && isOpen && (
+                    <div style={{ padding: '0 12px 11px' }}>
+                      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--tx-faint)', margin: '2px 0 0' }}>
+                        Schedule of values · {hLines.length} lines · {formatMoney(sovTotal)} to date
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 6 }}>
-                        <span style={{ fontSize: 11, color: 'var(--tx-tertiary)' }}>This period</span>
-                        <span style={{ fontFamily: mono, fontSize: 11.5, color: 'var(--tx-secondary)' }}>{formatMoney(h.thisPeriod)}</span>
-                        <div style={{ flex: 1 }} />
-                        <span style={{ fontSize: 11, color: 'var(--tx-tertiary)' }}>To date</span>
-                        <span style={{ fontFamily: mono, fontSize: 11.5, color: 'var(--tx-secondary)' }}>{formatMoney(h.billedToDate)}</span>
-                      </div>
-                      {h.status && <div style={{ marginTop: 5, fontSize: 10, fontWeight: 600, letterSpacing: '.2px', color: h.status === 'Under Review' ? tone.info.c : 'var(--tx-faint)' }}>{h.status}</div>}
-                    </button>
-                  )
-                })}
-              </div>
-            </>
-          )}
+                      <SovLines lines={hLines} />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
 
           {/* cross-link: the commitment this pay app bills against */}
           {inv.commitmentId && (
