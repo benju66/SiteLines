@@ -503,6 +503,89 @@ def enrich_commitments_with_detail(token: str, commitments, line_item_rows: list
     return True
 
 
+# Which pay apps get their G703 SOV line items pulled (Invoicing Phase 4). Each pull
+# is ONE extra GET on the per-requisition detail endpoint, so this bounds the added
+# rate-limit load on top of the nightly run.
+#   'latest' — the most recent pay app per commitment (~49 for OP III): the current
+#              "what's billed per line" for every sub, at low cost. RECOMMENDED default.
+#   'all'    — every pay app (200): full per-period per-line history. A deliberate
+#              off-hours BACKFILL only — 200 GETs risks Procore's spike cooldown (the
+#              51 commitment GETs already do); do NOT run 'all' near the nightly ceiling.
+REQUISITION_DETAIL_SCOPE = 'latest'
+
+
+def _latest_requisition_per_commitment(requisitions):
+    """The most recent pay app per commitment (max billing_date, id-tiebroken) — the
+    ~49 'current' pay apps for OP III. Mirrors the sitelines_invoices `is_latest`
+    window so the pulled SOV matches the pay app the register marks current."""
+    latest = {}
+    for r in requisitions:
+        if not isinstance(r, dict):
+            continue
+        cid = r.get('commitment_id')
+        if cid is None:
+            continue
+        key = (r.get('billing_date') or '', r.get('id') or 0)
+        cur = latest.get(cid)
+        if cur is None or key > (cur.get('billing_date') or '', cur.get('id') or 0):
+            latest[cid] = r
+    return list(latest.values())
+
+
+def enrich_requisitions_with_detail(token: str, requisitions, line_item_rows: list, project_id) -> bool:
+    """Fetch each pay app's DETAIL (show) endpoint to recover its G703 SOV line items,
+    into line_item_rows. Which pay apps are fetched is bounded by
+    REQUISITION_DETAIL_SCOPE ('latest' per commitment, or 'all').
+
+    The requisition list/show endpoints carry the G702 cover-sheet `summary` only. The
+    G703 continuation sheet is the `/requisitions/{id}/detail` sub-resource (verified
+    2026-07-13) — a LIST of SOV lines, each with `wbs_code` (cost code) + `scheduled_value`
+    + `work_completed_this_period` / `_from_previous_application` + `materials_presently_stored`
+    + `total_completed_and_stored_to_date` (+ `_percent`) + the retainage fields + `balance_to_finish`.
+    For each pay app we flatten every line into line_item_rows — the WHOLE item, tagged
+    with `line_item_id` (the PK = the per-pay-app line's own id) + `contract_sov_line_id`
+    (Procore's line_item_id, the shared contract SOV line) + `requisition_id` (the parent
+    pay app) + `commitment_id` (the sub) — so the Phase-5 view maps the G703 out of `raw`.
+
+    Returns True only if EVERY scoped detail fetch succeeded, so a partial pull never
+    marks the table synced (which would let the scoped purge delete rows). Mirrors
+    enrich_commitments_with_detail. Compliant, minimum-necessary: one extra GET per pay
+    app in scope, jittered for the spike rate-limit window (research §7).
+    """
+    if not requisitions:
+        return True
+    scoped = _latest_requisition_per_commitment(requisitions) if REQUISITION_DETAIL_SCOPE == 'latest' else requisitions
+    logging.info(
+        'Requisition SOV enrichment: pulling detail for %s of %s pay apps (scope=%s).',
+        len(scoped), len(requisitions), REQUISITION_DETAIL_SCOPE,
+    )
+    for r in scoped:
+        if not isinstance(r, dict):
+            continue
+        rid = r.get('id')
+        if not rid:
+            continue
+        # The G703 lines are the `/detail` sub-resource — a LIST, not a field on the
+        # requisition show (which has no line items). project_id required.
+        detail = get_json(token, f'{BASE_API_URL}/rest/v1.0/requisitions/{rid}/detail?project_id={project_id}')
+        if detail is None:
+            return False
+        if isinstance(detail, list):
+            for item in detail:
+                if not isinstance(item, dict) or not item.get('id'):
+                    continue
+                # PK = the per-pay-app line's own id (unique). Preserve Procore's
+                # line_item_id (the shared CONTRACT SOV line) before repurposing the key
+                # field, so Phase 5 can still link a pay-app line to the commitment SOV.
+                item['contract_sov_line_id'] = item.get('line_item_id')
+                item['line_item_id'] = item.get('id')
+                item['requisition_id'] = rid
+                item['commitment_id'] = r.get('commitment_id')
+                line_item_rows.append(item)
+        time.sleep(random.uniform(0.5, 1.5))  # jitter between detail calls (research §7)
+    return True
+
+
 def _latest_final_attachments(distributions) -> list:
     """The reviewed submittal(s) from the most recent completed distribution.
 
@@ -720,6 +803,7 @@ def run_pipeline() -> None:
     pccos_tbl = MasterTable('procore_prime_change_orders_master', ['id', 'project_id'], 'project')
     pcos_tbl = MasterTable('procore_potential_change_orders_master', ['id', 'project_id'], 'project')
     requisitions_tbl = MasterTable('procore_requisitions_master', ['id', 'project_id'], 'project')
+    requisition_line_items_tbl = MasterTable('procore_requisition_line_items_master', ['line_item_id', 'project_id'], 'project')
     direct_costs_tbl = MasterTable('procore_direct_costs_master', ['id', 'project_id'], 'project')
     rfis_tbl = MasterTable('procore_rfis_master', ['id', 'project_id'], 'project')
     submittals_tbl = MasterTable('procore_submittals_master', ['id', 'project_id'], 'project')
@@ -742,7 +826,7 @@ def run_pipeline() -> None:
         budget_views_tbl, budget_detail_rows_tbl,
         budget_mods_tbl, budget_meta_tbl, change_events_tbl, ce_line_items_tbl,
         co_packages_tbl, cors_tbl, commitments_tbl, commitment_line_items_tbl, ccos_tbl, prime_contracts_tbl, pay_apps_tbl,
-        pccos_tbl, pcos_tbl, requisitions_tbl, direct_costs_tbl, rfis_tbl, submittals_tbl,
+        pccos_tbl, pcos_tbl, requisitions_tbl, requisition_line_items_tbl, direct_costs_tbl, rfis_tbl, submittals_tbl,
         submittal_approvers_tbl,
         punch_tbl, meetings_tbl, drawings_tbl, specs_tbl, documents_tbl, schedule_tbl,
         weather_logs_tbl, manpower_logs_tbl, notes_logs_tbl,
@@ -890,10 +974,25 @@ def run_pipeline() -> None:
         if pot is not None:
             pcos_tbl.add(pot, p_id, run_ts)
 
-        # Requisitions & direct costs
+        # Requisitions (sub pay apps) + their G703 SOV line items. The requisition LIST
+        # is complete on its own (Phase 1–3 depend on it) → ALWAYS upserted; enrichment
+        # adds the per-line SOV from each pay app's detail endpoint, and the line-items
+        # table only upserts if EVERY scoped detail fetch succeeded (a partial pull never
+        # triggers the scoped purge). Scope bounded by REQUISITION_DETAIL_SCOPE. Mirrors
+        # the commitments pattern above.
         reqs = paginated_get(token, f'{BASE_API_URL}/rest/v1.1/requisitions?project_id={p_id}')
         if reqs is not None:
+            req_li_rows: list = []
+            req_detail_ok = enrich_requisitions_with_detail(token, reqs, req_li_rows, p_id)
             requisitions_tbl.add(reqs, p_id, run_ts)
+            if req_detail_ok:
+                requisition_line_items_tbl.add(req_li_rows, p_id, run_ts)
+            else:
+                logging.warning(
+                    'Requisition detail enrichment incomplete for project %s — pay apps '
+                    'upserted (list is complete), but skipping SOV line-items upsert (no purge) '
+                    'so a partial set cannot delete rows.', p_id
+                )
 
         dc = paginated_get(token, f'{BASE_API_URL}/rest/v1.1/projects/{p_id}/direct_costs')
         if dc is not None:
