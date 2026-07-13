@@ -25,6 +25,8 @@ interface DataContextValue {
   getDrawingRevisions: (drawingId: string) => Promise<DrawingRevision[]>
   /** Re-mint a fresh sheet URL for a revision (the viewer's onError recovery). */
   getSheetUrls: (id: string) => Promise<{ pngUrl: string | null; pdfUrl: string | null }>
+  /** Fetch the Final reviewed submittal PDF bytes (the submittal viewer, on open). */
+  getFinalSubmittalFile: (id: string) => Promise<Blob | null>
 }
 
 const DataContext = createContext<DataContextValue | null>(null)
@@ -65,10 +67,11 @@ export function DataProvider({ source, children }: { source: DataSource; childre
   const getCommitmentDetail = useCallback((id: string) => source.getCommitmentDetail(id), [source])
   const getDrawingRevisions = useCallback((drawingId: string) => source.getDrawingRevisions(drawingId), [source])
   const getSheetUrls = useCallback((id: string) => source.getSheetUrls(id), [source])
+  const getFinalSubmittalFile = useCallback((id: string) => source.getFinalSubmittalFile(id), [source])
 
   const value = useMemo(
-    () => ({ status, data, syncedAt, error, refresh, getDetail, getCommitmentDetail, getDrawingRevisions, getSheetUrls }),
-    [status, data, syncedAt, error, refresh, getDetail, getCommitmentDetail, getDrawingRevisions, getSheetUrls],
+    () => ({ status, data, syncedAt, error, refresh, getDetail, getCommitmentDetail, getDrawingRevisions, getSheetUrls, getFinalSubmittalFile }),
+    [status, data, syncedAt, error, refresh, getDetail, getCommitmentDetail, getDrawingRevisions, getSheetUrls, getFinalSubmittalFile],
   )
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }

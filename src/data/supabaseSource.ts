@@ -234,5 +234,17 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
         pdfUrl: typeof pdf === 'string' ? pdf : null,
       }
     },
+    async getFinalSubmittalFile(id: string): Promise<Blob | null> {
+      // Invoke the `submittal-file` edge function (verify_jwt) with the caller's
+      // session; supabase-js attaches the logged-in user's bearer token so the
+      // gateway admits it. The function re-mints a fresh Procore URL server-side and
+      // streams the stamped PDF back inline — supabase-js parses the `application/pdf`
+      // response as a Blob. The Procore secret stays server-side (never in this
+      // bundle). A 404 (`no_final`) or any error surfaces as `error`; we return null
+      // so the viewer degrades to its Open-in-Procore fallback rather than throwing.
+      const { data, error } = await client.functions.invoke('submittal-file', { body: { id } })
+      if (error) return null
+      return data instanceof Blob ? data : null
+    },
   }
 }

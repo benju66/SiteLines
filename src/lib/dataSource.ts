@@ -64,4 +64,15 @@ export interface DataSource {
    * fixture URL. Either field is null when unavailable. Rejects on read error.
    */
   getSheetUrls(id: string): Promise<{ pngUrl: string | null; pdfUrl: string | null }>
+  /**
+   * Fetch the FINAL reviewed submittal PDF bytes for a submittal (the in-app
+   * viewer calls this on open, keyed by the submittal's seam id "submittals:<id>").
+   * The live source invokes the `submittal-file` edge function, which mints a fresh
+   * Procore URL server-side and streams the stamped PDF back inline (the Procore
+   * secret never reaches the browser); the caller wraps the Blob in an object URL
+   * for an <iframe>. Returns null on ANY failure — no backend offline (seed), the
+   * submittal has no final doc (404), or a read error — so the viewer always
+   * degrades to its Open-in-Procore fallback rather than throwing.
+   */
+  getFinalSubmittalFile(id: string): Promise<Blob | null>
 }
