@@ -103,7 +103,7 @@ function wholesale; Procore secrets already set (no new-secret gate). Owner-lock
 | Phase | Surface | Status |
 |-------|---------|--------|
 | 1 | `submittal-file` byte-streaming edge function (auth-gated proxy: Procore token → submittal detail v1.1 → latest `final_attachments` url → stream PDF inline) + `getFinalSubmittalFile` seam (supabase invoke / seed null) | ✅ Shipped + deployed (2026-07-13) — `submittal-file` v1 ACTIVE on `sitelines-sync` (`verify_jwt`+`authenticated`-role gated). Live-verified: unauth/publishable-key → 401; `submittals:63076362` → 200 `application/pdf` `%PDF-` 2.3 MB; no-final `submittals:63205968` → 404 `no_final`. 228 tests green. ⛔ awaiting owner "Approved" to commit |
-| 2 | `SubmittalViewerOverlay` (iframe + blob, loading/error/fallback) + open-from-row wiring in the record drawer + `AppState.submittalViewer` | ⬜ Planned |
+| 2 | `SubmittalViewerOverlay` (iframe + blob, loading/error/fallback) + open-from-row wiring in the record drawer + `AppState.submittalViewer` | ✅ Shipped (2026-07-13) — the drawer's Final-reviewed-submittal row opens the stamped PDF in-app (`getFinalSubmittalFile` → Blob → object URL → `<iframe>`), z-60 over the drawer; Download + Open-in-Procore fallbacks; ×/backdrop returns to the drawer, Esc closes all; revokes the object URL on close. Live-verified (`:5175`, logged in): `03 4100-1` Precast → blob PDF renders in-app, no download, no console errors, close returns to drawer. typecheck + 228 tests + build green. ⛔ awaiting owner "Approved" to commit |
 
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**

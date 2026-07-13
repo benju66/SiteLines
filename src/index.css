@@ -314,6 +314,10 @@ button {
   background: var(--fill-1);
   border-color: #cdd2d8;
 }
+.sl-final-sub:hover {
+  filter: brightness(0.97);
+  border-color: #a6d4b8;
+}
 .sl-party-link:hover {
   color: #24507a;
 }
@@ -325,6 +329,21 @@ button {
 }
 .sl-table-search::placeholder {
   color: var(--tx-faint-2);
+}
+
+/* Spinner (Submittal Viewer loading state). */
+@keyframes sl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.sl-spin {
+  animation: sl-spin 0.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sl-spin {
+    animation-duration: 2s;
+  }
 }
 
 /* Budget drill-down (Budget Insights): division hover + resizable-column handle */

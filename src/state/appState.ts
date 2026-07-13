@@ -18,6 +18,7 @@ export interface AppState {
   detail: { tool: ToolKey; record: Item } | null // open record drawer
   commitment: Commitment | null // open commitment detail drawer (the clicked register row)
   viewer: Drawing | null // open drawing-sheet viewer overlay (the clicked current sheet)
+  submittalViewer: { id: string; name: string; downloadUrl?: string; procoreUrl?: string } | null // open Final-reviewed-submittal PDF viewer (id = "submittals:<id>")
   activity: boolean // activity drawer
   palette: boolean // command palette
   query: string // palette search text
@@ -39,6 +40,7 @@ export const initialState: AppState = {
   detail: null,
   commitment: null,
   viewer: null,
+  submittalViewer: null,
   activity: false,
   palette: false,
   query: '',

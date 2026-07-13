@@ -218,24 +218,26 @@ export function RecordDetailDrawer() {
           )}
 
           {/* Final reviewed submittal — the stamped doc Procore distributed back.
-              Surfaced up top, distinct from the submitted Attachments below. */}
+              Surfaced up top, distinct from the submitted Attachments below. Clicking
+              opens it in the in-app PDF viewer (SubmittalViewerOverlay) rather than
+              downloading; the viewer keeps Download / Open-in-Procore as fallbacks. */}
           {thread?.finalSubmittal && thread.finalSubmittal.length > 0 && (
             <div style={{ marginTop: 16 }}>
               <div style={{ ...sectionLabel, margin: '0 0 8px', color: '#1f7a4d' }}>Final reviewed submittal</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                 {thread.finalSubmittal.map((a, i) => (
-                  <a
+                  <button
                     key={i}
-                    href={a.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={a.name}
-                    style={{ display: 'flex', alignItems: 'center', gap: 9, background: '#eef8f1', border: '1px solid #bfe3cd', borderRadius: 9, padding: '10px 12px', textDecoration: 'none' }}
+                    type="button"
+                    className="sl-final-sub"
+                    title={`View ${a.name}`}
+                    onClick={() => patch({ submittalViewer: { id: r.id, name: a.name, downloadUrl: a.url, procoreUrl: thread.procoreUrl } })}
+                    style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'left', background: '#eef8f1', border: '1px solid #bfe3cd', borderRadius: 9, padding: '10px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
                   >
                     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, borderRadius: '50%', background: '#1f7a4d', color: '#fff', fontSize: 11, fontWeight: 700, flex: 'none' }}>✓</span>
                     <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 620, color: '#1f5f3d', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
-                    <span style={{ fontFamily: mono, fontSize: 10, color: '#4a8b68', flex: 'none' }}>↓</span>
-                  </a>
+                    <span aria-hidden style={{ fontFamily: mono, fontSize: 11, color: '#4a8b68', flex: 'none' }}>⤢</span>
+                  </button>
                 ))}
               </div>
             </div>
