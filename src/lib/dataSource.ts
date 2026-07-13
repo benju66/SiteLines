@@ -4,7 +4,7 @@
 // a supabaseDataSource reading the normalization views — the UI never knows
 // the difference.
 
-import type { ActivityEvent, BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentDetail, CommitmentLineItem, Contact, DailyLogEntry, Drawing, DrawingRevision, FinancialSource, Invoice, Item, ItemDetail, Photo, ToolKey } from '@/types'
+import type { ActivityEvent, BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentDetail, CommitmentLineItem, Contact, DailyLogEntry, Drawing, DrawingRevision, FinancialSource, Invoice, InvoiceLineItem, Item, ItemDetail, Photo, ToolKey } from '@/types'
 
 export type ItemsByTool = Record<ToolKey, Item[]>
 
@@ -24,6 +24,7 @@ export interface SiteData {
   changeEvents: ChangeEvent[] // potential changes, priced (reference; the Change Events cost-exposure ledger)
   changeEventLineItems: ChangeEventLineItem[] // priced change-event lines (reference; the drawer + Change-Event↔Commitment cross-link)
   invoices: Invoice[] // subcontractor pay applications (reference; the Invoicing register + G702 drawer)
+  invoiceLineItems: InvoiceLineItem[] // pay-app G703 SOV lines (reference; the drawer's schedule of values)
 }
 
 export interface Snapshot {

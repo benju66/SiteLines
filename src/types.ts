@@ -313,6 +313,31 @@ export interface Invoice {
 }
 
 /**
+ * One pay-application SOV line — the AIA G703 continuation sheet (Invoicing, Phase 5).
+ * Reference data — NOT a court `Item`, never in My Court. Loaded in the main snapshot
+ * (like `changeEventLineItems`). Each line is one scheduled-value item on a pay app:
+ * what was billed this period vs. from the previous application vs. to date, against
+ * the scheduled value, with retainage and balance to finish. Raw DOLLARS; the selector
+ * layer orders + subtotals (never stored — DATA_CONTRACT §6). `invoiceId` matches
+ * `Invoice.id`. The lines' `billedToDate` sum to the pay app's G702 cover-sheet total.
+ */
+export interface InvoiceLineItem {
+  project: Project // 'opiii' for v1
+  id: string // "invoicing:<req id>:li:<line item id>" — stable list key
+  invoiceId: string // "invoicing:<req id>" — matches Invoice.id (the drawer filter)
+  itemNumber: string // G703 item number (display order / label)
+  description: string // description_of_work
+  scheduledValue: number // scheduled_value (this line's contract amount)
+  fromPrevious: number // work_completed_from_previous_application
+  thisPeriod: number // work_completed_this_period
+  stored: number // materials_presently_stored
+  billedToDate: number // total_completed_and_stored_to_date (cumulative)
+  pctComplete: number // 0..1 (of scheduled value billed)
+  retainage: number // total_retainage_currently_retained (held on this line)
+  balanceToFinish: number // balance_to_finish
+}
+
+/**
  * One commitment — a subcontract (SC) or purchase order (PO) with its financial
  * position (Commitments, Phase 1). Reference data — NOT a court `Item` and never
  * enters My Court (like `Drawing`/`BudgetLine`). The commitments master is

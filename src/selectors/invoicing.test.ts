@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { invoiceHistoryFor, invoicePeriods, invoiceRollup, invoicesSorted } from '@/selectors'
-import type { Invoice } from '@/types'
+import { invoiceHistoryFor, invoiceLinesFor, invoicePeriods, invoiceRollup, invoicesSorted } from '@/selectors'
+import type { Invoice, InvoiceLineItem } from '@/types'
 
 function inv(p: Partial<Invoice> & Pick<Invoice, 'id' | 'billedToDate' | 'retainage' | 'isLatest'>): Invoice {
   return {
@@ -117,5 +117,41 @@ describe('invoiceHistoryFor', () => {
   it('returns just itself when the pay app has no commitment', () => {
     const solo = inv({ id: 's', commitmentId: null, billedToDate: 0, retainage: 0, isLatest: true })
     expect(invoiceHistoryFor([...ALL, solo], solo)).toEqual([solo])
+  })
+})
+
+describe('invoiceLinesFor', () => {
+  const li = (id: string, invoiceId: string, itemNumber: string): InvoiceLineItem => ({
+    project: 'opiii',
+    id,
+    invoiceId,
+    itemNumber,
+    description: 'd',
+    scheduledValue: 0,
+    fromPrevious: 0,
+    thisPeriod: 0,
+    stored: 0,
+    billedToDate: 0,
+    pctComplete: 0,
+    retainage: 0,
+    balanceToFinish: 0,
+  })
+  const LINES = [
+    li('x2', 'invoicing:1', '2'),
+    li('x10', 'invoicing:1', '10'),
+    li('x1', 'invoicing:1', '1'),
+    li('y1', 'invoicing:2', '1'), // different invoice
+  ]
+
+  it('returns only the invoice’s lines, ordered by item number numerically', () => {
+    const inv1: Invoice = { ...({} as Invoice), id: 'invoicing:1' }
+    // item "10" must come AFTER "2" (numeric, not lexical)
+    expect(invoiceLinesFor(LINES, inv1).map((l) => l.id)).toEqual(['x1', 'x2', 'x10'])
+  })
+
+  it('does not mutate the input', () => {
+    const input = [...LINES]
+    invoiceLinesFor(LINES, { ...({} as Invoice), id: 'invoicing:1' })
+    expect(input.map((l) => l.id)).toEqual(LINES.map((l) => l.id))
   })
 })

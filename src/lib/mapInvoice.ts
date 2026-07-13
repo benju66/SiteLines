@@ -6,7 +6,7 @@
 // shape carries 0..1. `is_latest` (computed in SQL, one per commitment) gates the
 // rollup's cumulative sums so the app never double-counts cumulative G702 fields.
 
-import type { Invoice, Project } from '@/types'
+import type { Invoice, InvoiceLineItem, Project } from '@/types'
 
 /** One row of the sitelines_invoices view (numerics arrive as strings). */
 export interface InvoiceRow {
@@ -57,6 +57,42 @@ export function mapInvoice(row: InvoiceRow): Invoice {
     revised: num(row.revised),
     netChangeByCOs: num(row.net_change_by_cos),
     earnedLessRetainage: num(row.earned_less_retainage),
+    balanceToFinish: num(row.balance_to_finish),
+  }
+}
+
+/** One row of the sitelines_invoice_line_items view (numerics arrive as strings). */
+export interface InvoiceLineItemRow {
+  project: string | null
+  id: string
+  invoice_id: string
+  item_number: string | null
+  description: string | null
+  scheduled_value: number | string | null
+  from_previous: number | string | null
+  this_period: number | string | null
+  stored: number | string | null
+  billed_to_date: number | string | null
+  pct_complete: number | string | null
+  retainage: number | string | null
+  balance_to_finish: number | string | null
+}
+
+/** Map an invoice-line-item view row to the InvoiceLineItem contract shape. */
+export function mapInvoiceLineItem(row: InvoiceLineItemRow): InvoiceLineItem {
+  return {
+    project: (row.project ?? 'opiii') as Project,
+    id: row.id,
+    invoiceId: row.invoice_id,
+    itemNumber: (row.item_number ?? '').trim(),
+    description: (row.description ?? '').trim(),
+    scheduledValue: num(row.scheduled_value),
+    fromPrevious: num(row.from_previous),
+    thisPeriod: num(row.this_period),
+    stored: num(row.stored),
+    billedToDate: num(row.billed_to_date),
+    pctComplete: num(row.pct_complete) / 100,
+    retainage: num(row.retainage),
     balanceToFinish: num(row.balance_to_finish),
   }
 }

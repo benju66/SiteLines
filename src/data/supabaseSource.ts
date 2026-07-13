@@ -11,7 +11,7 @@ import type { DataSource, ItemsByTool, SiteData, Snapshot } from '@/lib/dataSour
 import { deriveUrgency, formatDueDate, formatMoney, statusTone, timeAgo } from '@/lib/derive'
 import { mapBudgetLine, mapBudgetPending, type BudgetLineRow, type BudgetPendingRow } from '@/lib/mapBudgetLine'
 import { mapChangeEvent, mapChangeEventLineItem, type ChangeEventRow, type ChangeEventLineItemRow } from '@/lib/mapChangeEvent'
-import { mapInvoice, type InvoiceRow } from '@/lib/mapInvoice'
+import { mapInvoice, mapInvoiceLineItem, type InvoiceRow, type InvoiceLineItemRow } from '@/lib/mapInvoice'
 import { mapCommitment, mapCommitmentBilling, mapCommitmentChangeOrder, mapCommitmentLineItem, type CommitmentRow, type CommitmentBillingRow, type CommitmentChangeOrderRow, type CommitmentLineItemRow } from '@/lib/mapCommitment'
 import { mapDrawing, mapDrawingRevision, type DrawingRow, type DrawingRevisionRow } from '@/lib/mapDrawing'
 import { mapRfiDetail, type RfiDetailRow } from '@/lib/mapRfiDetail'
@@ -138,7 +138,7 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
     name: 'supabase',
     async fetch(): Promise<Snapshot> {
       const now = new Date()
-      const [items, contacts, financials, activity, dailyLogs, drawings, budgetLines, budgetPending, commitments, commitmentLineItems, changeEvents, changeEventLineItems, invoices] = await Promise.all([
+      const [items, contacts, financials, activity, dailyLogs, drawings, budgetLines, budgetPending, commitments, commitmentLineItems, changeEvents, changeEventLineItems, invoices, invoiceLineItems] = await Promise.all([
         fetchAll<ItemRow>(client, 'sitelines_items'),
         fetchAll<ContactRow>(client, 'sitelines_contacts'),
         fetchAll<FinRow>(client, 'sitelines_financials'),
@@ -152,6 +152,7 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
         fetchAll<ChangeEventRow>(client, 'sitelines_change_events'),
         fetchAll<ChangeEventLineItemRow>(client, 'sitelines_change_event_line_items'),
         fetchAll<InvoiceRow>(client, 'sitelines_invoices'),
+        fetchAll<InvoiceLineItemRow>(client, 'sitelines_invoice_line_items'),
       ])
 
       const itemsByTool = emptyItemsByTool()
@@ -177,6 +178,7 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
         changeEvents: changeEvents.map(mapChangeEvent),
         changeEventLineItems: changeEventLineItems.map(mapChangeEventLineItem),
         invoices: invoices.map(mapInvoice),
+        invoiceLineItems: invoiceLineItems.map(mapInvoiceLineItem),
       }
       // syncedAt = fetch time for now; a future sitelines_meta view can expose the
       // pipeline's true last-sync timestamp (max synced_at) once it's readable.

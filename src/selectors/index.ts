@@ -11,7 +11,7 @@ import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Invoice, Item, Project, ToolKey } from '@/types'
+import type { BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Invoice, InvoiceLineItem, Item, Project, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -1212,4 +1212,22 @@ export function invoicePeriods(invoices: Invoice[]): string[] {
 export function invoiceHistoryFor(invoices: Invoice[], invoice: Invoice): Invoice[] {
   if (!invoice.commitmentId) return [invoice]
   return invoices.filter((i) => i.commitmentId === invoice.commitmentId).sort(byInvoiceRecency)
+}
+
+/** Numeric value of a G703 item number ("1", "2.1", …); non-numeric sinks to the end. */
+const itemNumValue = (s: string): number => {
+  const n = parseFloat(s)
+  return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY
+}
+
+/**
+ * A pay app's G703 SOV lines (Invoicing, Phase 5), ordered by item number
+ * (id-tiebroken). A G703 is a flat schedule of values — one row per line item, not
+ * grouped — so this is a simple filter + order. The lines' `billedToDate` sum to the
+ * pay app's G702 cover-sheet total. Deterministic, pure — the input is never mutated.
+ */
+export function invoiceLinesFor(lineItems: InvoiceLineItem[], invoice: Invoice): InvoiceLineItem[] {
+  return lineItems
+    .filter((li) => li.invoiceId === invoice.id)
+    .sort((a, b) => itemNumValue(a.itemNumber) - itemNumValue(b.itemNumber) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
 }
