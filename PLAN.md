@@ -136,7 +136,7 @@ $622,877, tying to Commitments.
 | Phase | Surface | Status |
 |-------|---------|--------|
 | 1 | Invoicing own view — `sitelines_invoices` view (one row/requisition + G702 summary + `is_latest`) + `Invoice` seam + rollup KPIs (billed to date · retainage · this period · # under review) + enriched sortable register (vendor · pay app # · period · this period · billed · retainage · % · status) | ✅ Shipped (2026-07-13) — [view](sync/views/sitelines_invoices.sql) applied (`security_invoker`, no re-sync); typecheck + **251 tests** + build green; seed (`:5174`) + live (`:5175`) reconcile — **billed $15,285,899 + retainage $622,877 = Commitments** (isLatest-gated); 200 pay apps · 49 subs · 1 under review; advisors clean. Committed on `change-events-phase-1` |
-| 2 | G702 detail drawer (no new SQL) — `invoice` on `AppState` + an `InvoiceDrawer`: the G702 cover sheet (original → net COs → revised · billed · retainage breakdown · balance to finish) + **click-through to the commitment** it bills + owner-pay-app note | ⬜ Planned |
+| 2 | G702 detail drawer (no new SQL) — `invoice` on `AppState` + an `InvoiceDrawer`: the G702 cover sheet (original → net COs → revised · billed · retainage breakdown · balance to finish) + **click-through to the commitment** it bills + owner-pay-app note | ✅ Shipped (2026-07-13) — reuses the Phase-1 view (no SQL); typecheck + **251 tests** + build green; seed (`:5174`) + live (`:5175`) — G702 cover sheet renders, "Bills against" opens the real Commitment drawer (PO-25-117-085). Committed on `change-events-phase-1` |
 
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**

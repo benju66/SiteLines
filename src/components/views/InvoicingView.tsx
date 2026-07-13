@@ -69,7 +69,7 @@ function StatusPill({ label }: { label: string }) {
 }
 
 export function InvoicingView() {
-  const { state } = useApp()
+  const { state, patch } = useApp()
   const { invoices } = useSiteData()
 
   const [sort, setSort] = useState<InvoiceSort | null>(null)
@@ -118,7 +118,7 @@ export function InvoicingView() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '16px 2px 9px' }}>
             <TableSearch value={query} onChange={setQuery} placeholder="Filter pay applications…" count={{ shown: shown.length, total: rows.length }} />
             <span style={{ fontSize: 12, color: 'var(--tx-tertiary)', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Every subcontractor pay app · a column header to sort · newest first.
+              Click a row for the G702 · a column header to sort · newest first.
             </span>
           </div>
 
@@ -160,7 +160,7 @@ export function InvoicingView() {
                 ) : (
                   <>
                     {shown.map((i) => (
-                      <InvoiceRow key={i.id} inv={i} query={query} />
+                      <InvoiceRow key={i.id} inv={i} query={query} onOpen={() => patch({ invoice: i })} />
                     ))}
 
                     {/* totals — billed/retainage reflect the shown set's latest-per-sub rollup */}
@@ -185,9 +185,21 @@ export function InvoicingView() {
   )
 }
 
-function InvoiceRow({ inv, query }: { inv: Invoice; query?: string }) {
+function InvoiceRow({ inv, query, onOpen }: { inv: Invoice; query?: string; onOpen: () => void }) {
   return (
-    <div style={{ ...rowBase, padding: '9px 16px', borderBottom: '1px solid var(--bd-row)' }}>
+    <div
+      className="sl-hover-row"
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
+      style={{ ...rowBase, padding: '9px 16px', borderBottom: '1px solid var(--bd-row)', cursor: 'pointer' }}
+    >
       <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
         <span style={{ fontSize: 12.5, color: 'var(--tx-primary)', fontWeight: 540, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={inv.vendor || inv.contract}>
           <Highlight text={inv.vendor || inv.contract || '—'} query={query} />
