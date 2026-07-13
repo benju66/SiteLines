@@ -11,6 +11,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { TOOLS } from '@/data/tools'
 import { formatMoney, formatShortDate, statusTone } from '@/lib/derive'
+import { invoiceHistoryFor } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useSiteData } from '@/state/DataContext'
 import { mono, tone } from '@/theme/tokens'
@@ -53,8 +54,10 @@ export function InvoiceDrawer() {
 
 function InvoicePanel({ invoice: inv, onClose }: { invoice: Invoice; onClose: () => void }) {
   const { patch } = useApp()
-  const { commitments } = useSiteData()
+  const { commitments, invoices } = useSiteData()
   const commitment = inv.commitmentId ? commitments.find((c) => c.id === inv.commitmentId) : undefined
+  // The sub's full pay-app chain (current + past) — click one to switch the drawer.
+  const history = invoiceHistoryFor(invoices, inv)
 
   const openCommitment = () => {
     if (commitment) patch({ invoice: null, commitment })
@@ -119,6 +122,44 @@ function InvoicePanel({ invoice: inv, onClose }: { invoice: Invoice; onClose: ()
             <G702Line label="Total earned less retainage" value={inv.earnedLessRetainage} strong />
             <G702Line label="Balance to finish (incl. retainage)" value={inv.balanceToFinish} />
           </div>
+
+          {/* billing history — the sub's current + past pay apps; click to switch */}
+          {history.length > 1 && (
+            <>
+              <div style={{ ...sectionLabel, margin: '18px 0 9px' }}>Billing history ({history.length})</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {history.map((h) => {
+                  const viewing = h.id === inv.id
+                  return (
+                    <button
+                      key={h.id}
+                      type="button"
+                      onClick={() => !viewing && patch({ invoice: h })}
+                      style={{ textAlign: 'left', background: viewing ? tone.info.bg : '#fff', border: `1px solid ${viewing ? tone.info.bd : 'var(--bd-1)'}`, borderRadius: 9, padding: '9px 12px', cursor: viewing ? 'default' : 'pointer', fontFamily: 'inherit' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                        <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 650, color: 'var(--tx-secondary-2)', flex: 'none' }}>{h.number}</span>
+                        <span style={{ fontSize: 12, color: 'var(--tx-tertiary)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.period || (formatShortDate(h.billingDate) ?? '—')}</span>
+                        {viewing ? (
+                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.3px', textTransform: 'uppercase', color: tone.info.c, flex: 'none' }}>Viewing</span>
+                        ) : h.isLatest ? (
+                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.3px', textTransform: 'uppercase', color: 'var(--tx-faint)', flex: 'none' }}>Current</span>
+                        ) : null}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 6 }}>
+                        <span style={{ fontSize: 11, color: 'var(--tx-tertiary)' }}>This period</span>
+                        <span style={{ fontFamily: mono, fontSize: 11.5, color: 'var(--tx-secondary)' }}>{formatMoney(h.thisPeriod)}</span>
+                        <div style={{ flex: 1 }} />
+                        <span style={{ fontSize: 11, color: 'var(--tx-tertiary)' }}>To date</span>
+                        <span style={{ fontFamily: mono, fontSize: 11.5, color: 'var(--tx-secondary)' }}>{formatMoney(h.billedToDate)}</span>
+                      </div>
+                      {h.status && <div style={{ marginTop: 5, fontSize: 10, fontWeight: 600, letterSpacing: '.2px', color: h.status === 'Under Review' ? tone.info.c : 'var(--tx-faint)' }}>{h.status}</div>}
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
 
           {/* cross-link: the commitment this pay app bills against */}
           {inv.commitmentId && (

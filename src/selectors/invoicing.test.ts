@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { invoiceRollup, invoicesSorted } from '@/selectors'
+import { invoiceHistoryFor, invoicePeriods, invoiceRollup, invoicesSorted } from '@/selectors'
 import type { Invoice } from '@/types'
 
 function inv(p: Partial<Invoice> & Pick<Invoice, 'id' | 'billedToDate' | 'retainage' | 'isLatest'>): Invoice {
@@ -77,5 +77,45 @@ describe('invoicesSorted', () => {
     const input = [...INVOICES]
     invoicesSorted(input, { col: 'retainage', dir: 'asc' })
     expect(input.map((i) => i.id)).toEqual(INVOICES.map((i) => i.id))
+  })
+})
+
+describe('invoicePeriods', () => {
+  // Periods spanning a 2025→2026 boundary — the lexical order ("01/.." < "06/..")
+  // is the OPPOSITE of chronological, so this proves the date-parsed sort.
+  const P: Invoice[] = [
+    inv({ id: 'p1', billedToDate: 0, retainage: 0, isLatest: true, period: '06/01/25 - 06/30/25' }),
+    inv({ id: 'p2', billedToDate: 0, retainage: 0, isLatest: true, period: '01/01/26 - 01/31/26' }),
+    inv({ id: 'p3', billedToDate: 0, retainage: 0, isLatest: true, period: '05/01/26 - 05/31/26' }),
+    inv({ id: 'p4', billedToDate: 0, retainage: 0, isLatest: false, period: '05/01/26 - 05/31/26' }), // dup period
+    inv({ id: 'p5', billedToDate: 0, retainage: 0, isLatest: true, period: '' }), // empty → dropped
+  ]
+
+  it('returns distinct non-empty periods, newest first (chronological, not lexical)', () => {
+    expect(invoicePeriods(P)).toEqual(['05/01/26 - 05/31/26', '01/01/26 - 01/31/26', '06/01/25 - 06/30/25'])
+  })
+
+  it('is empty-safe', () => {
+    expect(invoicePeriods([])).toEqual([])
+  })
+})
+
+describe('invoiceHistoryFor', () => {
+  const A1 = inv({ id: 'a1', commitmentId: 'commitments:1', billedToDate: 700_000, retainage: 0, isLatest: false, billingDate: '2026-04-30' })
+  const A2 = inv({ id: 'a2', commitmentId: 'commitments:1', billedToDate: 1_197_286, retainage: 0, isLatest: true, billingDate: '2026-05-31' })
+  const B1 = inv({ id: 'b1', commitmentId: 'commitments:2', billedToDate: 1_150_900, retainage: 0, isLatest: true, billingDate: '2026-05-31' })
+  const ALL = [A1, A2, B1]
+
+  it('returns the same commitment’s pay apps, newest first, including the clicked one', () => {
+    expect(invoiceHistoryFor(ALL, A1).map((i) => i.id)).toEqual(['a2', 'a1'])
+  })
+
+  it('excludes other commitments’ pay apps', () => {
+    expect(invoiceHistoryFor(ALL, B1).map((i) => i.id)).toEqual(['b1'])
+  })
+
+  it('returns just itself when the pay app has no commitment', () => {
+    const solo = inv({ id: 's', commitmentId: null, billedToDate: 0, retainage: 0, isLatest: true })
+    expect(invoiceHistoryFor([...ALL, solo], solo)).toEqual([solo])
   })
 })

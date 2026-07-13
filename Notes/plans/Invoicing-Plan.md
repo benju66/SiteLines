@@ -146,6 +146,74 @@ REUSE, do not fork:
 - **Exit criteria:** typecheck + build + tests; live — drawer opens, G702 totals tie to the
   row, the commitment cross-link opens `CommitmentDrawer`; seed renders. Then STOP.
 
+---
+
+## v2 — deeper billing detail (owner feedback, 2026-07-13)
+Phases 1–2 shipped a flat pay-app register + a G702 **cover-sheet** drawer. The owner (a GC
+PM) noted it should work more like Procore's Invoicing: **navigate by billing period**, see a
+sub's **current + past invoices**, and drill into each invoice's **SOV / G703 — what's getting
+billed per line**. Data check (verified live 2026-07-13):
+- **14 billing periods** synced (`summary.formatted_period`, Jun 2025 → Jul 2026) → a period
+  selector needs **no re-sync**.
+- Pay apps **chain** via `previous_requisition_id` (151/200) + `billing_date` → a sub's
+  current/past history needs **no re-sync**.
+- **Per-line SOV billing (G703) is NOT synced** — `raw->'line_items'` is absent on all 200
+  requisitions (`with_line_items = 0`). The line detail lives on Procore's requisition **detail
+  (show)** endpoint → getting it is a **⛔ backend sync change** (Phase 4), the same shape as
+  Commitments Phase 3. ⚠️ 200 requisitions = 200 per-record GETs (vs. 51 commitments, which hit
+  a ~39-min Procore rate-limit cooldown) — so the scope of *which* pay apps to pull line items
+  for is a real decision (see Phase 4).
+
+**Locked (owner, 2026-07-13):** pursue the sync change for the per-invoice SOV lines.
+
+### Phase 3 — billing-period navigation + per-sub invoice history (no re-sync)
+- **Scope:** (a) a **billing-period selector** on `InvoicingView` — a dropdown of the distinct
+  periods (default: the latest period; an "All periods" option) that filters the register; a
+  pure `invoicePeriods(invoices)` selector (distinct periods, newest-first) + a period filter in
+  `invoicesSorted`/a new `invoicesInPeriod`. (b) a **Billing history** section in the
+  `InvoiceDrawer`: the clicked pay app's **sibling pay apps for the same commitment** (the sub's
+  chain), current one marked, each showing period · this-period · billed-to-date · status, click
+  to switch the drawer to that pay app. Pure `invoiceHistoryFor(invoices, invoice)` (the
+  commitment's pay apps, recency-sorted). No new data — all from the `invoices` slice.
+- **Approval gates:** none (no SQL, no re-sync). `ballInCourt.ts` untouched.
+- **Exit criteria:** typecheck + build + tests; live `:5173` — pick a period → register filters;
+  open an invoice → its billing history lists the sub's other pay apps, clicking one switches the
+  drawer; seed renders. Then STOP.
+
+### Phase 4 — ⛔ Procore sync change: per-requisition SOV line items (G703)
+- **Scope (in-repo `sync/`):** mirror `enrich_commitments_with_detail` →
+  `enrich_requisitions_with_detail(token, reqs, li_rows, project_id)`: a per-requisition
+  `GET /rest/v1.1/requisitions/{id}?project_id={pid}` (the show endpoint carries the G703
+  `line_items[]` — scheduled value, work_completed_from_previous_application, work_completed_this_period,
+  materials_presently_stored, percent, retainage, balance_to_finish, cost_code). Flatten each
+  line to a new **`procore_requisition_line_items_master`** (`line_item_id, project_id, raw jsonb,
+  synced_at` — migration **0012**, mirroring 0009; PK + project index + deny-all RLS +
+  `authenticated_read`). The requisition LIST upsert stays unconditional; the new table is gated
+  on full-enrichment success (purge safety), like commitments.
+- **⚠️ Rate-limit decision (owner, at kickoff):** which pay apps to pull line items for —
+  **(Recommended) latest pay app per commitment (~49 GETs)**: covers "what's billed now" per line,
+  keeps the run well under the rate ceiling; past invoices keep cover-sheet-only. Alternatives:
+  **all 200** (full per-line history, highest rate-limit risk — space them / gate to changed
+  requisitions) or **incremental** (only requisitions whose `updated_at` changed since last run).
+- **Approval gates:** ⛔ this is a real Procore pull + a new Supabase base table — present the
+  migration + the pipeline diff and STOP for owner sign-off; run the sync only on approval; never
+  recreate the Procore app registration. Do NOT run it near the nightly job's rate ceiling.
+- **Exit criteria:** migration applied; a manual/one-off enrichment run populates
+  `procore_requisition_line_items_master`; spot-check that a pay app's line items sum to its G702
+  `total_completed_and_stored_to_date` (the G703 → G702 tie). Then STOP.
+
+### Phase 5 — render the G703 SOV in the invoice drawer (no re-sync; needs Phase 4)
+- **Scope:** ⛔ a `sitelines_invoice_line_items` view (one row per requisition line: invoice id,
+  cost_code, description, scheduled_value, this_period, from_previous, stored, pct, retainage,
+  balance) + an `InvoiceLineItem` type + mapper + `invoiceLineItems` slice (loaded in the
+  snapshot, like `changeEventLineItems`). The `InvoiceDrawer` gains a **Schedule of values (G703)**
+  section: per line, what's billed this period vs. to date vs. scheduled, % complete, retainage —
+  grouped by cost code with subtotals reconciling to the G702 cover sheet. Pure
+  `invoiceLineGroups(lineItems)` (+ tests), mirroring `changeEventLineGroups`.
+- **Approval gates:** ⛔ Supabase view SQL (present, STOP, apply). No re-sync (Phase 4 did it).
+- **Exit criteria:** typecheck + build + tests; live — an invoice opens into its G703 SOV; the
+  line subtotals tie to the G702 `total_completed_and_stored_to_date`; seed renders. Then STOP.
+
 ## Hard guardrails (do not violate)
 - **Overlays** (`InvoiceDrawer`) render `position:fixed` OUTSIDE the card's `overflow:hidden`
   (mount in `App.tsx`'s overlay slot; add `invoice: null` to the Esc clear-list).

@@ -1178,3 +1178,38 @@ export function invoicesSorted(invoices: Invoice[], sort: InvoiceSort | null): I
     return cmp * sign || byInvoiceRecency(a, b)
   })
 }
+
+/** Sortable YYYYMMDD from a "MM/DD/YY - MM/DD/YY" period's START date; -1 when
+ *  unparseable. Used so the period dropdown sorts chronologically (a "06/01/25"
+ *  period is OLDER than "01/01/26" — a lexical sort gets that wrong). */
+function periodStartValue(period: string): number {
+  const start = period.split(' - ')[0]?.trim() ?? ''
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(start)
+  if (!m) return -1
+  return (2000 + Number(m[3])) * 10000 + Number(m[1]) * 100 + Number(m[2])
+}
+
+/**
+ * The distinct billing periods present, NEWEST first (by parsed start date, not
+ * the lexical string). Empty periods dropped. Feeds the register's period
+ * dropdown. Deterministic, pure — no clock.
+ */
+export function invoicePeriods(invoices: Invoice[]): string[] {
+  const seen = new Set<string>()
+  for (const inv of invoices) {
+    const p = inv.period.trim()
+    if (p) seen.add(p)
+  }
+  return [...seen].sort((a, b) => periodStartValue(b) - periodStartValue(a) || (a < b ? 1 : a > b ? -1 : 0))
+}
+
+/**
+ * A pay app's sibling invoices — the same commitment's pay apps, newest first
+ * (recency, id-tiebroken), the given invoice included. A pay app with no
+ * commitment returns just itself. Drives the drawer's Billing history section.
+ * Deterministic, pure — the input is never mutated.
+ */
+export function invoiceHistoryFor(invoices: Invoice[], invoice: Invoice): Invoice[] {
+  if (!invoice.commitmentId) return [invoice]
+  return invoices.filter((i) => i.commitmentId === invoice.commitmentId).sort(byInvoiceRecency)
+}

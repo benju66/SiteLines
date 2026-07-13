@@ -13,7 +13,7 @@ import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { formatMoney, statusTone } from '@/lib/derive'
 import { fuzzyMatchesAny } from '@/lib/fuzzy'
-import { invoiceRollup, invoicesSorted, scoped } from '@/selectors'
+import { invoicePeriods, invoiceRollup, invoicesSorted, scoped } from '@/selectors'
 import type { InvoiceSort, InvoiceSortCol } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useSiteData } from '@/state/DataContext'
@@ -74,13 +74,22 @@ export function InvoicingView() {
 
   const [sort, setSort] = useState<InvoiceSort | null>(null)
   const [query, setQuery] = useState('')
+  const [period, setPeriod] = useState<string>('') // '' = All periods
 
   const rows = scoped(invoices, state.project)
-  const rollup = invoiceRollup(rows)
+  const rollup = invoiceRollup(rows) // KPI cards = the job's whole billing position (never period-filtered)
+  const periods = invoicePeriods(rows)
   const sorted = invoicesSorted(rows, sort)
+  // A selected period that falls out of scope (project switch) degrades to All.
+  const activePeriod = period && periods.includes(period) ? period : ''
+  const inPeriod = activePeriod ? sorted.filter((i) => i.period === activePeriod) : sorted
   const q = query.trim()
-  const shown = q ? sorted.filter((i) => fuzzyMatchesAny(query, [i.vendor, i.number, i.contract, i.period, i.status])) : sorted
-  const totals = q ? invoiceRollup(shown) : rollup
+  const shown = q ? inPeriod.filter((i) => fuzzyMatchesAny(query, [i.vendor, i.number, i.contract, i.period, i.status])) : inPeriod
+  // Total row sums THIS-PERIOD billing (always summable) — not the cumulative
+  // billed/retainage, which would be misleading under a period filter.
+  const shownThisPeriod = shown.reduce((s, i) => s + i.thisPeriod, 0)
+  const shownUnderReview = shown.filter((i) => i.status === 'Under Review').length
+  const filtered = !!activePeriod || !!q
 
   // Header click cycles: default order → column default dir → opposite → default order.
   const onSort = (col: InvoiceSortCol) =>
@@ -115,10 +124,25 @@ export function InvoicingView() {
         <div style={{ padding: 52, textAlign: 'center', color: 'var(--tx-faint)', fontSize: 13 }}>No pay applications for this project.</div>
       ) : (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '16px 2px 9px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 2px 9px', flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--tx-faint)', fontWeight: 600 }}>Period</span>
+              <select
+                value={activePeriod}
+                onChange={(e) => setPeriod(e.target.value)}
+                style={{ fontFamily: 'inherit', fontSize: 12, fontWeight: 540, padding: '7px 9px', borderRadius: 8, border: '1px solid var(--bd-2)', background: '#fff', color: 'var(--tx-secondary)', cursor: 'pointer', maxWidth: 168 }}
+              >
+                <option value="">All periods</option>
+                {periods.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </label>
             <TableSearch value={query} onChange={setQuery} placeholder="Filter pay applications…" count={{ shown: shown.length, total: rows.length }} />
             <span style={{ fontSize: 12, color: 'var(--tx-tertiary)', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Click a row for the G702 · a column header to sort · newest first.
+              Click a row for the G702 &amp; billing history.
             </span>
           </div>
 
@@ -163,16 +187,18 @@ export function InvoicingView() {
                       <InvoiceRow key={i.id} inv={i} query={query} onOpen={() => patch({ invoice: i })} />
                     ))}
 
-                    {/* totals — billed/retainage reflect the shown set's latest-per-sub rollup */}
+                    {/* totals — sums THIS-PERIOD billing across the shown set (billed/
+                        retainage are cumulative and would mislead under a period filter;
+                        the KPI cards above carry the job's cumulative position) */}
                     <div style={{ ...rowBase, padding: '11px 16px', background: '#f9fafb', borderTop: '1px solid var(--bd-2)' }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 700 }}>Total — {totals.count} {q ? 'matching' : 'pay apps'}</span>
+                      <span style={{ fontSize: 12.5, fontWeight: 700 }}>Total — {shown.length} {filtered ? 'shown' : 'pay apps'}</span>
+                      <span />
+                      <span style={{ ...numBase, textAlign: 'left', fontSize: 10.5, color: 'var(--tx-faint)' }}>billed this period →</span>
+                      <Money v={shownThisPeriod} />
                       <span />
                       <span />
-                      <span style={{ ...numBase, fontSize: 11, color: 'var(--tx-faint)' }}>{totals.underReview > 0 ? `${totals.underReview} in review` : ''}</span>
-                      <Money v={totals.billedToDate} />
-                      <Money v={totals.retainageHeld} />
                       <span />
-                      <span />
+                      <span style={{ textAlign: 'right', fontSize: 11, color: shownUnderReview > 0 ? 'var(--tx-secondary)' : 'var(--tx-faint)' }}>{shownUnderReview > 0 ? `${shownUnderReview} in review` : ''}</span>
                     </div>
                   </>
                 )}
