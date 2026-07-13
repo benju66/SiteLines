@@ -12,6 +12,7 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { formatMoney, statusTone } from '@/lib/derive'
+import { openPatch } from '@/lib/drawerNav'
 import { fuzzyMatchesAny } from '@/lib/fuzzy'
 import { changeEventRollup, changeEventsByScope, changeEventsByType, changeEventsSorted, scoped } from '@/selectors'
 import type { ChangeEventBucket, ChangeEventSort, ChangeEventSortCol } from '@/selectors'
@@ -276,7 +277,7 @@ export function ChangeEventsView() {
                 ) : (
                   <>
                     {shown.map((e) => (
-                      <ChangeEventRow key={e.id} e={e} query={query} onOpen={() => patch({ changeEvent: e })} />
+                      <ChangeEventRow key={e.id} e={e} query={query} onOpen={() => patch(openPatch({ kind: 'changeEvent', value: e }))} />
                     ))}
 
                     {/* totals — reflect the filtered set when searching; exposure excludes void */}

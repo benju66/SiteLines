@@ -376,3 +376,36 @@ button {
   width: 2px;
   background: var(--accent);
 }
+
+/* Detail-drawer resize handle — a thin grab zone straddling the panel's left edge.
+   A hairline appears on hover / during the drag (the handle itself is transparent). */
+.sl-drawer-rz {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  width: 12px;
+  cursor: col-resize;
+  z-index: 4;
+  touch-action: none;
+}
+.sl-drawer-rz::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 6px;
+  width: 1px;
+  background: transparent;
+  transition: background 0.12s ease, width 0.12s ease;
+}
+.sl-drawer-rz:hover::after,
+.sl-drawer-rz.is-drag::after {
+  width: 2px;
+  background: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sl-drawer-rz::after {
+    transition: none;
+  }
+}

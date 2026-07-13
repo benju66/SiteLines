@@ -12,6 +12,7 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { formatMoney, statusTone } from '@/lib/derive'
+import { openPatch } from '@/lib/drawerNav'
 import { fuzzyMatchesAny } from '@/lib/fuzzy'
 import { invoicePeriods, invoiceRollup, invoicesSorted, scoped } from '@/selectors'
 import type { InvoiceSort, InvoiceSortCol } from '@/selectors'
@@ -184,7 +185,7 @@ export function InvoicingView() {
                 ) : (
                   <>
                     {shown.map((i) => (
-                      <InvoiceRow key={i.id} inv={i} query={query} onOpen={() => patch({ invoice: i })} />
+                      <InvoiceRow key={i.id} inv={i} query={query} onOpen={() => patch(openPatch({ kind: 'invoice', value: i }))} />
                     ))}
 
                     {/* totals — sums THIS-PERIOD billing across the shown set (billed/

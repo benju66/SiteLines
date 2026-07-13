@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { ReactNode } from 'react'
+import { closePatch } from '@/lib/drawerNav'
 import { useApp } from '@/state/AppContext'
 import { useData } from '@/state/DataContext'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -27,7 +28,7 @@ function useGlobalKeys() {
         e.preventDefault()
         patch((s) => ({ palette: !s.palette, query: '' }))
       } else if (e.key === 'Escape') {
-        patch({ palette: false, detail: null, commitment: null, changeEvent: null, invoice: null, activity: false, viewer: null, submittalViewer: null })
+        patch({ palette: false, activity: false, viewer: null, submittalViewer: null, ...closePatch() })
       }
     }
     window.addEventListener('keydown', onKey)

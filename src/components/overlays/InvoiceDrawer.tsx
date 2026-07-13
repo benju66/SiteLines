@@ -12,13 +12,14 @@ import { useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { TOOLS } from '@/data/tools'
 import { formatMoney, formatShortDate, statusTone } from '@/lib/derive'
+import { closePatch, navigatePatch } from '@/lib/drawerNav'
 import { invoiceHistoryFor, invoiceLinesFor } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useSiteData } from '@/state/DataContext'
 import { mono, projectMeta, tone } from '@/theme/tokens'
 import type { Invoice, InvoiceLineItem } from '@/types'
-import { CodeBadge, ProjectTag, StatusPill } from '@/components/ui/primitives'
-import { Backdrop } from './Backdrop'
+import { ProjectTag, StatusPill } from '@/components/ui/primitives'
+import { DrawerShell } from './DrawerShell'
 
 const cellLabel: CSSProperties = { fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--tx-faint)' }
 const sectionLabel: CSSProperties = { fontSize: 10, textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--tx-faint-2)', fontWeight: 600 }
@@ -128,7 +129,7 @@ export function InvoiceDrawer() {
   const { state, patch } = useApp()
   const invoice = state.invoice
   if (!invoice) return null
-  return <InvoicePanel key={invoice.id} invoice={invoice} onClose={() => patch({ invoice: null })} />
+  return <InvoicePanel key={invoice.id} invoice={invoice} onClose={() => patch(closePatch())} />
 }
 
 function InvoicePanel({ invoice: inv, onClose }: { invoice: Invoice; onClose: () => void }) {
@@ -152,130 +153,106 @@ function InvoicePanel({ invoice: inv, onClose }: { invoice: Invoice; onClose: ()
     })
 
   const openCommitment = () => {
-    if (commitment) patch({ invoice: null, commitment })
+    if (commitment) patch((s) => navigatePatch(s, { kind: 'commitment', value: commitment }))
   }
 
   return (
-    <Backdrop onClose={onClose}>
-      <div
-        onClick={(ev) => ev.stopPropagation()}
-        className="scry"
-        style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 452, maxWidth: '94vw', background: 'var(--card)', boxShadow: '-8px 0 40px rgba(20,25,35,.2)', display: 'flex', flexDirection: 'column' }}
-      >
-        {/* header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '15px 18px', borderBottom: '1px solid var(--bd-2)', background: '#fff', flex: 'none' }}>
-          <CodeBadge code={TOOLS.invoicing.code} style={{ fontSize: 10, fontWeight: 700, padding: '3px 7px', borderRadius: 5 }} />
-          <span style={{ fontFamily: mono, fontSize: 12.5, fontWeight: 650, color: 'var(--tx-secondary)' }}>{inv.number}</span>
-          <div style={{ flex: 1 }} />
-          <button
-            type="button"
-            className="sl-icon-btn"
-            onClick={onClose}
-            style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--bd-1)', background: '#fff', cursor: 'pointer', color: 'var(--tx-secondary-2)', fontSize: 15, lineHeight: 1 }}
-          >
-            ×
-          </button>
-        </div>
-
-        {/* body */}
-        <div className="scry" style={{ flex: 1, overflowY: 'auto', padding: 18 }}>
-          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 680, lineHeight: 1.3, letterSpacing: '-.2px' }}>{inv.vendor || inv.contract || 'Pay application'}</h2>
-          {inv.contract && inv.vendor && <div style={{ fontSize: 12.5, color: 'var(--tx-tertiary)', marginTop: 3 }}>{inv.contract}</div>}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-            <StatusPill label={inv.status || '—'} tone={statusTone(inv.status, 'track')} />
-            <ProjectTag project={inv.project} />
-            {inv.final && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: '.3px', textTransform: 'uppercase', color: 'var(--tx-faint)', border: '1px solid var(--bd-1)', borderRadius: 4, padding: '1px 5px' }}>Final</span>}
-          </div>
-
-          {/* period + this-period + % */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: '#e8ebee', border: '1px solid #e8ebee', borderRadius: 9, overflow: 'hidden', marginTop: 16 }}>
-            <MetaCell label="This period due">
-              <span style={{ ...money, color: 'var(--tx-primary)' }}>{formatMoney(inv.thisPeriod)}</span>
-            </MetaCell>
-            <MetaCell label="% complete">
-              <span style={{ ...money, color: 'var(--tx-secondary)' }}>{Math.round(inv.pctComplete * 100)}%</span>
-            </MetaCell>
-            <MetaCell label="Billing period">
-              <span style={{ fontSize: 12.5, color: '#3c434c' }}>{inv.period || '—'}</span>
-            </MetaCell>
-            <MetaCell label="Billing date">
-              <span style={{ fontSize: 12.5, color: '#3c434c' }}>{formatShortDate(inv.billingDate) ?? '—'}</span>
-            </MetaCell>
-          </div>
-
-          {/* AIA G702 cover sheet */}
-          <div style={{ ...sectionLabel, margin: '18px 0 4px' }}>G702 summary</div>
-          <div style={{ background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 9, padding: '4px 13px 8px' }}>
-            <G702Line label="Original contract sum" value={inv.original} />
-            <G702Line label="Net change by change orders" value={inv.netChangeByCOs} />
-            <G702Line label="Contract sum to date" value={inv.revised} strong />
-            <G702Line label="Completed & stored to date" value={inv.billedToDate} />
-            <G702Line label="Retainage held" value={inv.retainage} deduct />
-            <G702Line label="Total earned less retainage" value={inv.earnedLessRetainage} strong />
-            <G702Line label="Balance to finish (incl. retainage)" value={inv.balanceToFinish} />
-          </div>
-
-          {/* pay applications — each one expands to its own G703 schedule of values
-              inline; the pay app the drawer opened on is expanded by default */}
-          <div style={{ ...sectionLabel, margin: '18px 0 9px' }}>
-            {history.length > 1 ? `Pay applications (${history.length})` : 'Schedule of values'}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            {history.map((h) => {
-              const hLines = invoiceLinesFor(invoiceLineItems, h)
-              const hasSov = hLines.length > 0
-              const isOpen = expanded.has(h.id)
-              const opened = h.id === inv.id
-              const sovTotal = hLines.reduce((s, l) => s + l.billedToDate, 0)
-              return (
-                <div key={h.id} style={{ background: opened ? tone.info.bg : '#fff', border: `1px solid ${opened ? tone.info.bd : 'var(--bd-1)'}`, borderRadius: 9, overflow: 'hidden' }}>
-                  <SummaryRow
-                    h={h}
-                    hasSov={hasSov}
-                    isOpen={isOpen}
-                    isLatest={h.isLatest}
-                    onToggle={hasSov ? () => toggle(h.id) : undefined}
-                  />
-                  {hasSov && isOpen && (
-                    <div style={{ padding: '0 12px 11px' }}>
-                      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--tx-faint)', margin: '2px 0 0' }}>
-                        Schedule of values · {hLines.length} lines · {formatMoney(sovTotal)} to date
-                      </div>
-                      <SovLines lines={hLines} />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* cross-link: the commitment this pay app bills against */}
-          {inv.commitmentId && (
-            <>
-              <div style={{ ...sectionLabel, margin: '18px 0 7px' }}>Bills against</div>
-              {commitment ? (
-                <button
-                  type="button"
-                  className="sl-ce-sub"
-                  onClick={openCommitment}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 9, padding: '10px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
-                  title={`Open ${commitment.number}`}
-                >
-                  <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: 'var(--tx-secondary-2)', background: 'var(--fill-3)', border: '1px solid var(--bd-1)', borderRadius: 4, padding: '1px 6px', flex: 'none' }}>{commitment.number}</span>
-                  <span style={{ fontSize: 12.5, color: 'var(--tx-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{commitment.title || commitment.vendor}</span>
-                  <span style={{ fontSize: 11, fontWeight: 650, color: tone.info.c, flex: 'none' }}>Open ↗</span>
-                </button>
-              ) : (
-                <div style={{ fontSize: 12, color: 'var(--tx-faint)' }}>Commitment {inv.commitmentId.replace('commitments:', '#')}</div>
-              )}
-            </>
-          )}
-
-          <div style={{ marginTop: 16, fontSize: 11, color: 'var(--tx-faint)', lineHeight: 1.5 }}>
-            Subcontractor pay application (money out). Owner billing is tracked separately in Procore.
-          </div>
-        </div>
+    <DrawerShell code={TOOLS.invoicing.code} number={inv.number} onClose={onClose}>
+      <h2 style={{ margin: 0, fontSize: 17, fontWeight: 680, lineHeight: 1.3, letterSpacing: '-.2px' }}>{inv.vendor || inv.contract || 'Pay application'}</h2>
+      {inv.contract && inv.vendor && <div style={{ fontSize: 12.5, color: 'var(--tx-tertiary)', marginTop: 3 }}>{inv.contract}</div>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        <StatusPill label={inv.status || '—'} tone={statusTone(inv.status, 'track')} />
+        <ProjectTag project={inv.project} />
+        {inv.final && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: '.3px', textTransform: 'uppercase', color: 'var(--tx-faint)', border: '1px solid var(--bd-1)', borderRadius: 4, padding: '1px 5px' }}>Final</span>}
       </div>
-    </Backdrop>
+
+      {/* period + this-period + % */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: '#e8ebee', border: '1px solid #e8ebee', borderRadius: 9, overflow: 'hidden', marginTop: 16 }}>
+        <MetaCell label="This period due">
+          <span style={{ ...money, color: 'var(--tx-primary)' }}>{formatMoney(inv.thisPeriod)}</span>
+        </MetaCell>
+        <MetaCell label="% complete">
+          <span style={{ ...money, color: 'var(--tx-secondary)' }}>{Math.round(inv.pctComplete * 100)}%</span>
+        </MetaCell>
+        <MetaCell label="Billing period">
+          <span style={{ fontSize: 12.5, color: '#3c434c' }}>{inv.period || '—'}</span>
+        </MetaCell>
+        <MetaCell label="Billing date">
+          <span style={{ fontSize: 12.5, color: '#3c434c' }}>{formatShortDate(inv.billingDate) ?? '—'}</span>
+        </MetaCell>
+      </div>
+
+      {/* AIA G702 cover sheet */}
+      <div style={{ ...sectionLabel, margin: '18px 0 4px' }}>G702 summary</div>
+      <div style={{ background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 9, padding: '4px 13px 8px' }}>
+        <G702Line label="Original contract sum" value={inv.original} />
+        <G702Line label="Net change by change orders" value={inv.netChangeByCOs} />
+        <G702Line label="Contract sum to date" value={inv.revised} strong />
+        <G702Line label="Completed & stored to date" value={inv.billedToDate} />
+        <G702Line label="Retainage held" value={inv.retainage} deduct />
+        <G702Line label="Total earned less retainage" value={inv.earnedLessRetainage} strong />
+        <G702Line label="Balance to finish (incl. retainage)" value={inv.balanceToFinish} />
+      </div>
+
+      {/* pay applications — each one expands to its own G703 schedule of values
+          inline; the pay app the drawer opened on is expanded by default */}
+      <div style={{ ...sectionLabel, margin: '18px 0 9px' }}>
+        {history.length > 1 ? `Pay applications (${history.length})` : 'Schedule of values'}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        {history.map((h) => {
+          const hLines = invoiceLinesFor(invoiceLineItems, h)
+          const hasSov = hLines.length > 0
+          const isOpen = expanded.has(h.id)
+          const opened = h.id === inv.id
+          const sovTotal = hLines.reduce((s, l) => s + l.billedToDate, 0)
+          return (
+            <div key={h.id} style={{ background: opened ? tone.info.bg : '#fff', border: `1px solid ${opened ? tone.info.bd : 'var(--bd-1)'}`, borderRadius: 9, overflow: 'hidden' }}>
+              <SummaryRow
+                h={h}
+                hasSov={hasSov}
+                isOpen={isOpen}
+                isLatest={h.isLatest}
+                onToggle={hasSov ? () => toggle(h.id) : undefined}
+              />
+              {hasSov && isOpen && (
+                <div style={{ padding: '0 12px 11px' }}>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--tx-faint)', margin: '2px 0 0' }}>
+                    Schedule of values · {hLines.length} lines · {formatMoney(sovTotal)} to date
+                  </div>
+                  <SovLines lines={hLines} />
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* cross-link: the commitment this pay app bills against */}
+      {inv.commitmentId && (
+        <>
+          <div style={{ ...sectionLabel, margin: '18px 0 7px' }}>Bills against</div>
+          {commitment ? (
+            <button
+              type="button"
+              className="sl-ce-sub"
+              onClick={openCommitment}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: '#fff', border: '1px solid var(--bd-1)', borderRadius: 9, padding: '10px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
+              title={`Open ${commitment.number}`}
+            >
+              <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: 'var(--tx-secondary-2)', background: 'var(--fill-3)', border: '1px solid var(--bd-1)', borderRadius: 4, padding: '1px 6px', flex: 'none' }}>{commitment.number}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--tx-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{commitment.title || commitment.vendor}</span>
+              <span style={{ fontSize: 11, fontWeight: 650, color: tone.info.c, flex: 'none' }}>Open ↗</span>
+            </button>
+          ) : (
+            <div style={{ fontSize: 12, color: 'var(--tx-faint)' }}>Commitment {inv.commitmentId.replace('commitments:', '#')}</div>
+          )}
+        </>
+      )}
+
+      <div style={{ marginTop: 16, fontSize: 11, color: 'var(--tx-faint)', lineHeight: 1.5 }}>
+        Subcontractor pay application (money out). Owner billing is tracked separately in Procore.
+      </div>
+    </DrawerShell>
   )
 }

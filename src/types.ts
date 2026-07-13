@@ -505,6 +505,20 @@ export interface FinancialSource {
   projectedOverUnder: Record<Project, number> // +over / -under, $M
 }
 
+/**
+ * A target the detail drawer can show — the discriminated union behind the
+ * cross-drawer navigation stack (`AppState.drawerHistory`). Each variant carries
+ * exactly what its `AppState` slot holds, so restoring a target is a plain slot
+ * assignment. Powers the drawer's Back button: following a cross-link (a linked
+ * record, the commitment a change event / invoice hits) pushes the current target
+ * here so Back can restore it. Pure transitions live in `src/lib/drawerNav.ts`.
+ */
+export type DrawerTarget =
+  | { kind: 'detail'; value: { tool: ToolKey; record: Item } }
+  | { kind: 'commitment'; value: Commitment }
+  | { kind: 'changeEvent'; value: ChangeEvent }
+  | { kind: 'invoice'; value: Invoice }
+
 export interface ToolMeta {
   label: string
   code: string // short mono code badge, e.g. "RFI"

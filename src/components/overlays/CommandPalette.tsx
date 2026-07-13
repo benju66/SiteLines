@@ -3,6 +3,7 @@
 // Enter for the top hit) opens a record's detail or navigates to a tool.
 
 import { TOOLS } from '@/data/tools'
+import { openPatch } from '@/lib/drawerNav'
 import { paletteResults } from '@/selectors'
 import type { PaletteResult } from '@/selectors'
 import { useApp } from '@/state/AppContext'
@@ -19,7 +20,7 @@ export function CommandPalette() {
   const close = () => patch({ palette: false })
   const open = (res: PaletteResult) => {
     if (res.kind === 'record') {
-      patch({ tool: res.record.tool, detail: { tool: res.record.tool, record: res.record }, palette: false })
+      patch({ tool: res.record.tool, palette: false, ...openPatch({ kind: 'detail', value: { tool: res.record.tool, record: res.record } }) })
     } else {
       patch({ tool: res.tool, palette: false })
     }

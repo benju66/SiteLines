@@ -13,6 +13,7 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { formatMoney } from '@/lib/derive'
+import { openPatch } from '@/lib/drawerNav'
 import { fuzzyMatchesAny } from '@/lib/fuzzy'
 import { boughtOut, budgetByDivision, budgetForecast, budgetTotals, buyoutGaps, commitmentsByCostCode, costCodeKey, costTypeMix, financialView, overBudget, scoped, sortedBudgetGroups } from '@/selectors'
 import type { BudgetDivisionGroup, BudgetForecast, BudgetSort, BudgetSortCol, CostCodeCommitment, CostTypeSlice, OverBudgetResult } from '@/selectors'
@@ -135,7 +136,7 @@ export function BudgetView() {
       else next.add(code)
       return next
     })
-  const openCommitment = (c: Commitment) => patch({ commitment: c })
+  const openCommitment = (c: Commitment) => patch(openPatch({ kind: 'commitment', value: c }))
 
   // Phase 2 analysis — always over the full scoped lines (independent of the table's filter).
   const risk = overBudget(lines)

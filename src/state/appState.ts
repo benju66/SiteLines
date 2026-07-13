@@ -2,7 +2,7 @@
 // derived from it via selectors — no view owns state. Ports cleanly to the
 // prototype's `state` object.
 
-import type { ChangeEvent, Commitment, Drawing, Invoice, Item, ToolKey } from '@/types'
+import type { ChangeEvent, Commitment, Drawing, DrawerTarget, Invoice, Item, ToolKey } from '@/types'
 
 export type ProjectScope = 'all' | 'mckenna' | 'opiii'
 export type TypeFilter = 'all' | 'rfi' | 'submittal' | 'co' | 'punch'
@@ -19,6 +19,12 @@ export interface AppState {
   commitment: Commitment | null // open commitment detail drawer (the clicked register row)
   changeEvent: ChangeEvent | null // open change-event detail drawer (the clicked register row)
   invoice: Invoice | null // open invoice (pay-app) G702 detail drawer (the clicked register row)
+  // Detail-drawer chrome (shared by all four drawers, so it survives a cross-drawer
+  // swap): a drag-resizable width + a full-width toggle (both sticky across opens),
+  // and the cross-link back-stack that powers the drawer's Back button.
+  drawerWidth: number // px width of the detail drawer (drag-resizable; default 452)
+  drawerFull: boolean // detail drawer expanded to near-full width (toggle)
+  drawerHistory: DrawerTarget[] // back-stack: targets to restore when Back is pressed
   viewer: Drawing | null // open drawing-sheet viewer overlay (the clicked current sheet)
   submittalViewer: { id: string; name: string; downloadUrl?: string; procoreUrl?: string } | null // open Final-reviewed-submittal PDF viewer (id = "submittals:<id>")
   activity: boolean // activity drawer
@@ -43,6 +49,9 @@ export const initialState: AppState = {
   commitment: null,
   changeEvent: null,
   invoice: null,
+  drawerWidth: 452,
+  drawerFull: false,
+  drawerHistory: [],
   viewer: null,
   submittalViewer: null,
   activity: false,

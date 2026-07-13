@@ -4,6 +4,7 @@
 import type { ReactNode } from 'react'
 import { useApp } from '@/state/AppContext'
 import { TOOLS } from '@/data/tools'
+import { openPatch } from '@/lib/drawerNav'
 import { mono, urgency as urgencyMap } from '@/theme/tokens'
 import type { Item } from '@/types'
 import { CodeBadge, ProjectTag, StatusPill, UrgencyDot, YouPill } from './primitives'
@@ -51,7 +52,7 @@ export function ListTableHeader({ whoLabel, rightLabel }: { whoLabel: string; ri
 export function RecordRow({ record, isHome, showPill, query }: { record: Item; isHome: boolean; showPill: boolean; query?: string }) {
   const { patch } = useApp()
   const u = urgencyMap[record.urgency]
-  const openDetail = () => patch({ detail: { tool: record.tool, record } })
+  const openDetail = () => patch(openPatch({ kind: 'detail', value: { tool: record.tool, record } }))
 
   return (
     <div

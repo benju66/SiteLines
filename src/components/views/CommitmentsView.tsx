@@ -13,6 +13,7 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { formatMoney, statusTone } from '@/lib/derive'
+import { openPatch } from '@/lib/drawerNav'
 import { fuzzyMatchesAny } from '@/lib/fuzzy'
 import { commitmentRollup, commitmentsSorted, scoped } from '@/selectors'
 import type { CommitmentSort, CommitmentSortCol } from '@/selectors'
@@ -199,7 +200,7 @@ export function CommitmentsView() {
                 ) : (
                   <>
                     {shown.map((c) => (
-                      <CommitmentRow key={c.id} c={c} query={query} onOpen={() => patch({ commitment: c })} />
+                      <CommitmentRow key={c.id} c={c} query={query} onOpen={() => patch(openPatch({ kind: 'commitment', value: c }))} />
                     ))}
 
                     {/* totals — reflect the filtered set when searching */}
