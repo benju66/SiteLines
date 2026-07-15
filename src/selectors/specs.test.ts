@@ -3,7 +3,7 @@ import type { Spec } from '@/types'
 import { groupByDivision } from './index'
 
 function spec(id: string, number: string, title = 'x'): Spec {
-  return { id, number, title, division: number.trim().split(/\s+/)[0] ?? '', issuedDate: null, pdfUrl: null }
+  return { id, number, title, division: number.trim().split(/\s+/)[0] ?? '', procoreUrl: null, issuedDate: null, pdfUrl: null }
 }
 
 describe('groupByDivision', () => {

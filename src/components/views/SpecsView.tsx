@@ -4,10 +4,10 @@
 // selector (divisions in book order, sections natural-sorted), and lets each
 // division collapse/expand (state lives in AppState; default = all expanded).
 //
-// Rows are static reference lines in Phase 1: the spec master syncs only a thin
-// section summary (number + title), so there is nothing per-row to open yet. The
-// per-section "Open PDF ↗" + issued date arrive in Phase 3 (they need the detail
-// re-sync in Phase 2). Mirrors DrawingsView; kept trimmed to what specs carry.
+// Each row opens the current spec section in Procore's PDF viewer (a link built
+// from the section's current_revision_id — already synced, no re-sync). The Issued
+// date column + an in-app/served Open PDF are the later phases. Mirrors DrawingsView;
+// kept trimmed to what specs carry.
 
 import { useState } from 'react'
 import { fuzzyMatch, fuzzyMatchesAny } from '@/lib/fuzzy'
@@ -19,8 +19,8 @@ import type { Spec } from '@/types'
 import { Highlight } from '@/components/ui/Highlight'
 import { TableSearch } from '@/components/ui/TableSearch'
 
-// 2 data columns: Section number · Title. (Phase 3 adds Issued + Open PDF.)
-const GRID = '132px minmax(200px,1fr)'
+// 2 data columns + a trailing action cell: Section number · Title · (Open in Procore).
+const GRID = '132px minmax(200px,1fr) 150px'
 const HEADS = ['Section', 'Title']
 
 // Division dot colors, drawn only from existing tokens (no ad-hoc hex). A stable
@@ -56,7 +56,37 @@ function ColumnHeader() {
       {HEADS.map((h) => (
         <span key={h}>{h}</span>
       ))}
+      <span />
     </div>
+  )
+}
+
+function OpenInProcore({ url }: { url: string | null }) {
+  if (!url) return <span style={{ fontSize: 11.5, color: 'var(--tx-faint-2)' }}>—</span>
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="sl-linked-row"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        fontSize: 11.5,
+        fontWeight: 600,
+        color: 'var(--tx-secondary-2)',
+        background: '#fff',
+        border: '1px solid var(--bd-1)',
+        borderRadius: 6,
+        padding: '4px 9px',
+        textDecoration: 'none',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      Open in Procore <span aria-hidden style={{ fontSize: 10 }}>↗</span>
+    </a>
   )
 }
 
@@ -77,6 +107,9 @@ function SectionRow({ section, query }: { section: Spec; query?: string }) {
       </span>
       <span style={{ fontSize: 13, fontWeight: 530, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={section.title}>
         {section.title ? <Highlight text={section.title} query={query} /> : '—'}
+      </span>
+      <span style={{ justifySelf: 'start' }}>
+        <OpenInProcore url={section.procoreUrl} />
       </span>
     </div>
   )

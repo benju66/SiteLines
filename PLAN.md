@@ -152,12 +152,21 @@ pattern. **The grouped log is free** (division = the first token of every sectio
 `description` · `current_revision_id` pointer only) — so **the PDF + issued dates are a
 gated re-sync** (⛔ ≈189 per-section Procore GETs + a spec fresh-URL edge function),
 exactly the two-step Drawings itself took. Owner **committed to the full PDF result**.
+**Update (2026-07-15):** the owner supplied Procore's spec-viewer URL pattern
+(`/project/specification_section_revisions/<current_revision_id>?open_viewer=true`) —
+and `current_revision_id` is **already synced**, so a per-row **Open in Procore ↗** (opens
+the section's PDF in Procore's viewer) shipped **for free** as Phase 1.5, verified live to
+the digit (`03 3000` → revision `46700073`). That makes the Phase-2/3 re-sync purely about
+(a) the **Issued date** column and (b) serving the PDF **in-app** (no Procore bounce); the
+owner **chose the full in-app PDF** (2026-07-15), reusing the **Submittal Viewer** pattern
+(`submittal-file` edge fn + blob overlay). Open-in-Procore stays as the fallback.
 
 | Phase | Surface | Status |
 |-------|---------|--------|
-| 1 | Spec log — `sitelines_specs` view + `Spec` seam + `csiDivisions` lib + `groupByDivision` selector + own collapsible/searchable `SpecsView` (CSI divisions in book order, section # · title). No re-sync | ✅ Shipped (2026-07-15) — [view](sync/views/sitelines_specs.sql) applied (`security_invoker`, no re-sync); typecheck + **282 tests** + build green; view returns **189 sections / 21 divisions** (dates+pdf NULL), advisors clean; seed (`:5174`) verified — book order (00→26), within-division natural sort (`09 9110` before `09 9123`), search (name-match keeps a division whole), collapse/expand. Live (`:5175`, logged in) verified — the real **189 sections / 21 divisions** render, division counts tie to the DB to the row (00→6, 01→20, 06→11, 26→37 …), canonical CSI names + real titles, no console errors. Rows are **static** in v1 (Open-in-Procore URL unverified → deferred to Phase 3's Open PDF). Committed on `specifications-phase-1` |
-| 2 | **⛔ re-sync** — `enrich_specs_with_detail()`: per-section current-revision fetch → issued date + attachment PDF url onto the spec master `raw` (gated, no purge on partial fail). ~189 Procore GETs | ⏳ Planned |
-| 3 | Open PDF ↗ + Issued date in the log — widen `sitelines_specs` + `SpecsView` column/action + a `spec-file` fresh-URL edge fn (reuse `drawing-file`) + `getSpecFileUrl` seam | ⏳ Planned |
+| 1 | Spec log — `sitelines_specs` view + `Spec` seam + `csiDivisions` lib + `groupByDivision` selector + own collapsible/searchable `SpecsView` (CSI divisions in book order, section # · title). No re-sync | ✅ Shipped (2026-07-15) — [view](sync/views/sitelines_specs.sql) applied (`security_invoker`, no re-sync); typecheck + **282 tests** + build green; view returns **189 sections / 21 divisions** (dates+pdf NULL), advisors clean; seed (`:5174`) verified — book order (00→26), within-division natural sort (`09 9110` before `09 9123`), search (name-match keeps a division whole), collapse/expand. Live (`:5175`, logged in) verified — the real **189 sections / 21 divisions** render, division counts tie to the DB to the row (00→6, 01→20, 06→11, 26→37 …), canonical CSI names + real titles, no console errors. Committed on `specifications-phase-1` |
+| 1.5 | **Open in Procore ↗** per row — `procore_url` on `sitelines_specs` (constructed from the already-synced `current_revision_id`, no re-sync) + `Spec.procoreUrl` + a link cell on `SpecsView` (opens the section's PDF in Procore's viewer); the row's permanent Procore fallback once the in-app PDF lands | ✅ Shipped (2026-07-15) — view widened (append-only `CREATE OR REPLACE`); typecheck + **282 tests** + build green; seed (`:5174`) link href-verified; live (`:5175`, logged in) — **189/189** rows link out, `03 3000` → revision **46700073** (= the owner's URL to the digit), no console errors |
+| 2 | **⛔ re-sync** — `enrich_specs_with_detail()`: per-section current-revision fetch → issued date + attachment PDF url onto the spec master `raw` (gated, no purge on partial fail). ⚠️ **probe for a bulk `/specification_section_revisions` list first** (one call for the whole project) to avoid ~189 per-section GETs + the rate-limit cooldown | ⏳ Planned |
+| 3 | **In-app PDF** (owner chose over Open-in-new-tab, 2026-07-15) + Issued date — widen `sitelines_specs` (issued_date + pdf_url) + a `spec-file` byte-streaming edge fn + a `SpecViewerOverlay` (blob iframe) reusing the **Submittal Viewer** wholesale; Open-in-Procore (1.5) stays as the fallback | ⏳ Planned |
 
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**

@@ -158,8 +158,9 @@ export interface Spec {
   number: string // "26 0519"
   title: string // section title (from description)
   division: string // CSI division code — first token of number, e.g. "26"
-  issuedDate: string | null // Phase 3 (from the current revision) — null in Phase 1
-  pdfUrl: string | null // Phase 3 (current revision's attachment) — null in Phase 1
+  procoreUrl: string | null // deep link to the current revision's PDF viewer in Procore (from current_revision_id — no re-sync)
+  issuedDate: string | null // Phase 3 (from the current revision) — null until the detail re-sync
+  pdfUrl: string | null // Phase 3 (current revision's attachment) — null until the detail re-sync
 }
 
 export interface Contact {

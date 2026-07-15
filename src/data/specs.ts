@@ -23,11 +23,22 @@ export const SPECS: Spec[] = [
   s('specs:seed-230000', '23 0000', 'Heating, Ventilating & Air Conditioning'),
   s('specs:seed-260519', '26 0519', 'Low-Voltage Electrical Power Conductors & Cables'),
   s('specs:seed-260500', '26 0500', 'Common Work Results for Electrical'), // sorts before 0519
-  s('specs:seed-265100', '26 5100', 'Interior Lighting'),
+  s('specs:seed-265100', '26 5100', 'Interior Lighting', { noLink: true }), // exercises the inert "—" link cell
 ]
 
 /** Compact fixture builder — a spec section. Division is derived from the number
- *  exactly as mapSpec / the view do; issued date + pdf are Phase 2/3 (null here). */
-function s(id: string, number: string, title: string): Spec {
-  return { id, number, title, division: divisionCode(number), issuedDate: null, pdfUrl: null }
+ *  exactly as mapSpec / the view do; the Procore link is constructed from a (fake,
+ *  offline) revision id in the same shape the view builds live; issued date + pdf are
+ *  Phase 2/3 (null here). `noLink` exercises the row's inert "—" affordance. */
+function s(id: string, number: string, title: string, opts: { noLink?: boolean } = {}): Spec {
+  const fakeRevId = id.replace('specs:seed-', '9') // stable pseudo revision id for the seed link
+  return {
+    id,
+    number,
+    title,
+    division: divisionCode(number),
+    procoreUrl: opts.noLink ? null : `https://app.procore.com/3051002/project/specification_section_revisions/${fakeRevId}?open_viewer=true&mfe_view=true`,
+    issuedDate: null,
+    pdfUrl: null,
+  }
 }

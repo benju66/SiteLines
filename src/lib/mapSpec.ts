@@ -15,6 +15,7 @@ export interface SpecRow {
   id: string
   number: string | null
   title: string | null // description (section title)
+  procore_url: string | null // constructed deep link to the current revision's PDF viewer
   issued_date: string | null // ISO date "YYYY-MM-DD" — NULL until Phase 2
   pdf_url: string | null // current revision attachment — NULL until Phase 2
 }
@@ -27,6 +28,7 @@ export function mapSpec(row: SpecRow): Spec {
     number,
     title: htmlToText(row.title),
     division: divisionCode(number),
+    procoreUrl: safeUrl(row.procore_url) ?? null,
     issuedDate: formatResponseDate(row.issued_date),
     pdfUrl: safeUrl(row.pdf_url) ?? null,
   }
