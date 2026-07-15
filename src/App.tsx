@@ -14,6 +14,7 @@ import { InvoiceDrawer } from '@/components/overlays/InvoiceDrawer'
 import { DrawingViewerOverlay } from '@/components/overlays/DrawingViewerOverlay'
 import { RecordDetailDrawer } from '@/components/overlays/RecordDetailDrawer'
 import { SubmittalViewerOverlay } from '@/components/overlays/SubmittalViewerOverlay'
+import { SpecViewerOverlay } from '@/components/overlays/SpecViewerOverlay'
 
 /**
  * Global keyboard shortcuts (README "Interactions"):
@@ -28,7 +29,7 @@ function useGlobalKeys() {
         e.preventDefault()
         patch((s) => ({ palette: !s.palette, query: '' }))
       } else if (e.key === 'Escape') {
-        patch({ palette: false, activity: false, viewer: null, submittalViewer: null, ...closePatch() })
+        patch({ palette: false, activity: false, viewer: null, submittalViewer: null, specViewer: null, ...closePatch() })
       }
     }
     window.addEventListener('keydown', onKey)
@@ -123,6 +124,7 @@ export function App() {
       <InvoiceDrawer />
       <DrawingViewerOverlay />
       <SubmittalViewerOverlay />
+      <SpecViewerOverlay />
       <ActivityDrawer />
       <CommandPalette />
     </>

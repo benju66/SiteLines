@@ -147,11 +147,11 @@ export interface DrawingRevision {
 }
 
 /**
- * One current specification section (Specifications, Phase 1). Reference data —
- * NOT a court `Item` and never enters My Court (like `Drawing`). Grouped by CSI
- * MasterFormat `division` (the first token of `number`) in the spec log. The spec
- * master syncs only a thin summary today, so `issuedDate`/`pdfUrl` are null until
- * the Phase-2 detail re-sync + a widened view populate them (Phase 3 surfaces them).
+ * One current specification section (Specifications). Reference data — NOT a court
+ * `Item` and never enters My Court (like `Drawing`). Grouped by CSI MasterFormat
+ * `division` (the first token of `number`) in the spec log. `issuedDate`/`pdfUrl`/
+ * `revisionId` come from the Phase-2 current-revision enrichment; `pdfUrl` is null
+ * when the section has no PDF in Procore (the row then offers only Open-in-Procore).
  */
 export interface Spec {
   id: string // "specs:<sectionId>"
@@ -159,8 +159,9 @@ export interface Spec {
   title: string // section title (from description)
   division: string // CSI division code — first token of number, e.g. "26"
   procoreUrl: string | null // deep link to the current revision's PDF viewer in Procore (from current_revision_id — no re-sync)
-  issuedDate: string | null // Phase 3 (from the current revision) — null until the detail re-sync
-  pdfUrl: string | null // Phase 3 (current revision's attachment) — null until the detail re-sync
+  revisionId: string | null // the current_revision_id — passed to the spec-file edge fn to stream a fresh PDF
+  issuedDate: string | null // the current revision's issued date (preformatted display); null if no revision
+  pdfUrl: string | null // the current revision's stored PDF url — an EXISTENCE FLAG only (expiring sig; the edge fn re-mints for viewing)
 }
 
 export interface Contact {

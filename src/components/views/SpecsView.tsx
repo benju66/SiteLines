@@ -1,13 +1,13 @@
-// Spec log (Specifications workstream, Phase 1) — the CSI-division-grouped,
-// collapsible specification register. Reference data (NOT court items): reads the
-// `specs` slice, groups by CSI MasterFormat division via the pure groupByDivision
-// selector (divisions in book order, sections natural-sorted), and lets each
-// division collapse/expand (state lives in AppState; default = all expanded).
+// Spec log (Specifications workstream) — the CSI-division-grouped, collapsible
+// specification register. Reference data (NOT court items): reads the `specs`
+// slice, groups by CSI MasterFormat division via the pure groupByDivision selector
+// (divisions in book order, sections natural-sorted), and lets each division
+// collapse/expand (state lives in AppState; default = all expanded).
 //
-// Each row opens the current spec section in Procore's PDF viewer (a link built
-// from the section's current_revision_id — already synced, no re-sync). The Issued
-// date column + an in-app/served Open PDF are the later phases. Mirrors DrawingsView;
-// kept trimmed to what specs carry.
+// Each row shows the current revision's Issued date and a smart action: "Open PDF"
+// opens the spec section IN-APP (the spec-file edge fn streams a fresh PDF) when the
+// section has one; otherwise "Open in Procore ↗" (built from current_revision_id);
+// a section with no current revision shows "—". Mirrors DrawingsView.
 
 import { useState } from 'react'
 import { fuzzyMatch, fuzzyMatchesAny } from '@/lib/fuzzy'
@@ -19,9 +19,9 @@ import type { Spec } from '@/types'
 import { Highlight } from '@/components/ui/Highlight'
 import { TableSearch } from '@/components/ui/TableSearch'
 
-// 2 data columns + a trailing action cell: Section number · Title · (Open in Procore).
-const GRID = '132px minmax(200px,1fr) 150px'
-const HEADS = ['Section', 'Title']
+// 3 data columns + a trailing action cell: Section · Title · Issued · (Open PDF / Procore).
+const GRID = '128px minmax(180px,1fr) 96px 150px'
+const HEADS = ['Section', 'Title', 'Issued']
 
 // Division dot colors, drawn only from existing tokens (no ad-hoc hex). A stable
 // hash keeps each division's dot color constant across data changes.
@@ -61,36 +61,45 @@ function ColumnHeader() {
   )
 }
 
-function OpenInProcore({ url }: { url: string | null }) {
-  if (!url) return <span style={{ fontSize: 11.5, color: 'var(--tx-faint-2)' }}>—</span>
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={(e) => e.stopPropagation()}
-      className="sl-linked-row"
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 4,
-        fontSize: 11.5,
-        fontWeight: 600,
-        color: 'var(--tx-secondary-2)',
-        background: '#fff',
-        border: '1px solid var(--bd-1)',
-        borderRadius: 6,
-        padding: '4px 9px',
-        textDecoration: 'none',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      Open in Procore <span aria-hidden style={{ fontSize: 10 }}>↗</span>
-    </a>
-  )
+// Shared pill-button chrome for the two row actions.
+const actionBtn = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  fontSize: 11.5,
+  fontWeight: 600,
+  color: 'var(--tx-secondary-2)',
+  background: '#fff',
+  border: '1px solid var(--bd-1)',
+  borderRadius: 6,
+  padding: '4px 9px',
+  textDecoration: 'none',
+  whiteSpace: 'nowrap',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+} as const
+
+// The per-row action, by state: an in-app "Open PDF" when the section has one, else the
+// "Open in Procore ↗" link (built from current_revision_id), else an inert "—".
+function RowAction({ section, onOpenPdf }: { section: Spec; onOpenPdf: (s: Spec) => void }) {
+  if (section.pdfUrl && section.revisionId) {
+    return (
+      <button type="button" className="sl-linked-row" onClick={() => onOpenPdf(section)} style={actionBtn}>
+        Open PDF <span aria-hidden style={{ fontSize: 10 }}>↗</span>
+      </button>
+    )
+  }
+  if (section.procoreUrl) {
+    return (
+      <a href={section.procoreUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="sl-linked-row" style={actionBtn}>
+        Open in Procore <span aria-hidden style={{ fontSize: 10 }}>↗</span>
+      </a>
+    )
+  }
+  return <span style={{ fontSize: 11.5, color: 'var(--tx-faint-2)' }}>—</span>
 }
 
-function SectionRow({ section, query }: { section: Spec; query?: string }) {
+function SectionRow({ section, query, onOpenPdf }: { section: Spec; query?: string; onOpenPdf: (s: Spec) => void }) {
   return (
     <div
       style={{
@@ -108,8 +117,11 @@ function SectionRow({ section, query }: { section: Spec; query?: string }) {
       <span style={{ fontSize: 13, fontWeight: 530, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={section.title}>
         {section.title ? <Highlight text={section.title} query={query} /> : '—'}
       </span>
+      <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--tx-faint)', whiteSpace: 'nowrap' }}>
+        {section.issuedDate ?? '—'}
+      </span>
       <span style={{ justifySelf: 'start' }}>
-        <OpenInProcore url={section.procoreUrl} />
+        <RowAction section={section} onOpenPdf={onOpenPdf} />
       </span>
     </div>
   )
@@ -128,6 +140,12 @@ export function SpecsView() {
       else next.add(code)
       return { collapsedDivisions: next }
     })
+
+  // Open the in-app PDF viewer for a section (only rows with a revisionId offer this).
+  const openPdf = (s: Spec) => {
+    if (!s.revisionId) return
+    patch({ specViewer: { revisionId: s.revisionId, title: `${s.number} — ${s.title}`, procoreUrl: s.procoreUrl } })
+  }
 
   if (specs.length === 0) {
     return (
@@ -214,7 +232,7 @@ export function SpecsView() {
                   {q ? `${sections.length} / ${g.sections.length}` : g.sections.length}
                 </span>
               </button>
-              {!collapsed && sections.map((s) => <SectionRow key={s.id} section={s} query={query} />)}
+              {!collapsed && sections.map((s) => <SectionRow key={s.id} section={s} query={query} onOpenPdf={openPdf} />)}
             </section>
           )
         })

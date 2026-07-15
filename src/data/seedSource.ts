@@ -109,6 +109,11 @@ export function createSeedSource(opts: { delayMs?: number; fail?: boolean } = {}
       const d = DRAWINGS.find((x) => x.id === base)
       return { pngUrl: d?.pngUrl ?? null, pdfUrl: d?.pdfUrl ?? null }
     },
+    async getSpecFile(): Promise<Blob | null> {
+      // Seed has no backend to stream Procore bytes; return null so the spec viewer
+      // shows its Open-in-Procore fallback (parity stub, like getFinalSubmittalFile).
+      return null
+    },
     async getFinalSubmittalFile(): Promise<Blob | null> {
       // Seed has no backend to stream Procore bytes; return null so the viewer
       // shows its Open-in-Procore fallback (parity stub, like getSheetUrls).

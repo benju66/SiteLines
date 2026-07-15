@@ -259,5 +259,17 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
       if (error) return null
       return data instanceof Blob ? data : null
     },
+    async getSpecFile(revisionId: string): Promise<Blob | null> {
+      // Invoke the `spec-file` edge function (verify_jwt) with the caller's session;
+      // supabase-js attaches the logged-in user's bearer so the gateway admits it. The
+      // function GETs the current revision server-side (a fresh, non-expired PDF url each
+      // call) and streams the PDF back inline — supabase-js parses the `application/pdf`
+      // response as a Blob. The Procore secret stays server-side. Any error (offline,
+      // no PDF → 404, read error) surfaces as `error`; we return null so the viewer
+      // degrades to its Open-in-Procore fallback rather than throwing.
+      const { data, error } = await client.functions.invoke('spec-file', { body: { id: revisionId } })
+      if (error) return null
+      return data instanceof Blob ? data : null
+    },
   }
 }

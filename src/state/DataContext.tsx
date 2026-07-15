@@ -27,6 +27,8 @@ interface DataContextValue {
   getSheetUrls: (id: string) => Promise<{ pngUrl: string | null; pdfUrl: string | null }>
   /** Fetch the Final reviewed submittal PDF bytes (the submittal viewer, on open). */
   getFinalSubmittalFile: (id: string) => Promise<Blob | null>
+  /** Fetch a spec section's current-revision PDF bytes (the spec viewer, on open). */
+  getSpecFile: (revisionId: string) => Promise<Blob | null>
 }
 
 const DataContext = createContext<DataContextValue | null>(null)
@@ -68,10 +70,11 @@ export function DataProvider({ source, children }: { source: DataSource; childre
   const getDrawingRevisions = useCallback((drawingId: string) => source.getDrawingRevisions(drawingId), [source])
   const getSheetUrls = useCallback((id: string) => source.getSheetUrls(id), [source])
   const getFinalSubmittalFile = useCallback((id: string) => source.getFinalSubmittalFile(id), [source])
+  const getSpecFile = useCallback((revisionId: string) => source.getSpecFile(revisionId), [source])
 
   const value = useMemo(
-    () => ({ status, data, syncedAt, error, refresh, getDetail, getCommitmentDetail, getDrawingRevisions, getSheetUrls, getFinalSubmittalFile }),
-    [status, data, syncedAt, error, refresh, getDetail, getCommitmentDetail, getDrawingRevisions, getSheetUrls, getFinalSubmittalFile],
+    () => ({ status, data, syncedAt, error, refresh, getDetail, getCommitmentDetail, getDrawingRevisions, getSheetUrls, getFinalSubmittalFile, getSpecFile }),
+    [status, data, syncedAt, error, refresh, getDetail, getCommitmentDetail, getDrawingRevisions, getSheetUrls, getFinalSubmittalFile, getSpecFile],
   )
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }

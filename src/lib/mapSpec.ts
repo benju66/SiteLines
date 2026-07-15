@@ -16,8 +16,9 @@ export interface SpecRow {
   number: string | null
   title: string | null // description (section title)
   procore_url: string | null // constructed deep link to the current revision's PDF viewer
-  issued_date: string | null // ISO date "YYYY-MM-DD" — NULL until Phase 2
-  pdf_url: string | null // current revision attachment — NULL until Phase 2
+  revision_id: string | null // current_revision_id (for the spec-file edge fn)
+  issued_date: string | null // ISO date "YYYY-MM-DD" (current revision) — NULL if no revision
+  pdf_url: string | null // current revision attachment url (existence flag) — NULL if no PDF
 }
 
 /** Map a specs view row to the Spec contract shape. */
@@ -29,6 +30,7 @@ export function mapSpec(row: SpecRow): Spec {
     title: htmlToText(row.title),
     division: divisionCode(number),
     procoreUrl: safeUrl(row.procore_url) ?? null,
+    revisionId: (row.revision_id ?? '').trim() || null,
     issuedDate: formatResponseDate(row.issued_date),
     pdfUrl: safeUrl(row.pdf_url) ?? null,
   }

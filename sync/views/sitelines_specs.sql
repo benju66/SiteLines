@@ -21,30 +21,36 @@
 --                    already-synced current_revision_id — NO re-sync. NULL if a section
 --                    has no current revision. (Owner-supplied pattern, verified against
 --                    03 3000 → revision 46700073.)
---   • issued_date  — NULL in Phase 1 (Phase 2 pulls the current revision's date)
---   • pdf_url      — NULL in Phase 1 (Phase 2 pulls the current revision's attachment;
---                    a later phase serves it in-app via a fresh-URL edge fn)
+--   • issued_date  — the current revision's issued date (Phase 2 enrichment). NULL only
+--                    if enrichment hasn't run.
+--   • pdf_url      — the current revision's stored PDF url (Phase 2). Used as an
+--                    EXISTENCE FLAG (present → the row offers in-app "Open PDF"); the url
+--                    itself carries an expiring `sig`, so the app never loads it directly
+--                    — the `spec-file` edge fn re-mints a fresh one server-side.
+--   • revision_id  — the current_revision_id, passed to the `spec-file` edge fn so it can
+--                    GET a fresh PDF url for the in-app viewer.
 --
 -- Ordering is intentionally NOT done here: the pure groupByDivision selector owns
 -- division order (CSI code ascending — book order) and the natural number sort.
 -- ============================================================================
 
--- NOTE: column ORDER — procore_url is appended AFTER issued_date/pdf_url so that a
--- CREATE OR REPLACE over the original Phase-1 view (id/number/title/issued_date/
--- pdf_url) only APPENDS a column (Postgres forbids inserting one mid-list, and
--- appending preserves the view's grants — no DROP). The app reads columns by name.
+-- NOTE: column ORDER — issued_date/pdf_url are early (they were the original Phase-1
+-- NULL placeholders, now given real expressions — a CREATE OR REPLACE may change a
+-- column's expression but not rename one); procore_url/revision_id are appended (adding
+-- columns is allowed and preserves the view's grants — no DROP). The app reads by name.
 CREATE OR REPLACE VIEW sitelines_specs WITH (security_invoker = true) AS
 SELECT
-    'specs:' || (raw->>'id')          AS id,
-    raw->>'number'                    AS number,
-    raw->>'description'               AS title,
-    NULL::text                        AS issued_date,
-    NULL::text                        AS pdf_url,
+    'specs:' || (raw->>'id')                  AS id,
+    raw->>'number'                            AS number,
+    raw->>'description'                        AS title,
+    NULLIF(raw->>'issued_date', '')           AS issued_date,
+    NULLIF(raw->>'current_revision_url', '')  AS pdf_url,
     CASE
         WHEN raw->>'current_revision_id' IS NOT NULL
         THEN 'https://app.procore.com/' || project_id
              || '/project/specification_section_revisions/' || (raw->>'current_revision_id')
              || '?open_viewer=true&mfe_view=true'
-    END                               AS procore_url
+    END                                       AS procore_url,
+    raw->>'current_revision_id'               AS revision_id
 FROM procore_specification_sections_master
 WHERE project_id = 3051002;

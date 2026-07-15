@@ -27,6 +27,7 @@ export interface AppState {
   drawerHistory: DrawerTarget[] // back-stack: targets to restore when Back is pressed
   viewer: Drawing | null // open drawing-sheet viewer overlay (the clicked current sheet)
   submittalViewer: { id: string; name: string; downloadUrl?: string; procoreUrl?: string } | null // open Final-reviewed-submittal PDF viewer (id = "submittals:<id>")
+  specViewer: { revisionId: string; title: string; procoreUrl: string | null } | null // open spec-section PDF viewer (revisionId = current_revision_id)
   activity: boolean // activity drawer
   palette: boolean // command palette
   query: string // palette search text
@@ -55,6 +56,7 @@ export const initialState: AppState = {
   drawerHistory: [],
   viewer: null,
   submittalViewer: null,
+  specViewer: null,
   activity: false,
   palette: false,
   query: '',

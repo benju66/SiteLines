@@ -80,4 +80,14 @@ export interface DataSource {
    * degrades to its Open-in-Procore fallback rather than throwing.
    */
   getFinalSubmittalFile(id: string): Promise<Blob | null>
+  /**
+   * Fetch a spec section's current-revision PDF bytes for the in-app viewer, keyed by
+   * the section's `revisionId` (its `current_revision_id`). The live source invokes the
+   * `spec-file` edge function, which GETs the current revision (a FRESH pre-signed url
+   * each call — the synced one expires) and streams the PDF inline; the caller wraps the
+   * Blob in an object URL for an <iframe>. Returns null on ANY failure — no backend
+   * (seed), the section has no PDF (404), or a read error — so the viewer degrades to its
+   * Open-in-Procore fallback rather than throwing.
+   */
+  getSpecFile(revisionId: string): Promise<Blob | null>
 }
