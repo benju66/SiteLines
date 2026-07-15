@@ -19,6 +19,7 @@ export type ViewType =
   | 'photos'
   | 'dailyLog'
   | 'drawings'
+  | 'specs'
 
 /** Stable tool keys used for nav, records, and the ball-in-court rule. */
 export type ToolKey =
@@ -143,6 +144,22 @@ export interface DrawingRevision {
   pngUrl: string | null
   pdfUrl: string | null
   procoreUrl: string | null // constructed deep link to the sheet in Procore
+}
+
+/**
+ * One current specification section (Specifications, Phase 1). Reference data —
+ * NOT a court `Item` and never enters My Court (like `Drawing`). Grouped by CSI
+ * MasterFormat `division` (the first token of `number`) in the spec log. The spec
+ * master syncs only a thin summary today, so `issuedDate`/`pdfUrl` are null until
+ * the Phase-2 detail re-sync + a widened view populate them (Phase 3 surfaces them).
+ */
+export interface Spec {
+  id: string // "specs:<sectionId>"
+  number: string // "26 0519"
+  title: string // section title (from description)
+  division: string // CSI division code — first token of number, e.g. "26"
+  issuedDate: string | null // Phase 3 (from the current revision) — null in Phase 1
+  pdfUrl: string | null // Phase 3 (current revision's attachment) — null in Phase 1
 }
 
 export interface Contact {

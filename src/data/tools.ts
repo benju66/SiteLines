@@ -15,7 +15,7 @@ export const TOOLS: Record<ToolKey, ToolMeta> = {
   rfis: { label: 'RFIs', code: 'RFI', view: 'list', group: 0, whoLabel: 'Waiting on', rightLabel: 'Age', desc: 'Requests for information.' },
   submittals: { label: 'Submittals', code: 'SUB', view: 'list', group: 0, whoLabel: 'Waiting on', rightLabel: 'Status', desc: 'Shop drawings, product data, samples.' },
   drawings: { label: 'Drawings', code: 'DWG', view: 'drawings', group: 0, desc: 'Current drawing set, grouped by discipline.' },
-  specs: { label: 'Specifications', code: 'SPEC', view: 'list', group: 0, whoLabel: 'Revision', rightLabel: 'Issued', desc: 'Project specification sections.' },
+  specs: { label: 'Specifications', code: 'SPEC', view: 'specs', group: 0, desc: 'Project specification sections, grouped by CSI division.' },
   changeEvents: { label: 'Change Events', code: 'CE', view: 'changeEvents', group: 0, desc: 'Potential changes being tracked and priced.' },
   punch: { label: 'Punch List', code: 'PUN', view: 'list', group: 0, whoLabel: 'Assigned', rightLabel: 'Status', desc: 'Deficiencies to close out.' },
   dailyLog: { label: 'Daily Log', code: 'LOG', view: 'dailyLog', group: 0, desc: 'Field reports, weather, and manpower.' },

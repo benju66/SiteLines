@@ -141,6 +141,24 @@ $622,877, tying to Commitments.
 | 4 | **v2** ⛔ — Procore sync change: per-requisition **SOV line items** (G703) → `procore_requisition_line_items_master` (migration 0012). Endpoint is `/requisitions/{id}/detail` (a LIST; the show endpoint has no lines — caught by a probe). Scope `'latest'` (~49) | ✅ **Synced + verified (2026-07-13)** — migration 0012 applied; `enrich_requisitions_with_detail` (owner-approved run, scope=latest) pulled **615 G703 lines across 49 latest pay apps**; **all 49 reconcile to their G702 billed** (`reqs_reconciling=49`, none outside `is_latest`); requisitions master refreshed from the same pull (billed now $15,481,880, incl. a new live pay app). **Phase 4.1 (incremental) shipped** — the nightly now pulls a requisition's SOV only when it's new or not-yet-Approved (an Approved pay app's G703 is immutable), rewriting just those and keeping the rest (accumulates history, no purge). Verified live: a re-run pulled **2 of 49** (the under-review ones), rows 615→615, still reconciles. Nightly cost ~2 GETs, not ~49 |
 | 5 | **v2** — render the **G703 SOV** in the drawer: `sitelines_invoice_line_items` view + seam + a "Schedule of values" section (per line: scheduled · this period · to date · % · retainage), subtotals tie to the G702 cover sheet | ✅ **Shipped (2026-07-13)** — [view](sync/views/sitelines_invoice_line_items.sql) applied (`security_invoker`, no re-sync); typecheck + **258 tests** + build green; seed (`:5174`) + live (`:5175`) — a pay app opens into its G703 (**17 lines, $1,974,850 to date = the G702 billed**), %-bars per line, history-switch swaps the SOV; advisors clean. The full "what's getting billed per line" ask, delivered |
 
+### Parallel workstream: Specifications (CSI-divisioned spec book)
+Enrich **Specifications** from a bare, flat 189-row register into the navigable **spec
+book** — CSI-MasterFormat-division-grouped, collapsible, searchable — then (gated) each
+section's real PDF via **Open PDF ↗** — its own plan:
+[Notes/plans/Specifications-Plan.md](Notes/plans/Specifications-Plan.md). Chosen next
+(owner, 2026-07-14) as the lowest-risk high-utility win, cloning the **Drawings** log
+pattern. **The grouped log is free** (division = the first token of every section
+`number`; no re-sync), but the spec master is a thin summary (`number` · `label` ·
+`description` · `current_revision_id` pointer only) — so **the PDF + issued dates are a
+gated re-sync** (⛔ ≈189 per-section Procore GETs + a spec fresh-URL edge function),
+exactly the two-step Drawings itself took. Owner **committed to the full PDF result**.
+
+| Phase | Surface | Status |
+|-------|---------|--------|
+| 1 | Spec log — `sitelines_specs` view + `Spec` seam + `csiDivisions` lib + `groupByDivision` selector + own collapsible/searchable `SpecsView` (CSI divisions in book order, section # · title). No re-sync | ✅ Shipped (2026-07-15) — [view](sync/views/sitelines_specs.sql) applied (`security_invoker`, no re-sync); typecheck + **282 tests** + build green; view returns **189 sections / 21 divisions** (dates+pdf NULL), advisors clean; seed (`:5174`) verified — book order (00→26), within-division natural sort (`09 9110` before `09 9123`), search (name-match keeps a division whole), collapse/expand. Rows are **static** in v1 (Open-in-Procore URL unverified → deferred to Phase 3's Open PDF). Live `:5175` click-through owner-gated (login wall). Committed on `specifications-phase-1` |
+| 2 | **⛔ re-sync** — `enrich_specs_with_detail()`: per-section current-revision fetch → issued date + attachment PDF url onto the spec master `raw` (gated, no purge on partial fail). ~189 Procore GETs | ⏳ Planned |
+| 3 | Open PDF ↗ + Issued date in the log — widen `sitelines_specs` + `SpecsView` column/action + a `spec-file` fresh-URL edge fn (reuse `drawing-file`) + `getSpecFileUrl` seam | ⏳ Planned |
+
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**
 with its own plan: [Notes/plans/Procore-Data-Seam-Plan.md](Notes/plans/Procore-Data-Seam-Plan.md).

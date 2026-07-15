@@ -18,6 +18,7 @@ import { FINANCIALS } from './financials'
 import { INVOICES } from './invoices'
 import { INVOICE_LINE_ITEMS } from './invoiceLineItems'
 import { PHOTOS } from './photos'
+import { SPECS } from './specs'
 import { DATA } from './records'
 
 export function createSeedSource(opts: { delayMs?: number; fail?: boolean } = {}): DataSource {
@@ -28,7 +29,7 @@ export function createSeedSource(opts: { delayMs?: number; fail?: boolean } = {}
       if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs))
       if (fail) throw new Error('Simulated sync failure (seed source, ?fail)')
       return {
-        data: { itemsByTool: DATA, contacts: DIRECTORY, activity: ACTIVITY, financials: FINANCIALS, photos: PHOTOS, dailyLogs: DAILY_LOGS, drawings: DRAWINGS, budgetLines: BUDGET_LINES, budgetPending: BUDGET_PENDING, commitments: COMMITMENTS, commitmentLineItems: COMMITMENT_LINE_ITEMS, changeEvents: CHANGE_EVENTS, changeEventLineItems: CHANGE_EVENT_LINE_ITEMS, invoices: INVOICES, invoiceLineItems: INVOICE_LINE_ITEMS },
+        data: { itemsByTool: DATA, contacts: DIRECTORY, activity: ACTIVITY, financials: FINANCIALS, photos: PHOTOS, dailyLogs: DAILY_LOGS, drawings: DRAWINGS, specs: SPECS, budgetLines: BUDGET_LINES, budgetPending: BUDGET_PENDING, commitments: COMMITMENTS, commitmentLineItems: COMMITMENT_LINE_ITEMS, changeEvents: CHANGE_EVENTS, changeEventLineItems: CHANGE_EVENT_LINE_ITEMS, invoices: INVOICES, invoiceLineItems: INVOICE_LINE_ITEMS },
         syncedAt: new Date(),
       }
     },

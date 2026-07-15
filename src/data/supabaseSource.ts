@@ -14,6 +14,7 @@ import { mapChangeEvent, mapChangeEventLineItem, type ChangeEventRow, type Chang
 import { mapInvoice, mapInvoiceLineItem, type InvoiceRow, type InvoiceLineItemRow } from '@/lib/mapInvoice'
 import { mapCommitment, mapCommitmentBilling, mapCommitmentChangeOrder, mapCommitmentLineItem, type CommitmentRow, type CommitmentBillingRow, type CommitmentChangeOrderRow, type CommitmentLineItemRow } from '@/lib/mapCommitment'
 import { mapDrawing, mapDrawingRevision, type DrawingRow, type DrawingRevisionRow } from '@/lib/mapDrawing'
+import { mapSpec, type SpecRow } from '@/lib/mapSpec'
 import { mapRfiDetail, type RfiDetailRow } from '@/lib/mapRfiDetail'
 import { mapSubmittalDetail, type SubmittalDetailRow } from '@/lib/mapSubmittalDetail'
 import type { ActivityEvent, DailyLogEntry, FinancialSource, Item, ItemDetail, Project, Status, ToolKey } from '@/types'
@@ -138,13 +139,14 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
     name: 'supabase',
     async fetch(): Promise<Snapshot> {
       const now = new Date()
-      const [items, contacts, financials, activity, dailyLogs, drawings, budgetLines, budgetPending, commitments, commitmentLineItems, changeEvents, changeEventLineItems, invoices, invoiceLineItems] = await Promise.all([
+      const [items, contacts, financials, activity, dailyLogs, drawings, specs, budgetLines, budgetPending, commitments, commitmentLineItems, changeEvents, changeEventLineItems, invoices, invoiceLineItems] = await Promise.all([
         fetchAll<ItemRow>(client, 'sitelines_items'),
         fetchAll<ContactRow>(client, 'sitelines_contacts'),
         fetchAll<FinRow>(client, 'sitelines_financials'),
         fetchAll<ActivityRow>(client, 'sitelines_activity'),
         fetchAll<DailyLogEntry>(client, 'sitelines_daily_logs'),
         fetchAll<DrawingRow>(client, 'sitelines_drawings'),
+        fetchAll<SpecRow>(client, 'sitelines_specs'),
         fetchAll<BudgetLineRow>(client, 'sitelines_budget_lines'),
         fetchAll<BudgetPendingRow>(client, 'sitelines_budget_pending'),
         fetchAll<CommitmentRow>(client, 'sitelines_commitments'),
@@ -171,6 +173,7 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
         photos: [],
         dailyLogs: dailyLogs.map((d) => ({ ...d, crew: Number(d.crew), mine: !!d.mine })),
         drawings: drawings.map(mapDrawing),
+        specs: specs.map(mapSpec),
         budgetLines: budgetLines.map(mapBudgetLine),
         budgetPending: budgetPending.map(mapBudgetPending),
         commitments: commitments.map(mapCommitment),

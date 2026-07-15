@@ -7,11 +7,12 @@
 
 import { TOOLS } from '@/data/tools'
 import { COURT_TOOLS, TERMINAL, isBallInCourt } from '@/lib/ballInCourt'
+import { csiDivisionName } from '@/lib/csiDivisions'
 import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Invoice, InvoiceLineItem, Item, Project, ToolKey } from '@/types'
+import type { BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Invoice, InvoiceLineItem, Item, Project, Spec, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -387,6 +388,47 @@ export function sortRevisionsDesc(revisions: DrawingRevision[]): DrawingRevision
   return [...revisions].sort(
     (a, b) => revValue(b) - revValue(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
   )
+}
+
+// ---- Specifications log (CSI-division-grouped) ----
+
+export interface DivisionGroup {
+  code: string // CSI division code, e.g. "26"
+  name: string // canonical CSI title, e.g. "Electrical"
+  sections: Spec[]
+}
+
+/** Numeric value of a CSI division code for book-order sorting. A blank/malformed
+ *  code (Uncategorized) sinks to the bottom — note `Number('')` is 0, not NaN, so
+ *  the blank case is guarded explicitly. */
+const divisionValue = (code: string): number => {
+  if (!code.trim()) return Number.POSITIVE_INFINITY
+  const n = Number(code)
+  return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY
+}
+
+/**
+ * Group specification sections into their CSI MasterFormat divisions for the spec
+ * log. Deterministic: divisions ordered by code ASCENDING (the spec book's real
+ * order — NOT count-desc like the drawing log); sections within a division by
+ * natural number sort, id-tiebroken. Pure — no clock, no state.
+ */
+export function groupByDivision(specs: Spec[]): DivisionGroup[] {
+  const buckets = new Map<string, Spec[]>()
+  for (const s of specs) {
+    const arr = buckets.get(s.division)
+    if (arr) arr.push(s)
+    else buckets.set(s.division, [s])
+  }
+  const groups: DivisionGroup[] = [...buckets.entries()].map(([code, sections]) => ({
+    code,
+    name: csiDivisionName(code),
+    sections: [...sections].sort(
+      (a, b) => compareDrawingNumber(a.number, b.number) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+    ),
+  }))
+  groups.sort((a, b) => divisionValue(a.code) - divisionValue(b.code) || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0))
+  return groups
 }
 
 // ---- Budget cost-control drill-down (Budget Insights, Phase 1) ----
