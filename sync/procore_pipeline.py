@@ -699,6 +699,89 @@ def enrich_submittals_with_final(token: str, submittals, project_id) -> bool:
     return True
 
 
+def enrich_specs_with_detail(token: str, sections, project_id) -> bool:
+    """Stamp each spec section's CURRENT revision detail (issued/received date +
+    revision label + the PDF `url`) onto its list record, in place.
+
+    The spec *list* endpoint (`/specification_sections?project_id=`) carries only
+    number / label / description / current_revision_id. The revision's dates + PDF
+    `url` live on `/specification_section_revisions`, which requires a
+    `specification_section_division_id` — so instead of one GET per section (~189),
+    we list the divisions (1 GET) and pull each division's revisions in bulk
+    (~21 GETs), build a {revision_id -> revision} map, and copy the fields for each
+    section's `current_revision_id` onto its `raw`. ~22 GETs for the whole project.
+
+    The stamped `current_revision_url` is a pre-signed storage.procore.com link that
+    EXPIRES (has a `sig`); a later phase re-mints it server-side for "Open PDF" — the
+    stored url is the pointer, not a durable file.
+
+    Returns True only if EVERY division fetch succeeded; on any failure returns False
+    so the caller skips the specs upsert — a partial fetch must never mark the table
+    synced (which would let the scoped purge delete rows). Mirrors
+    enrich_rfis_with_detail. Compliant, minimum-necessary: ~22 bulk GETs, jittered
+    (research §7).
+    """
+    if not sections:
+        return True
+    divisions = paginated_get(
+        token, f'{BASE_API_URL}/rest/v1.0/specification_section_divisions?project_id={project_id}'
+    )
+    if divisions is None:
+        return False
+    # {str(revision id) -> revision dict} across every division.
+    rev_by_id: dict = {}
+    for div in divisions:
+        if not isinstance(div, dict) or not div.get('id'):
+            continue
+        revs = paginated_get(
+            token,
+            f'{BASE_API_URL}/rest/v1.0/specification_section_revisions'
+            f'?project_id={project_id}&specification_section_division_id={div["id"]}',
+        )
+        if revs is None:
+            return False  # partial → don't upsert (no purge)
+        for rev in revs:
+            if isinstance(rev, dict) and rev.get('id') is not None:
+                rev_by_id[str(rev['id'])] = rev
+        time.sleep(random.uniform(0.5, 1.5))  # jitter between division calls (research §7)
+
+    for sec in sections:
+        if not isinstance(sec, dict):
+            continue
+        rev = rev_by_id.get(str(sec.get('current_revision_id')))
+        if not isinstance(rev, dict):
+            continue  # unmatched here → the per-section fallback below tries to fill it
+        sec['issued_date'] = rev.get('issued_date')
+        sec['received_date'] = rev.get('received_date')
+        sec['revision'] = rev.get('revision')
+        sec['current_revision_url'] = rev.get('url')
+
+    # Fallback for sections still without a PDF url — a section whose current revision
+    # lives in a SECONDARY spec set isn't returned by the default-set division pulls
+    # above. The single-revision endpoint (`/specification_section_revisions/{id}`)
+    # resolves any revision regardless of set; it serves a leaner payload (url +
+    # source_*_time, no issued_date), so we take its url and derive the date from
+    # source_update_time. Best-effort + NON-fatal: a failed fallback GET leaves that one
+    # section without a PDF (never fails the whole enrichment — the bulk data, which
+    # governs the no-purge gate, already succeeded).
+    for sec in sections:
+        if not isinstance(sec, dict) or sec.get('current_revision_url'):
+            continue
+        rev_id = sec.get('current_revision_id')
+        if not rev_id:
+            continue
+        one = get_json(token, f'{BASE_API_URL}/rest/v1.0/specification_section_revisions/{rev_id}?project_id={project_id}')
+        time.sleep(random.uniform(0.5, 1.5))  # jitter (research §7)
+        if not isinstance(one, dict):
+            continue
+        sec['current_revision_url'] = one.get('url')
+        if not sec.get('issued_date'):
+            stamp = one.get('source_update_time') or one.get('source_create_time')
+            if stamp:
+                sec['issued_date'] = str(stamp)[:10]  # YYYY-MM-DD from the ISO timestamp
+    return True
+
+
 # --- 4. KEYED STAGING + UPSERT + SCOPED PURGE -----------------------------------
 
 class MasterTable:
@@ -1144,7 +1227,14 @@ def run_pipeline() -> None:
 
         specs = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/specification_sections?project_id={p_id}')
         if specs is not None:
-            specs_tbl.add(specs, p_id, run_ts)
+            # Enrich each section with its current revision's date + PDF url (~22 bulk
+            # GETs). Only upsert if the enrichment fully succeeded, so a partial detail
+            # fetch never marks the table synced (which would let the scoped purge delete
+            # rows) — mirrors the RFI/commitment enrichment gating.
+            if enrich_specs_with_detail(token, specs, p_id):
+                specs_tbl.add(specs, p_id, run_ts)
+            else:
+                logging.warning('specs: detail enrichment failed — skipping upsert (no purge).')
 
         documents = paginated_get(token, f'{BASE_API_URL}/rest/v1.0/projects/{p_id}/documents')
         if documents is not None:
