@@ -34,6 +34,7 @@ export interface CommitmentRow {
   inclusions: string | null
   exclusions: string | null
   grand_total: number | string | null
+  procore_url: string | null
 }
 
 const num = (v: number | string | null): number => (v == null ? 0 : Number(v))
@@ -78,6 +79,7 @@ export function mapCommitment(row: CommitmentRow): Commitment {
     inclusions: decodeEntities(row.inclusions ?? ''),
     exclusions: decodeEntities(row.exclusions ?? ''),
     grandTotal: num(row.grand_total),
+    procoreUrl: row.procore_url ?? null, // null until the view ships procore_url (forward-compatible)
   }
 }
 

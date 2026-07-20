@@ -91,7 +91,17 @@ SELECT
     -- appended 2026-07-08 (Phase 4; CREATE OR REPLACE appends at the end):
     NULLIF(c.raw->>'inclusions', '')                                          AS inclusions,
     NULLIF(c.raw->>'exclusions', '')                                          AS exclusions,
-    NULLIF(c.raw->>'grand_total', '')::numeric                                AS grand_total
+    NULLIF(c.raw->>'grand_total', '')::numeric                                AS grand_total,
+    -- appended 2026-07-20: a CONSTRUCTED Procore deep link to the commitment (the
+    -- master has no `link` field). Mirrors the drawings/specs views. company 8906 is
+    -- the single synced company; project_id is per-row; the type path is
+    -- work_order_contracts for subcontracts (SC-…) and purchase_order_contracts for
+    -- POs (PO-…). No re-sync — id + project_id already present.
+    'https://app.procore.com/webclients/host/companies/8906/projects/' || c.project_id
+        || '/tools/contracts/commitments/'
+        || CASE WHEN c.raw->>'number' LIKE 'PO-%' THEN 'purchase_order_contracts'
+                ELSE 'work_order_contracts' END
+        || '/' || (c.raw->>'id')                                             AS procore_url
 FROM procore_commitments_master c
 LEFT JOIN procore_vendors_master v ON (v.raw->>'id')::bigint = (c.raw#>>'{vendor,id}')::bigint
 LEFT JOIN latest_req r ON r.commitment_id = (c.raw->>'id')::bigint

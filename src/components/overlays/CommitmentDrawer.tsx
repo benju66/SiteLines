@@ -103,6 +103,15 @@ function CommitmentPanel({ commitment: c, onClose }: { commitment: Commitment; o
         {c.private && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: '.3px', textTransform: 'uppercase', color: 'var(--tx-faint)', border: '1px solid var(--bd-1)', borderRadius: 4, padding: '1px 5px' }}>Private</span>}
       </div>
 
+      {/* deep link to the commitment in Procore (constructed in the view; null when absent) */}
+      {c.procoreUrl && (
+        <div style={{ marginTop: 10, textAlign: 'right' }}>
+          <a href={c.procoreUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: '#2f5f8a', textDecoration: 'none' }}>
+            Open in Procore ↗
+          </a>
+        </div>
+      )}
+
       {/* contract company + financial position */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: '#e8ebee', border: '1px solid #e8ebee', borderRadius: 9, overflow: 'hidden', marginTop: 16 }}>
         <div style={{ gridColumn: '1 / -1', background: '#fff', padding: '11px 13px' }}>

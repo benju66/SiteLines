@@ -428,6 +428,7 @@ export interface Commitment {
   inclusions: string
   exclusions: string
   grandTotal: number
+  procoreUrl: string | null // constructed deep link to the commitment in Procore (null when absent)
 }
 
 /**

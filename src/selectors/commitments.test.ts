@@ -42,6 +42,7 @@ function cm(
     inclusions: '',
     exclusions: '',
     grandTotal: revised,
+    procoreUrl: null,
     ...overrides,
   }
 }

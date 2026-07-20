@@ -14,7 +14,7 @@
 
 import type { Commitment } from '@/types'
 
-export const COMMITMENTS: Commitment[] = [
+const RAW: Omit<Commitment, 'procoreUrl'>[] = [
   {
     project: 'opiii',
     id: 'commitments:9001',
@@ -163,3 +163,12 @@ export const COMMITMENTS: Commitment[] = [
     grandTotal: 0,
   },
 ]
+
+// Build the same Procore commitment deep link the `sitelines_commitments` view
+// constructs (company 8906 · project 3051002 · type path · procore id), so seed mode
+// exercises the "Open in Procore" link with a format-identical URL. SC → work order
+// contract, PO → purchase order contract.
+const procoreCommitmentUrl = (c: Pick<Commitment, 'id' | 'type'>): string =>
+  `https://app.procore.com/webclients/host/companies/8906/projects/3051002/tools/contracts/commitments/${c.type === 'PO' ? 'purchase_order_contracts' : 'work_order_contracts'}/${c.id.replace('commitments:', '')}`
+
+export const COMMITMENTS: Commitment[] = RAW.map((c) => ({ ...c, procoreUrl: procoreCommitmentUrl(c) }))
