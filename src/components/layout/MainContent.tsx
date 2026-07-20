@@ -13,6 +13,7 @@ import { InvoicingView } from '@/components/views/InvoicingView'
 import { MyCourtView } from '@/components/views/MyCourtView'
 import { OverviewView } from '@/components/views/OverviewView'
 import { PhotosView } from '@/components/views/PhotosView'
+import { PunchView } from '@/components/views/PunchView'
 import { SpecsView } from '@/components/views/SpecsView'
 import { ToolRegisterView } from '@/components/views/ToolRegisterView'
 import type { ViewType } from '@/types'
@@ -32,6 +33,7 @@ const VIEWS: Record<ViewType, ComponentType> = {
   overview: OverviewView,
   drawings: DrawingsView,
   specs: SpecsView,
+  punch: PunchView,
 }
 
 export function MainContent() {

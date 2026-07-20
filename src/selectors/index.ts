@@ -12,7 +12,7 @@ import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Invoice, InvoiceLineItem, Item, Project, Spec, ToolKey } from '@/types'
+import type { BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Invoice, InvoiceLineItem, Item, Project, PunchItem, Spec, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -1272,4 +1272,94 @@ export function invoiceLinesFor(lineItems: InvoiceLineItem[], invoice: Invoice):
   return lineItems
     .filter((li) => li.invoiceId === invoice.id)
     .sort((a, b) => itemNumValue(a.itemNumber) - itemNumValue(b.itemNumber) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+}
+
+// ---- Punch List closeout dashboard (lifecycle + assignee grouping) ----
+
+export interface PunchRollup {
+  total: number // every punch item in scope
+  open: number // not closed (Open + Overdue)
+  overdue: number // status === "Overdue"
+  readyForReview: number // workflowStatus === "ready_for_review" (sub done, awaiting verification)
+  closed: number // status === "Closed"
+  pctComplete: number // closed / total, 0..1 (0 when empty)
+}
+
+/** Roll punch items up for the KPI cards. Deterministic, pure — no clock. */
+export function punchRollup(items: PunchItem[]): PunchRollup {
+  let overdue = 0
+  let readyForReview = 0
+  let closed = 0
+  for (const p of items) {
+    if (p.status === 'Overdue') overdue++
+    if (p.workflowStatus === 'ready_for_review') readyForReview++
+    if (p.status === 'Closed') closed++
+  }
+  const total = items.length
+  const open = total - closed
+  return { total, open, overdue, readyForReview, closed, pctComplete: total > 0 ? closed / total : 0 }
+}
+
+export type PunchGroupDim = 'stage' | 'assignee'
+export interface PunchGroup {
+  key: string
+  label: string
+  items: PunchItem[]
+}
+
+// Lifecycle order + human labels for the "stage" grouping.
+const PUNCH_STAGE_ORDER = ['initiated', 'work_required', 'ready_for_review', 'closed']
+const PUNCH_STAGE_LABEL: Record<string, string> = {
+  initiated: 'Initiated',
+  work_required: 'Work Required',
+  ready_for_review: 'Ready for Review',
+  closed: 'Closed',
+}
+const punchStageRank = (key: string): number => {
+  const i = PUNCH_STAGE_ORDER.indexOf(key)
+  return i === -1 ? PUNCH_STAGE_ORDER.length : i // unknown stages sink to the bottom
+}
+
+/** Within-group order: overdue first, then earliest due date, id-tiebroken. dueSort is
+ *  the raw ISO date ("YYYY-MM-DD", sorts chronologically); missing dates sort last. */
+const comparePunch = (a: PunchItem, b: PunchItem): number => {
+  const ao = a.status === 'Overdue' ? 0 : 1
+  const bo = b.status === 'Overdue' ? 0 : 1
+  if (ao !== bo) return ao - bo
+  const ad = a.dueSort || '9999-99-99'
+  const bd = b.dueSort || '9999-99-99'
+  if (ad !== bd) return ad < bd ? -1 : 1
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+}
+
+/**
+ * Group punch items for the register. Deterministic, pure — no clock. By 'stage':
+ * buckets by `workflowStatus` in lifecycle order (initiated → closed). By 'assignee':
+ * buckets by the responsible sub, ordered by open-count desc then alpha, with the
+ * "Unassigned" bucket last. Items within a group are `comparePunch`-ordered.
+ */
+export function groupPunchBy(items: PunchItem[], dim: PunchGroupDim): PunchGroup[] {
+  const buckets = new Map<string, PunchItem[]>()
+  for (const p of items) {
+    const key = dim === 'stage' ? p.workflowStatus || 'unknown' : p.assignee || 'Unassigned'
+    const arr = buckets.get(key)
+    if (arr) arr.push(p)
+    else buckets.set(key, [p])
+  }
+  const groups: PunchGroup[] = [...buckets.entries()].map(([key, list]) => ({
+    key,
+    label: dim === 'stage' ? PUNCH_STAGE_LABEL[key] ?? key : key,
+    items: [...list].sort(comparePunch),
+  }))
+  if (dim === 'stage') {
+    groups.sort((a, b) => punchStageRank(a.key) - punchStageRank(b.key))
+  } else {
+    groups.sort(
+      (a, b) =>
+        (a.key === 'Unassigned' ? 1 : 0) - (b.key === 'Unassigned' ? 1 : 0) ||
+        b.items.length - a.items.length ||
+        strCompare(a.label, b.label),
+    )
+  }
+  return groups
 }

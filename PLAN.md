@@ -168,6 +168,25 @@ owner **chose the full in-app PDF** (2026-07-15), reusing the **Submittal Viewer
 | 2 | **⛔ re-sync** — `enrich_specs_with_detail()`: stamp issued/received date + revision + current-revision PDF url onto the spec master `raw` (gated, no purge on partial fail) | ✅ Shipped (2026-07-15) — probe found revisions are queryable **per division** (21 divisions), so it's **~22 bulk GETs, not 189** (rate-limit risk eliminated); + a per-section single-revision **fallback** for sections whose current revision lives in a secondary spec set. Wired into the nightly (gated) + a one-time [`backfill_specs_detail.py`](sync/backfill_specs_detail.py) run (owner-approved). Result: **189/189** issued dates · **156/189** PDF urls (the other 33 have no PDF in Procore — confirmed via the fallback; they keep the Phase-1.5 Open-in-Procore link) · none purged; `03 3000` → 2025-04-25, rev 0, valid PDF url |
 | 3 | **In-app PDF** (owner chose over Open-in-new-tab, 2026-07-15) + Issued date — widen `sitelines_specs` (issued_date + pdf_url + revision_id) + a `spec-file` byte-streaming edge fn + a `SpecViewerOverlay` (blob iframe) reusing the **Submittal Viewer** wholesale; Open-in-Procore (1.5) stays as the fallback | ✅ Shipped (2026-07-15) — view widened + [`spec-file`](supabase/functions/spec-file/index.ts) deployed (v1 ACTIVE, `verify_jwt`+`authenticated`-gated; reuses the existing Procore secrets); `Spec.revisionId`/`issuedDate`/`pdfUrl` + `getSpecFile` seam + `SpecViewerOverlay` + Issued column + smart row action (Open PDF / Open in Procore / —). typecheck + **282 tests** + build green; seed (`:5174`) — column + 3 row states + overlay fallback; live (`:5175`, logged in) — **156 Open PDF · 33 Open in Procore**; `03 3000` Open PDF streams the real PDF into a `blob:` iframe in-app, no console errors; unauth → 401 |
 
+### Parallel workstream: Punch List (closeout dashboard)
+Enrich **Punch List** from a bare register into a **closeout dashboard** — its own plan:
+[Notes/plans/Punch-List-Plan.md](Notes/plans/Punch-List-Plan.md). Punch is **already a
+court tool** (feeds My Court via the `sitelines_items` `punch:` UNION + `ballInCourt.ts`);
+this adds a second, richer lens over the same synced master. **No re-sync** for Phase 1.
+Chosen next (owner, 2026-07-20) as the highest-value bare register — 1,097 items, deep in
+closeout. **Key data finding (verified 2026-07-20):** the categorization fields Procore
+offers are **empty on this job** (`location` 0 · `trade` 6 · `priority` 0 · `description` 0),
+but the **lifecycle is rich** (`workflow_status`: initiated → work_required 192 →
+ready_for_review 208 → closed 693) and **assignee** (20 subs) + **photos** (876/1097) +
+`due_date` (936) are populated — so the dashboard groups by **lifecycle stage + assignee**,
+NOT room/trade. Photos + the response thread are only *flags* in the list payload → a gated
+**Phase 2** re-sync (per-item `/punch_items/{id}`, like the RFI thread + Drawings/Specs photo URLs).
+
+| Phase | Surface | Status |
+|-------|---------|--------|
+| 1 | Closeout dashboard — `sitelines_punch` view + `PunchItem` seam + `punchRollup`/`groupPunchBy` selectors + own `PunchView` (rollup KPIs: total · open · overdue · ready-for-review · closed · **% complete**; a Stage/Assignee group toggle; sortable register with 📎 photo + open-response indicators; rows open the existing `RecordDetailDrawer`). No re-sync; `sitelines_items` UNION + `ballInCourt.ts` untouched | ✅ Shipped (2026-07-20) — [view](sync/views/sitelines_punch.sql) applied (`security_invoker`, no re-sync, additive — UNION untouched); typecheck + **290 tests** + build green; view reconciles to the penny — **1097 total · 404 open · 172 overdue · 208 ready-for-review · 693 closed · 63% complete · 876 photos**; advisors clean. Seed (`:5174`) verified — KPIs, By-stage/By-sub grouping (assignee count-desc, Unassigned last), Show-closed, indicators, row→record-drawer (real Item + seed fallback). A TDZ crash in the seed fixture was caught by the click-through + fixed. Live `:5175` browser render pending (port held by another dev server + login-gated; data path DB-verified). Committed on `punch-phase-1` |
+| 2 | **⛔ re-sync** — `enrich_punch_with_detail()` (per-item `/punch_items/{id}` → response thread + photo attachment urls onto `raw`, gated) + a `punch` branch in `getDetail` (real thread in `RecordDetailDrawer`, à la `mapRfiDetail`) + photo thumbs via a fresh-URL edge fn (reuse `drawing-file`/`spec-file`). Probe for a bulk/incremental route first | ⏳ Planned |
+
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**
 with its own plan: [Notes/plans/Procore-Data-Seam-Plan.md](Notes/plans/Procore-Data-Seam-Plan.md).

@@ -20,6 +20,7 @@ export type ViewType =
   | 'dailyLog'
   | 'drawings'
   | 'specs'
+  | 'punch'
 
 /** Stable tool keys used for nav, records, and the ball-in-court rule. */
 export type ToolKey =
@@ -162,6 +163,29 @@ export interface Spec {
   revisionId: string | null // the current_revision_id — passed to the spec-file edge fn to stream a fresh PDF
   issuedDate: string | null // the current revision's issued date (preformatted display); null if no revision
   pdfUrl: string | null // the current revision's stored PDF url — an EXISTENCE FLAG only (expiring sig; the edge fn re-mints for viewing)
+}
+
+/**
+ * One punch item for the closeout dashboard (Punch List). Reference-style — the
+ * court `Item` for My Court still comes from the `sitelines_items` UNION; this is the
+ * richer row the dedicated `PunchView` renders. Grouped by lifecycle `workflowStatus`
+ * or `assignee`. Phase-2 detail (the real response thread + photos) is fetched lazily
+ * via the record drawer, not carried here — `hasPhotos`/`hasOpenResponse` are just
+ * indicators from the synced flags.
+ */
+export interface PunchItem {
+  id: string // "punch:<id>" (matches the sitelines_items UNION id)
+  project: Project // 'opiii' (only OP III synced) — for scoped()
+  number: string // "#<position>"
+  name: string // the item title (this project's items have no separate description)
+  assignee: string // assignees[0].name → ball_in_court → "" (the responsible sub)
+  status: string // "Open" | "Overdue" | "Closed"
+  workflowStatus: string // "initiated" | "work_required" | "ready_for_review" | "closed"
+  dueDate: string | null // preformatted display date
+  dueSort: string // sortable ISO "YYYY-MM-DD" (or "") — the raw due date, for chronological order
+  hasPhotos: boolean // has_attachments (indicator only in Phase 1)
+  hasOpenResponse: boolean // has_unresolved_responses (indicator only in Phase 1)
+  manager: string // punch_item_manager.name (the GC owner)
 }
 
 export interface Contact {

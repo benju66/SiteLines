@@ -4,7 +4,7 @@
 // a supabaseDataSource reading the normalization views — the UI never knows
 // the difference.
 
-import type { ActivityEvent, BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentDetail, CommitmentLineItem, Contact, DailyLogEntry, Drawing, DrawingRevision, FinancialSource, Invoice, InvoiceLineItem, Item, ItemDetail, Photo, Spec, ToolKey } from '@/types'
+import type { ActivityEvent, BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentDetail, CommitmentLineItem, Contact, DailyLogEntry, Drawing, DrawingRevision, FinancialSource, Invoice, InvoiceLineItem, Item, ItemDetail, Photo, PunchItem, Spec, ToolKey } from '@/types'
 
 export type ItemsByTool = Record<ToolKey, Item[]>
 
@@ -18,6 +18,7 @@ export interface SiteData {
   dailyLogs: DailyLogEntry[]
   drawings: Drawing[] // current drawing sheets (reference; grouped by discipline in the log)
   specs: Spec[] // current specification sections (reference; grouped by CSI division in the spec log)
+  punch: PunchItem[] // punch items (the closeout dashboard; also feed My Court via the sitelines_items UNION)
   budgetLines: BudgetLine[] // primary-cost-budget lines (reference; the Budget cost-control drill-down)
   budgetPending: BudgetPending[] // pending-change exposure per cost code (reference; the Budget forecast section)
   commitments: Commitment[] // subcontracts / POs with financials (reference; the Commitments register)
