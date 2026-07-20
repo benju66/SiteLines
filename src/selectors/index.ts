@@ -61,6 +61,21 @@ export function orderedNav(groups: NavGroup[], pinned: ToolKey[]): { pinned: Too
   return { pinned: validPinned, groups: remaining }
 }
 
+/** Canonical project order for the scope switcher (mirrors the historical sidebar order). */
+const PROJECT_ORDER: Project[] = ['mckenna', 'opiii']
+
+/** Projects that have ≥1 item across any tool, in canonical order (User Settings & UX,
+ *  Phase 4). Empty scopes — a project with zero synced data, e.g. the McKenna ghost in
+ *  live mode — are excluded, so the sidebar switcher only surfaces projects that actually
+ *  have data. Data-derived on purpose (no new Supabase view); pure. */
+export function activeProjects(items: ItemsByTool): Project[] {
+  const present = new Set<Project>()
+  for (const list of Object.values(items)) {
+    for (const item of list) present.add(item.project)
+  }
+  return PROJECT_ORDER.filter((p) => present.has(p))
+}
+
 /** Does a record pass the active saved-view quick filter? */
 function matchesSavedView(r: Item, view: SavedView): boolean {
   switch (view) {

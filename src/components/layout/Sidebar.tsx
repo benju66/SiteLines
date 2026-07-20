@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { GROUPS, TOOLS } from '@/data/tools'
-import { courtItems, myCourtCount, orderedNav, overdueTotal } from '@/selectors'
+import { activeProjects, courtItems, myCourtCount, orderedNav, overdueTotal } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useSiteData } from '@/state/DataContext'
 import { useSettings } from '@/state/SettingsContext'
@@ -12,11 +12,10 @@ import type { ToolKey } from '@/types'
 const RAIL_W = 64
 const FULL_W = 248
 
-const SCOPES: { key: ProjectScope; label: string }[] = [
-  { key: 'all', label: 'All Projects' },
-  { key: 'mckenna', label: 'McKenna Crossing' },
-  { key: 'opiii', label: 'OP_III' },
-]
+// The scope list is DATA-DERIVED (Phase 4): 'all' + the projects that actually have
+// synced data (see activeProjects), so an empty scope like the McKenna ghost in live
+// mode never appears. Built inside the component from itemsByTool.
+type Scope = { key: ProjectScope; label: string }
 
 function scopeSwatch(scope: ProjectScope) {
   if (scope === 'all') {
@@ -199,6 +198,18 @@ export function Sidebar() {
   // Pinned tools surface into their own section; the rest keep their groups (Phase 3).
   const nav = orderedNav(GROUPS, settings.pinnedTools)
 
+  // Scope switcher, data-derived (Phase 4): 'all' + only the projects with synced data.
+  // projectMeta covers every Project in the v1 union; a future open-string Project would
+  // need a fallback swatch/label here.
+  const visibleProjects = activeProjects(itemsByTool)
+  const scopes: Scope[] = [{ key: 'all', label: 'All Projects' }, ...visibleProjects.map((p) => ({ key: p, label: projectMeta[p].full }))]
+  // Guard: if the selected scope has no data (e.g. it vanished on a data refresh, or a
+  // stale selection), fall back to All Projects so the UI never sticks on a hidden scope.
+  const projectHidden = project !== 'all' && !visibleProjects.includes(project)
+  useEffect(() => {
+    if (projectHidden) patch({ project: 'all' })
+  }, [projectHidden, patch])
+
   const toggle = () => {
     setPeek(false)
     patch((s) => ({ sidebarCollapsed: !s.sidebarCollapsed }))
@@ -251,7 +262,7 @@ export function Sidebar() {
         {expanded && (
           <div style={{ padding: '2px 12px 10px' }}>
             <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--tx-faint-2)', fontWeight: 600, padding: '0 4px 6px' }}>Project</div>
-            {SCOPES.map((s) => {
+            {scopes.map((s) => {
               const active = project === s.key
               return (
                 <button
