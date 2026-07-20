@@ -13,6 +13,7 @@ import { CommitmentDrawer } from '@/components/overlays/CommitmentDrawer'
 import { InvoiceDrawer } from '@/components/overlays/InvoiceDrawer'
 import { DrawingViewerOverlay } from '@/components/overlays/DrawingViewerOverlay'
 import { RecordDetailDrawer } from '@/components/overlays/RecordDetailDrawer'
+import { SettingsOverlay } from '@/components/overlays/SettingsOverlay'
 import { SubmittalViewerOverlay } from '@/components/overlays/SubmittalViewerOverlay'
 import { SpecViewerOverlay } from '@/components/overlays/SpecViewerOverlay'
 
@@ -29,7 +30,7 @@ function useGlobalKeys() {
         e.preventDefault()
         patch((s) => ({ palette: !s.palette, query: '' }))
       } else if (e.key === 'Escape') {
-        patch({ palette: false, activity: false, viewer: null, submittalViewer: null, specViewer: null, ...closePatch() })
+        patch({ palette: false, activity: false, settingsOpen: false, viewer: null, submittalViewer: null, specViewer: null, ...closePatch() })
       }
     }
     window.addEventListener('keydown', onKey)
@@ -126,6 +127,7 @@ export function App() {
       <SubmittalViewerOverlay />
       <SpecViewerOverlay />
       <ActivityDrawer />
+      <SettingsOverlay />
       <CommandPalette />
     </>
   )

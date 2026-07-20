@@ -29,6 +29,7 @@ export interface AppState {
   submittalViewer: { id: string; name: string; downloadUrl?: string; procoreUrl?: string } | null // open Final-reviewed-submittal PDF viewer (id = "submittals:<id>")
   specViewer: { revisionId: string; title: string; procoreUrl: string | null } | null // open spec-section PDF viewer (revisionId = current_revision_id)
   activity: boolean // activity drawer
+  settingsOpen: boolean // settings menu overlay
   palette: boolean // command palette
   query: string // palette search text
   dirFocus: string | null // contact id to highlight in Directory
@@ -58,6 +59,7 @@ export const initialState: AppState = {
   submittalViewer: null,
   specViewer: null,
   activity: false,
+  settingsOpen: false,
   palette: false,
   query: '',
   dirFocus: null,

@@ -105,6 +105,16 @@ export function Header() {
             Activity
             <span style={{ background: 'var(--accent)', color: '#fff', fontFamily: mono, fontSize: 9.5, fontWeight: 700, borderRadius: 20, padding: '1px 5px' }}>{activity.length}</span>
           </button>
+          <button
+            type="button"
+            className="sl-icon-btn"
+            title="Settings"
+            aria-label="Settings"
+            onClick={() => patch({ settingsOpen: true })}
+            style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid var(--bd-1)', background: '#fff', cursor: 'pointer', color: 'var(--tx-secondary-2)', fontSize: 15, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}
+          >
+            ⚙
+          </button>
         </div>
       </div>
 
