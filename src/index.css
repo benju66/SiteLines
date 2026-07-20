@@ -81,6 +81,24 @@ button {
 .sl-nav-item:hover:not(.is-active) {
   background: #eceef1;
 }
+/* Sidebar pin toggle (Phase 3): hidden until row hover; always shown while pinned. */
+.sl-pin-btn {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.sl-nav-row:hover .sl-pin-btn,
+.sl-pin-btn.is-pinned,
+.sl-pin-btn:focus-visible {
+  opacity: 1;
+}
+.sl-pin-btn:hover {
+  background: var(--fill-3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sl-pin-btn {
+    transition: none;
+  }
+}
 .sl-chip:hover:not(.is-active) {
   background: #f2f4f6;
   border-color: #cdd2d8;

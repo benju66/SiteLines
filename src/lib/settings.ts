@@ -11,12 +11,14 @@
 // downstream (the provider, the boot hydrate, the bridge) can then assume a clean
 // UserSettings.
 
+import type { ToolKey } from '@/types'
 import { DRAWER_DEFAULT_WIDTH, DRAWER_MIN_WIDTH } from './drawerNav'
 
 /** The current on-disk schema version. Bump this when the shape changes, and add a
  *  migration branch in coerceSettings() that upgrades recognized older blobs.
- *  History: v1 = { sidebarCollapsed }; v2 (Phase 2) adds drawerWidth/drawerFull/columnWidths. */
-export const SETTINGS_VERSION = 2
+ *  History: v1 = { sidebarCollapsed }; v2 adds drawerWidth/drawerFull/columnWidths;
+ *  v3 (Phase 3) adds pinnedTools. */
+export const SETTINGS_VERSION = 3
 
 /** Absolute ceiling for a persisted drawer width. Generous on purpose — the runtime
  *  re-clamps to the live viewport via clampDrawerWidth(); this only rejects garbage. */
@@ -25,9 +27,9 @@ const DRAWER_WIDTH_CEILING = 4000
 /**
  * The persisted user-settings shape.
  *
- * Phase 1 wired `sidebarCollapsed`; Phase 2 adds the rest of the durable UI state:
- * the detail-drawer width + full-width toggle, and per-table column widths (keyed by
- * a table id, e.g. `{ budget: [...9 widths...] }`). Phase 3 will add `pinnedTools`.
+ * Grown a field at a time (each with a coerceSettings migration branch): v1 wired
+ * `sidebarCollapsed`; v2 added the drawer width/full + per-table column widths; v3
+ * adds `pinnedTools` (sidebar tools surfaced to a "Pinned" section, in pin order).
  * See `Notes/plans/Settings-And-UX-Plan.md` for the fuller target shape.
  */
 export interface UserSettings {
@@ -40,6 +42,8 @@ export interface UserSettings {
   drawerFull: boolean
   /** Resizable-table column widths, keyed by table id (e.g. 'budget'). */
   columnWidths: Record<string, number[]>
+  /** Sidebar tools the user pinned, in pin order (surfaced above the groups). */
+  pinnedTools: ToolKey[]
 }
 
 /** A fresh, valid settings object — the fallback for anything missing or malformed.
@@ -53,6 +57,7 @@ export function defaultSettings(): UserSettings {
     drawerWidth: DRAWER_DEFAULT_WIDTH,
     drawerFull: false,
     columnWidths: {},
+    pinnedTools: [],
   }
 }
 
@@ -82,6 +87,32 @@ function coerceColumnWidths(v: unknown): Record<string, number[]> {
   return out
 }
 
+/** A de-duplicated array of the string entries in `v` (dropping non-strings); [] if not
+ *  an array. Tool-existence isn't checked here (this pure blob-level coerce doesn't know
+ *  the tool registry) — orderedNav filters stale keys against the live groups at read time. */
+function coerceStringArray(v: unknown): ToolKey[] {
+  if (!Array.isArray(v)) return []
+  const seen = new Set<string>()
+  const out: ToolKey[] = []
+  for (const x of v) {
+    if (typeof x === 'string' && !seen.has(x)) {
+      seen.add(x)
+      out.push(x as ToolKey)
+    }
+  }
+  return out
+}
+
+/** The v2 field set (shared by the v2→current migration and the current-version read). */
+function coerceV2Fields(raw: Record<string, unknown>, d: UserSettings) {
+  return {
+    sidebarCollapsed: typeof raw.sidebarCollapsed === 'boolean' ? raw.sidebarCollapsed : d.sidebarCollapsed,
+    drawerWidth: coerceDrawerWidth(raw.drawerWidth, d.drawerWidth),
+    drawerFull: typeof raw.drawerFull === 'boolean' ? raw.drawerFull : d.drawerFull,
+    columnWidths: coerceColumnWidths(raw.columnWidths),
+  }
+}
+
 /**
  * Validate + version-migrate a loaded blob into a clean UserSettings.
  *
@@ -90,33 +121,30 @@ function coerceColumnWidths(v: unknown): Record<string, number[]> {
  * the wrong type falls back to its default; numbers out of range are clamped.
  *
  * Version handling (forward-migratable): a recognized OLDER version is upgraded,
- * preserving its still-valid fields; the CURRENT version is read field-by-field; an
- * unrecognized version — newer than this build, or junk/non-integer — degrades to
- * defaults rather than trusting an unknown structure.
+ * reading only the fields that legitimately existed in that version (so a hand-forged
+ * old blob can't smuggle a newer field through) and defaulting the rest; the CURRENT
+ * version is read field-by-field; an unrecognized version — newer than this build, or
+ * junk/non-integer — degrades to defaults rather than trusting an unknown structure.
  */
 export function coerceSettings(raw: unknown): UserSettings {
   const d = defaultSettings()
   if (!isPlainObject(raw)) return d
 
-  // v1 → v2 migration: v1 only had `sidebarCollapsed`. Preserve it; the fields v1
-  // never had (drawerWidth/drawerFull/columnWidths) take their v2 defaults. A v1 user
-  // keeps their sidebar preference across the upgrade rather than being reset.
+  // v1 → current: v1 only had sidebarCollapsed.
   if (raw.version === 1) {
-    return {
-      ...d,
-      sidebarCollapsed: typeof raw.sidebarCollapsed === 'boolean' ? raw.sidebarCollapsed : d.sidebarCollapsed,
-    }
+    return { ...d, sidebarCollapsed: typeof raw.sidebarCollapsed === 'boolean' ? raw.sidebarCollapsed : d.sidebarCollapsed }
   }
-
+  // v2 → current: v2 added drawerWidth/drawerFull/columnWidths (no pinnedTools yet).
+  if (raw.version === 2) {
+    return { ...d, ...coerceV2Fields(raw, d) }
+  }
   // Anything that isn't the current version (a newer build's blob, or junk) → defaults.
   if (raw.version !== SETTINGS_VERSION) return d
 
   return {
     version: SETTINGS_VERSION,
-    sidebarCollapsed: typeof raw.sidebarCollapsed === 'boolean' ? raw.sidebarCollapsed : d.sidebarCollapsed,
-    drawerWidth: coerceDrawerWidth(raw.drawerWidth, d.drawerWidth),
-    drawerFull: typeof raw.drawerFull === 'boolean' ? raw.drawerFull : d.drawerFull,
-    columnWidths: coerceColumnWidths(raw.columnWidths),
+    ...coerceV2Fields(raw, d),
+    pinnedTools: coerceStringArray(raw.pinnedTools),
   }
 }
 

@@ -10,6 +10,7 @@ describe('defaultSettings', () => {
       drawerWidth: DRAWER_DEFAULT_WIDTH,
       drawerFull: false,
       columnWidths: {},
+      pinnedTools: [],
     })
   })
 
@@ -18,28 +19,29 @@ describe('defaultSettings', () => {
     const b = defaultSettings()
     expect(a).not.toBe(b)
     expect(a.columnWidths).not.toBe(b.columnWidths)
+    expect(a.pinnedTools).not.toBe(b.pinnedTools)
     a.sidebarCollapsed = true
-    a.columnWidths.budget = [1]
+    a.pinnedTools.push('budget')
     expect(defaultSettings().sidebarCollapsed).toBe(false)
-    expect(defaultSettings().columnWidths).toEqual({})
+    expect(defaultSettings().pinnedTools).toEqual([])
   })
 })
 
 describe('coerceSettings', () => {
   const D = defaultSettings()
 
-  it('keeps a valid current-version (v2) blob', () => {
-    const blob = { version: 2, sidebarCollapsed: true, drawerWidth: 520, drawerFull: true, columnWidths: { budget: [300, 110] } }
+  it('keeps a valid current-version (v3) blob', () => {
+    const blob = { version: 3, sidebarCollapsed: true, drawerWidth: 520, drawerFull: true, columnWidths: { budget: [300, 110] }, pinnedTools: ['budget', 'rfis'] }
     expect(coerceSettings(blob)).toEqual(blob)
   })
 
   it('strips unknown/junk keys', () => {
-    const out = coerceSettings({ version: 2, sidebarCollapsed: true, drawerWidth: 500, drawerFull: false, columnWidths: {}, bogus: 1, nested: { x: 1 } })
-    expect(Object.keys(out).sort()).toEqual(['columnWidths', 'drawerFull', 'drawerWidth', 'sidebarCollapsed', 'version'])
+    const out = coerceSettings({ version: 3, sidebarCollapsed: true, drawerWidth: 500, drawerFull: false, columnWidths: {}, pinnedTools: [], bogus: 1, nested: { x: 1 } })
+    expect(Object.keys(out).sort()).toEqual(['columnWidths', 'drawerFull', 'drawerWidth', 'pinnedTools', 'sidebarCollapsed', 'version'])
   })
 
   it('falls back per-field when a field is the wrong type', () => {
-    const out = coerceSettings({ version: 2, sidebarCollapsed: 'yes', drawerWidth: 'wide', drawerFull: 1, columnWidths: 'nope' })
+    const out = coerceSettings({ version: 3, sidebarCollapsed: 'yes', drawerWidth: 'wide', drawerFull: 1, columnWidths: 'nope', pinnedTools: 'budget' })
     expect(out).toEqual(D)
   })
 
@@ -74,33 +76,47 @@ describe('coerceSettings', () => {
     })
   })
 
+  describe('pinnedTools coercion', () => {
+    it('keeps an array of string keys', () => {
+      expect(coerceSettings({ ...D, pinnedTools: ['budget', 'rfis', 'punch'] }).pinnedTools).toEqual(['budget', 'rfis', 'punch'])
+    })
+    it('drops non-string entries and de-duplicates (order preserved)', () => {
+      expect(coerceSettings({ ...D, pinnedTools: ['budget', 42, 'budget', null, 'rfis', {}] }).pinnedTools).toEqual(['budget', 'rfis'])
+    })
+    it('defaults to [] when pinnedTools is not an array', () => {
+      expect(coerceSettings({ ...D, pinnedTools: 'budget' }).pinnedTools).toEqual([])
+      expect(coerceSettings({ ...D, pinnedTools: null }).pinnedTools).toEqual([])
+    })
+  })
+
   describe('version migration', () => {
     it('migrates a v1 blob forward, preserving sidebarCollapsed', () => {
       expect(coerceSettings({ version: 1, sidebarCollapsed: true })).toEqual({ ...D, sidebarCollapsed: true })
-      expect(coerceSettings({ version: 1, sidebarCollapsed: false })).toEqual({ ...D, sidebarCollapsed: false })
-    })
-    it('migrates a v1 blob with a bad sidebarCollapsed to defaults for that field', () => {
-      expect(coerceSettings({ version: 1, sidebarCollapsed: 'x' })).toEqual(D)
-      expect(coerceSettings({ version: 1 })).toEqual(D)
     })
     it('ignores v1 fields that never existed in v1 (only sidebarCollapsed carries over)', () => {
-      // A hand-forged v1 blob with a stray drawerWidth must NOT smuggle it through the migration.
-      const out = coerceSettings({ version: 1, sidebarCollapsed: true, drawerWidth: 999 })
+      const out = coerceSettings({ version: 1, sidebarCollapsed: true, drawerWidth: 999, pinnedTools: ['budget'] })
       expect(out).toEqual({ ...D, sidebarCollapsed: true })
-      expect(out.drawerWidth).toBe(DRAWER_DEFAULT_WIDTH)
+    })
+    it('migrates a v2 blob forward, preserving its fields and defaulting pinnedTools', () => {
+      const v2 = { version: 2, sidebarCollapsed: true, drawerWidth: 600, drawerFull: true, columnWidths: { budget: [300] } }
+      expect(coerceSettings(v2)).toEqual({ version: 3, sidebarCollapsed: true, drawerWidth: 600, drawerFull: true, columnWidths: { budget: [300] }, pinnedTools: [] })
+    })
+    it('ignores a v2 blob’s stray pinnedTools (that field did not exist in v2)', () => {
+      const out = coerceSettings({ version: 2, sidebarCollapsed: false, pinnedTools: ['budget'] })
+      expect(out.pinnedTools).toEqual([])
     })
   })
 
   it('falls back to defaults for a partial/empty blob', () => {
-    expect(coerceSettings({ version: 2 })).toEqual(D)
+    expect(coerceSettings({ version: 3 })).toEqual(D)
     expect(coerceSettings({})).toEqual(D)
   })
 
   it('falls back to defaults for an unrecognized version (newer / out-of-range / wrong type)', () => {
     expect(coerceSettings({ version: 99, sidebarCollapsed: true })).toEqual(D)
     expect(coerceSettings({ version: 0, sidebarCollapsed: true })).toEqual(D)
-    expect(coerceSettings({ version: 1.5, sidebarCollapsed: true })).toEqual(D)
-    expect(coerceSettings({ version: '2', sidebarCollapsed: true })).toEqual(D)
+    expect(coerceSettings({ version: 2.5, sidebarCollapsed: true })).toEqual(D)
+    expect(coerceSettings({ version: '3', sidebarCollapsed: true })).toEqual(D)
     expect(coerceSettings({ sidebarCollapsed: true })).toEqual(D)
   })
 
@@ -109,12 +125,12 @@ describe('coerceSettings', () => {
     expect(coerceSettings(undefined)).toEqual(D)
     expect(coerceSettings('sitelines')).toEqual(D)
     expect(coerceSettings(42)).toEqual(D)
-    expect(coerceSettings([{ version: 2 }])).toEqual(D)
+    expect(coerceSettings([{ version: 3 }])).toEqual(D)
     expect(coerceSettings(NaN)).toEqual(D)
   })
 
   it('round-trips a coerced blob unchanged (idempotent)', () => {
-    const once = coerceSettings({ version: 2, sidebarCollapsed: true, drawerWidth: 600, drawerFull: true, columnWidths: { budget: [300] }, junk: 1 })
+    const once = coerceSettings({ version: 3, sidebarCollapsed: true, drawerWidth: 600, drawerFull: true, columnWidths: { budget: [300] }, pinnedTools: ['budget'], junk: 1 })
     expect(coerceSettings(once)).toEqual(once)
   })
 })

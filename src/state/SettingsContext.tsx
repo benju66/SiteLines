@@ -16,6 +16,7 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
 import type { ReactNode } from 'react'
 import { defaultSettings, type UserSettings } from '@/lib/settings'
 import type { SettingsSource } from '@/lib/settingsSource'
+import type { ToolKey } from '@/types'
 
 interface SettingsContextValue {
   /** The current, always-valid settings (coerced at load). */
@@ -27,6 +28,8 @@ interface SettingsContextValue {
   patchSettings: (partial: Partial<UserSettings>) => void
   /** Persist a resizable table's column widths (merged into `columnWidths[tableId]`). */
   setColumnWidths: (tableId: string, widths: number[]) => void
+  /** Pin (append) or unpin a sidebar tool, persisting the new `pinnedTools` order. */
+  togglePinnedTool: (toolKey: ToolKey) => void
   /** Restore every preference to its default and persist that. */
   resetSettings: () => void
 }
@@ -71,6 +74,20 @@ export function SettingsProvider({ source, children }: { source: SettingsSource;
     [source],
   )
 
+  const togglePinnedTool = useCallback(
+    (toolKey: ToolKey) => {
+      setSettings((prev) => {
+        const pinnedTools = prev.pinnedTools.includes(toolKey)
+          ? prev.pinnedTools.filter((t) => t !== toolKey)
+          : [...prev.pinnedTools, toolKey]
+        const next = { ...prev, pinnedTools }
+        source.save(next)
+        return next
+      })
+    },
+    [source],
+  )
+
   const resetSettings = useCallback(() => {
     const next = defaultSettings()
     source.save(next)
@@ -78,8 +95,8 @@ export function SettingsProvider({ source, children }: { source: SettingsSource;
   }, [source])
 
   const value = useMemo(
-    () => ({ settings, setSetting, patchSettings, setColumnWidths, resetSettings }),
-    [settings, setSetting, patchSettings, setColumnWidths, resetSettings],
+    () => ({ settings, setSetting, patchSettings, setColumnWidths, togglePinnedTool, resetSettings }),
+    [settings, setSetting, patchSettings, setColumnWidths, togglePinnedTool, resetSettings],
   )
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
 }

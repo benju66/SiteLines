@@ -12,7 +12,7 @@ import type { ItemsByTool, SiteData } from '@/lib/dataSource'
 import { involvesContact } from '@/lib/party'
 import { tone, urgency } from '@/theme/tokens'
 import type { AppState, ProjectScope, SavedView, TypeFilter } from '@/state/appState'
-import type { BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Invoice, InvoiceLineItem, Item, Project, PunchItem, Spec, ToolKey } from '@/types'
+import type { BudgetLine, BudgetPending, ChangeEvent, ChangeEventLineItem, Commitment, CommitmentBilling, CommitmentChangeOrder, CommitmentLineItem, Contact, Drawing, DrawingRevision, FinancialSource, Invoice, InvoiceLineItem, Item, NavGroup, Project, PunchItem, Spec, ToolKey } from '@/types'
 
 /** Tools whose overdue items roll up into the sidebar footer / overview. */
 const AGGREGATE_KEYS: ToolKey[] = ['rfis', 'submittals', 'changeOrders', 'punch', 'changeEvents', 'commitments', 'invoicing', 'schedule']
@@ -44,6 +44,21 @@ export function myCourtCount(items: ItemsByTool, tool: ToolKey, project: Project
 /** Total overdue across aggregate tools, in scope (sidebar footer). */
 export function overdueTotal(items: ItemsByTool, project: ProjectScope): number {
   return AGGREGATE_KEYS.reduce((sum, k) => sum + scoped(items[k], project).filter((r) => r.urgency === 'over').length, 0)
+}
+
+/** The sidebar's tool nav split into a surfaced "Pinned" list + the remaining groups
+ *  (User Settings & UX, Phase 3). A pinned tool is lifted out of its group into `pinned`
+ *  (in the user's pin order), so it appears once, at the top; a group emptied by pinning
+ *  is dropped. Stale pinned keys — a persisted tool that no longer exists in any group —
+ *  are ignored, so a corrupt/old `pinnedTools` can never surface a phantom nav item. Pure. */
+export function orderedNav(groups: NavGroup[], pinned: ToolKey[]): { pinned: ToolKey[]; groups: NavGroup[] } {
+  const existing = new Set(groups.flatMap((g) => g.keys))
+  const validPinned = pinned.filter((k) => existing.has(k))
+  const pinnedSet = new Set(validPinned)
+  const remaining = groups
+    .map((g) => ({ ...g, keys: g.keys.filter((k) => !pinnedSet.has(k)) }))
+    .filter((g) => g.keys.length > 0)
+  return { pinned: validPinned, groups: remaining }
 }
 
 /** Does a record pass the active saved-view quick filter? */

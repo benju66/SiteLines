@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { GROUPS, TOOLS } from '@/data/tools'
-import { courtItems, myCourtCount, overdueTotal } from '@/selectors'
+import { courtItems, myCourtCount, orderedNav, overdueTotal } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useSiteData } from '@/state/DataContext'
+import { useSettings } from '@/state/SettingsContext'
 import type { ProjectScope } from '@/state/appState'
 import { mono, projectMeta } from '@/theme/tokens'
 import type { ToolKey } from '@/types'
@@ -24,13 +25,15 @@ function scopeSwatch(scope: ProjectScope) {
   return <span style={{ width: 8, height: 8, borderRadius: 2, background: projectMeta[scope].color, flex: 'none' }} />
 }
 
-function navItemStyle(active: boolean, expanded: boolean): CSSProperties {
+function navItemStyle(active: boolean, expanded: boolean, reserveTrailing = false): CSSProperties {
   return {
     display: 'flex',
     alignItems: 'center',
     gap: 9,
     width: '100%',
-    padding: expanded ? '7px 10px' : '7px 0',
+    // Tool rows reserve room on the right for the hover/pin control so the count badge
+    // never sits under it.
+    padding: expanded ? (reserveTrailing ? '7px 30px 7px 10px' : '7px 10px') : '7px 0',
     justifyContent: expanded ? 'flex-start' : 'center',
     borderRadius: 8,
     cursor: 'pointer',
@@ -82,29 +85,41 @@ const iconBtn: CSSProperties = {
   fontFamily: 'inherit',
 }
 
+/** Pushpin glyph — outline when unpinned, filled (accent) when pinned. */
+function PinIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <line x1="12" y1="15" x2="12" y2="21" />
+      <path d="M9 3h6l-1 2v5l2 2v1H8v-1l2-2V5L9 3z" />
+    </svg>
+  )
+}
+
 /** A nav button (pinned or tool): icon/badge + label + count when expanded; icon + accent dot on the rail. */
-function NavButton({ active, expanded, label, icon, count = 0, accentCount = false, onClick }: {
+function NavButton({ active, expanded, label, icon, count = 0, accentCount = false, reserveTrailing = false, onClick }: {
   active: boolean
   expanded: boolean
   label: string
   icon: ReactNode
   count?: number
   accentCount?: boolean
+  reserveTrailing?: boolean
   onClick: () => void
 }) {
   return (
-    <button type="button" title={expanded ? undefined : label} className={`sl-nav-item${active ? ' is-active' : ''}`} style={navItemStyle(active, expanded)} onClick={onClick}>
+    <button type="button" title={expanded ? undefined : label} className={`sl-nav-item${active ? ' is-active' : ''}`} style={navItemStyle(active, expanded, reserveTrailing)} onClick={onClick}>
       {icon}
       {expanded && <span style={{ flex: 1, textAlign: 'left', fontWeight: label === 'Overview' || label === 'My Court' ? 600 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>}
-      {expanded && count > 0 && <span style={countBadge(accentCount)}>{count}</span>}
+      {expanded && count > 0 && <span className="sl-nav-count" style={countBadge(accentCount)}>{count}</span>}
       {!expanded && count > 0 && <span style={railDot} />}
     </button>
   )
 }
 
-function ToolNavItem({ toolKey, expanded }: { toolKey: ToolKey; expanded: boolean }) {
+function ToolNavItem({ toolKey, expanded, pinned }: { toolKey: ToolKey; expanded: boolean; pinned: boolean }) {
   const { state, patch } = useApp()
   const { itemsByTool } = useSiteData()
+  const { togglePinnedTool } = useSettings()
   const active = state.tool === toolKey
   const meta = TOOLS[toolKey]
   const count = myCourtCount(itemsByTool, toolKey, state.project)
@@ -127,12 +142,53 @@ function ToolNavItem({ toolKey, expanded }: { toolKey: ToolKey; expanded: boolea
       {meta.code}
     </span>
   )
-  return <NavButton active={active} expanded={expanded} label={meta.label} icon={badge} count={count} onClick={() => patch({ tool: toolKey })} />
+  const nav = <NavButton active={active} expanded={expanded} label={meta.label} icon={badge} count={count} reserveTrailing={expanded} onClick={() => patch({ tool: toolKey })} />
+  // On the rail there's no room for a pin control (pin/unpin happens in expanded mode).
+  if (!expanded) return nav
+  // The pin toggle is a SIBLING of the nav button (a relative wrapper), never nested —
+  // a <button> inside a <button> is invalid DOM. It sits in the reserved right gutter,
+  // fades in on row hover, and stays visible (accent) while pinned.
+  return (
+    <div className="sl-nav-row" style={{ position: 'relative' }}>
+      {nav}
+      <button
+        type="button"
+        className={`sl-pin-btn${pinned ? ' is-pinned' : ''}`}
+        title={pinned ? 'Unpin from top' : 'Pin to top'}
+        aria-label={pinned ? `Unpin ${meta.label}` : `Pin ${meta.label} to top`}
+        aria-pressed={pinned}
+        onClick={(e) => {
+          e.stopPropagation()
+          togglePinnedTool(toolKey)
+        }}
+        style={{
+          position: 'absolute',
+          right: 6,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          width: 20,
+          height: 20,
+          borderRadius: 5,
+          border: 'none',
+          background: 'transparent',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 0,
+          color: pinned ? 'var(--accent)' : 'var(--tx-faint-2)',
+        }}
+      >
+        <PinIcon filled={pinned} />
+      </button>
+    </div>
+  )
 }
 
 export function Sidebar() {
   const { state, patch } = useApp()
   const { itemsByTool } = useSiteData()
+  const { settings } = useSettings()
   const { project, tool } = state
   const [peek, setPeek] = useState(false)
 
@@ -140,6 +196,8 @@ export function Sidebar() {
   const expanded = !collapsed || peek // rail shows minimal chrome; expanded shows labels
   const homeCount = courtItems(itemsByTool, project).length
   const overdue = overdueTotal(itemsByTool, project)
+  // Pinned tools surface into their own section; the rest keep their groups (Phase 3).
+  const nav = orderedNav(GROUPS, settings.pinnedTools)
 
   const toggle = () => {
     setPeek(false)
@@ -255,12 +313,22 @@ export function Sidebar() {
           />
         </div>
 
-        {/* tool nav groups */}
-        {GROUPS.map((g) => (
+        {/* user-pinned tools, surfaced above the groups */}
+        {nav.pinned.length > 0 && (
+          <div style={{ padding: '10px 12px 2px' }}>
+            {expanded && <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--tx-faint-2)', fontWeight: 600, padding: '0 4px 4px' }}>Pinned</div>}
+            {nav.pinned.map((k) => (
+              <ToolNavItem key={k} toolKey={k} expanded={expanded} pinned />
+            ))}
+          </div>
+        )}
+
+        {/* tool nav groups (pinned tools lifted out) */}
+        {nav.groups.map((g) => (
           <div key={g.label} style={{ padding: '10px 12px 2px' }}>
             {expanded && <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.6px', color: 'var(--tx-faint-2)', fontWeight: 600, padding: '0 4px 4px' }}>{g.label}</div>}
             {g.keys.map((k) => (
-              <ToolNavItem key={k} toolKey={k} expanded={expanded} />
+              <ToolNavItem key={k} toolKey={k} expanded={expanded} pinned={false} />
             ))}
           </div>
         ))}
