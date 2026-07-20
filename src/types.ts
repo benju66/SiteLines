@@ -87,6 +87,15 @@ export interface ItemAttachment {
   url: string
 }
 
+/** A photo on a record (punch items). `thumbnailUrl` renders inline in an <img>; `url`
+ *  is the full image. Both are pre-signed Procore links, minted fresh at drawer-open by
+ *  the `punch-detail` edge function (they expire), so they are never stored. */
+export interface ItemPhoto {
+  thumbnailUrl: string
+  url: string
+  name: string
+}
+
 /**
  * The lazily-loaded detail thread behind a record (DATA_CONTRACT record detail).
  * Fetched via `DataSource.getDetail(item)` when the drawer opens — the register
@@ -106,6 +115,8 @@ export interface ItemDetail {
   /** The final reviewed submittal (Procore's distributed, stamped doc), surfaced
    *  separately from the originally-submitted attachments. Submittals only. */
   finalSubmittal?: ItemAttachment[]
+  /** Punch photos (thumbnails + full images), fetched fresh at open by punch-detail. */
+  photos?: ItemPhoto[]
 }
 
 /**

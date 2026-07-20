@@ -17,6 +17,7 @@ import { mapDrawing, mapDrawingRevision, type DrawingRow, type DrawingRevisionRo
 import { mapSpec, type SpecRow } from '@/lib/mapSpec'
 import { mapPunchItem, type PunchRow } from '@/lib/mapPunchItem'
 import { mapRfiDetail, type RfiDetailRow } from '@/lib/mapRfiDetail'
+import { mapPunchDetail, type PunchDetailRow } from '@/lib/mapPunchDetail'
 import { mapSubmittalDetail, type SubmittalDetailRow } from '@/lib/mapSubmittalDetail'
 import type { ActivityEvent, DailyLogEntry, FinancialSource, Item, ItemDetail, Project, Status, ToolKey } from '@/types'
 
@@ -210,6 +211,15 @@ export function createSupabaseSource(client: SupabaseClient): DataSource {
           .maybeSingle()
         if (error) throw new Error(`Supabase read failed (sitelines_submittal_detail): ${error.message}`)
         return data ? mapSubmittalDetail(data as SubmittalDetailRow) : null
+      }
+      if (item.tool === 'punch') {
+        // No synced view — the response thread + PHOTOS (expiring urls) are fetched LIVE
+        // from Procore via the punch-detail edge fn (verify_jwt); supabase-js attaches the
+        // caller's bearer. On any failure return null → the drawer shows its generated
+        // fallback rather than throwing.
+        const { data, error } = await client.functions.invoke('punch-detail', { body: { id: item.id } })
+        if (error) return null
+        return mapPunchDetail(data as PunchDetailRow)
       }
       return null
     },

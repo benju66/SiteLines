@@ -283,6 +283,21 @@ export function RecordDetailDrawer() {
         </>
       )}
 
+      {/* Punch photos — thumbnails render inline (image display needs no CORS); click
+          opens the full image. Fetched fresh at open by the punch-detail edge fn. */}
+      {thread && thread.photos && thread.photos.length > 0 && (
+        <>
+          <div style={{ ...sectionLabel, margin: '18px 0 9px' }}>Photos ({thread.photos.length})</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {thread.photos.map((ph, i) => (
+              <a key={i} href={ph.url} target="_blank" rel="noopener noreferrer" title={ph.name} style={{ display: 'block', width: 92, height: 70, borderRadius: 7, overflow: 'hidden', border: '1px solid var(--bd-1)', flex: 'none', background: 'var(--fill-1)' }}>
+                <img src={ph.thumbnailUrl} alt={ph.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              </a>
+            ))}
+          </div>
+        </>
+      )}
+
       {links.length > 0 && (
         <>
           <div style={{ ...sectionLabel, margin: '18px 0 8px' }}>Linked records</div>

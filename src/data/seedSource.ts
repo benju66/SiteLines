@@ -3,7 +3,7 @@
 // exercise the loading/error states in dev (?slow / ?fail query params).
 
 import type { DataSource, Snapshot } from '@/lib/dataSource'
-import type { CommitmentDetail, DrawingRevision, Item, ItemDetail, ItemResponse } from '@/types'
+import type { CommitmentDetail, DrawingRevision, Item, ItemDetail, ItemPhoto, ItemResponse } from '@/types'
 import { ACTIVITY } from './activity'
 import { BUDGET_LINES } from './budgetLines'
 import { BUDGET_PENDING } from './budgetPending'
@@ -22,6 +22,14 @@ import { PUNCH } from './punch'
 import { SPECS } from './specs'
 import { DATA } from './records'
 
+/** A self-contained SVG-tile placeholder photo (data URI) so the punch drawer's Photos
+ *  section renders offline. Live photos come from Procore via the punch-detail edge fn. */
+function seedPhoto(label: string, hue: number): ItemPhoto {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='90'><rect width='120' height='90' fill='hsl(${hue},42%,86%)'/><text x='60' y='50' font-size='12' text-anchor='middle' font-family='sans-serif' fill='hsl(${hue},34%,38%)'>${label}</text></svg>`
+  const uri = `data:image/svg+xml,${encodeURIComponent(svg)}`
+  return { thumbnailUrl: uri, url: uri, name: `${label}.jpg` }
+}
+
 export function createSeedSource(opts: { delayMs?: number; fail?: boolean } = {}): DataSource {
   const { delayMs = 0, fail = false } = opts
   return {
@@ -35,6 +43,23 @@ export function createSeedSource(opts: { delayMs?: number; fail?: boolean } = {}
       }
     },
     async getDetail(item: Item): Promise<ItemDetail | null> {
+      // Punch: an assignment-style thread + placeholder photos so seed exercises the
+      // Responses + Photos sections (live comes from the punch-detail edge fn).
+      if (item.tool === 'punch') {
+        const p = PUNCH.find((x) => x.id === item.id)
+        const closed = item.status?.label === 'Closed'
+        const responses: ItemResponse[] =
+          item.who && item.who !== '—'
+            ? [{ author: item.who, date: item.date?.replace(/^due /, '') ?? null, text: closed ? 'Completed and verified.' : 'On it — will mark ready for review.', official: closed, status: closed ? 'Closed' : 'Work Required' }]
+            : []
+        return {
+          request: '',
+          responses,
+          attachments: [],
+          photos: p && !p.hasPhotos ? [] : [seedPhoto('Before', 12), seedPhoto('After', 145)],
+          closedDate: closed ? 'Apr 15, 2026' : null,
+        }
+      }
       // Seed has no real Procore threads; synthesize a small deterministic stub
       // (no clock) so seed mode still exercises the Request + Responses sections.
       const request = `${item.title}. Requesting confirmation to proceed on ${item.num}.`

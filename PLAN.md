@@ -179,13 +179,15 @@ offers are **empty on this job** (`location` 0 · `trade` 6 · `priority` 0 · `
 but the **lifecycle is rich** (`workflow_status`: initiated → work_required 192 →
 ready_for_review 208 → closed 693) and **assignee** (20 subs) + **photos** (876/1097) +
 `due_date` (936) are populated — so the dashboard groups by **lifecycle stage + assignee**,
-NOT room/trade. Photos + the response thread are only *flags* in the list payload → a gated
-**Phase 2** re-sync (per-item `/punch_items/{id}`, like the RFI thread + Drawings/Specs photo URLs).
+NOT room/trade. Photos + the response thread are only *flags* in the list payload; the Phase-2
+probe (2026-07-20) showed the "thread" is the **assignment workflow** (comments empty) and the
+**photo urls expire** — so Phase 2 skipped the planned re-sync for a **lazy `punch-detail` edge
+fn** (fetch on drawer-open → fresh photos, no master mutation).
 
 | Phase | Surface | Status |
 |-------|---------|--------|
 | 1 | Closeout dashboard — `sitelines_punch` view + `PunchItem` seam + `punchRollup`/`groupPunchBy` selectors + own `PunchView` (rollup KPIs: total · open · overdue · ready-for-review · closed · **% complete**; a Stage/Assignee group toggle; sortable register with 📎 photo + open-response indicators; rows open the existing `RecordDetailDrawer`). No re-sync; `sitelines_items` UNION + `ballInCourt.ts` untouched | ✅ Shipped (2026-07-20) — [view](sync/views/sitelines_punch.sql) applied (`security_invoker`, no re-sync, additive — UNION untouched); typecheck + **290 tests** + build green; view reconciles to the penny — **1097 total · 404 open · 172 overdue · 208 ready-for-review · 693 closed · 63% complete · 876 photos**; advisors clean. Seed (`:5174`) verified — KPIs, By-stage/By-sub grouping (assignee count-desc, Unassigned last), Show-closed, indicators, row→record-drawer (real Item + seed fallback). A TDZ crash in the seed fixture was caught by the click-through + fixed. Live `:5175` browser render pending (port held by another dev server + login-gated; data path DB-verified). Committed on `punch-phase-1` |
-| 2 | **⛔ re-sync** — `enrich_punch_with_detail()` (per-item `/punch_items/{id}` → response thread + photo attachment urls onto `raw`, gated) + a `punch` branch in `getDetail` (real thread in `RecordDetailDrawer`, à la `mapRfiDetail`) + photo thumbs via a fresh-URL edge fn (reuse `drawing-file`/`spec-file`). Probe for a bulk/incremental route first | ⏳ Planned |
+| 2 | Detail drawer — the assignment thread + photos, **lazy** (owner chose over the planned re-sync, 2026-07-20). Probe found: `comments` empty (the "thread" is the `assignments[]` workflow), photos in `web_images[]` with **expiring** urls → no re-sync worth it. A `punch-detail` edge fn fetches `/punch_items/{id}` on drawer-open → trimmed thread + **fresh** photo urls; `mapPunchDetail` (thread→responses, photos→`ItemDetail.photos`); `getDetail('punch')` branch; a Photos strip in `RecordDetailDrawer`. No re-sync, no master mutation | ✅ Shipped (2026-07-20) — [`punch-detail`](supabase/functions/punch-detail/index.ts) deployed (v1 ACTIVE, `verify_jwt`+`authenticated`-gated; reuses existing Procore secrets; unauth → 401); `ItemPhoto`/`ItemDetail.photos` + `mapPunchDetail` (+test) + seed stub. typecheck + **293 tests** + build green; seed (`:5174`) — punch drawer shows the assignment thread (Responses) + a Photos strip (thumbnails; none when no photos), no console errors. Full authed live drawer render pending (port held by another dev server + login-gated). Committed on `punch-phase-1` |
 
 ### Parallel workstream: Procore Data Seam
 Wiring live Procore data (FP-Analytics → Supabase → app) is a **separate workstream**
