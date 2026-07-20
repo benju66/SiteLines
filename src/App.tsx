@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { closePatch } from '@/lib/drawerNav'
 import { useApp } from '@/state/AppContext'
 import { useData } from '@/state/DataContext'
+import { SettingsBridge } from '@/state/SettingsBridge'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 import { MainContent } from '@/components/layout/MainContent'
@@ -107,6 +108,8 @@ export function App() {
 
   return (
     <>
+      {/* Mirrors AppState's durable subset out to the settings store (no UI). */}
+      <SettingsBridge />
       <CardFrame>
         <Sidebar />
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: 'var(--card)' }}>

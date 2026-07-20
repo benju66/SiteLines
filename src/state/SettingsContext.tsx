@@ -22,6 +22,11 @@ interface SettingsContextValue {
   settings: UserSettings
   /** Update one preference and write it through to the source. */
   setSetting: <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => void
+  /** Merge a partial patch across several preferences in ONE write-through (used by
+   *  the AppState↔settings bridge to persist the durable subset in a single save). */
+  patchSettings: (partial: Partial<UserSettings>) => void
+  /** Persist a resizable table's column widths (merged into `columnWidths[tableId]`). */
+  setColumnWidths: (tableId: string, widths: number[]) => void
   /** Restore every preference to its default and persist that. */
   resetSettings: () => void
 }
@@ -44,6 +49,28 @@ export function SettingsProvider({ source, children }: { source: SettingsSource;
     [source],
   )
 
+  const patchSettings = useCallback(
+    (partial: Partial<UserSettings>) => {
+      setSettings((prev) => {
+        const next = { ...prev, ...partial }
+        source.save(next)
+        return next
+      })
+    },
+    [source],
+  )
+
+  const setColumnWidths = useCallback(
+    (tableId: string, widths: number[]) => {
+      setSettings((prev) => {
+        const next = { ...prev, columnWidths: { ...prev.columnWidths, [tableId]: widths } }
+        source.save(next)
+        return next
+      })
+    },
+    [source],
+  )
+
   const resetSettings = useCallback(() => {
     const next = defaultSettings()
     source.save(next)
@@ -51,8 +78,8 @@ export function SettingsProvider({ source, children }: { source: SettingsSource;
   }, [source])
 
   const value = useMemo(
-    () => ({ settings, setSetting, resetSettings }),
-    [settings, setSetting, resetSettings],
+    () => ({ settings, setSetting, patchSettings, setColumnWidths, resetSettings }),
+    [settings, setSetting, patchSettings, setColumnWidths, resetSettings],
   )
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
 }

@@ -59,9 +59,11 @@ export function SettingsOverlay() {
   }
 
   const reset = () => {
-    const defaults = defaultSettings()
+    const d = defaultSettings()
     resetSettings()
-    patch({ sidebarCollapsed: defaults.sidebarCollapsed }) // keep the live session in sync with the reset
+    // Reflect the reset in the live session for the bridged fields. Column widths reset
+    // on the Budget table's next mount / a reload (its widths ref hydrates at mount).
+    patch({ sidebarCollapsed: d.sidebarCollapsed, drawerWidth: d.drawerWidth, drawerFull: d.drawerFull })
   }
 
   return (

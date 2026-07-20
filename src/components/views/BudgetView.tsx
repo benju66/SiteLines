@@ -15,10 +15,12 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { formatMoney } from '@/lib/derive'
 import { openPatch } from '@/lib/drawerNav'
 import { fuzzyMatchesAny } from '@/lib/fuzzy'
+import { applyToTable } from '@/lib/settings'
 import { boughtOut, budgetByDivision, budgetForecast, budgetTotals, buyoutGaps, commitmentsByCostCode, costCodeKey, costTypeMix, financialView, overBudget, scoped, sortedBudgetGroups } from '@/selectors'
 import type { BudgetDivisionGroup, BudgetForecast, BudgetSort, BudgetSortCol, CostCodeCommitment, CostTypeSlice, OverBudgetResult } from '@/selectors'
 import { useApp } from '@/state/AppContext'
 import { useSiteData } from '@/state/DataContext'
+import { useSettings } from '@/state/SettingsContext'
 import { mono, projectMeta, tone } from '@/theme/tokens'
 import type { BudgetLine, Commitment } from '@/types'
 import { Highlight } from '@/components/ui/Highlight'
@@ -40,6 +42,8 @@ const COLS: { label: string; sort: BudgetSortCol | null }[] = [
 const DEFAULT_WIDTHS = [300, 110, 110, 106, 110, 132, 118, 110, 116]
 const MIN_WIDTHS = [168, 72, 72, 72, 72, 88, 72, 72, 72]
 const GRID_FALLBACK = DEFAULT_WIDTHS.map((w) => `${w}px`).join(' ')
+// Settings key for this table's persisted column widths (settings.columnWidths[id]).
+const BUDGET_TABLE_ID = 'budget'
 
 // Over/Under's most useful first click is ascending (most-negative = worst first);
 // every other column defaults to descending (largest first).
@@ -103,6 +107,7 @@ function divName(s: string): string {
 export function BudgetView() {
   const { state, patch } = useApp()
   const { financials, budgetLines, budgetPending, commitments, commitmentLineItems } = useSiteData()
+  const { settings, setColumnWidths } = useSettings()
 
   const [sort, setSort] = useState<BudgetSort | null>(null)
   const [overBudgetOnly, setOverBudgetOnly] = useState(false)
@@ -147,8 +152,10 @@ export function BudgetView() {
 
   // Resizable columns — widths in a ref + a CSS var written straight to the DOM so
   // a drag doesn't re-render every row (the var cascades to all .row children).
+  // Hydrate the initial widths from the persisted settings (validated against the
+  // current column count by applyToTable; a stale/junk save falls back to defaults).
   const innerRef = useRef<HTMLDivElement>(null)
-  const widthsRef = useRef<number[]>([...DEFAULT_WIDTHS])
+  const widthsRef = useRef<number[]>(applyToTable(settings.columnWidths[BUDGET_TABLE_ID], DEFAULT_WIDTHS, MIN_WIDTHS))
   const dragRef = useRef<{ col: number; x: number; w: number } | null>(null)
   const applyGrid = () => {
     const el = innerRef.current
@@ -175,6 +182,8 @@ export function BudgetView() {
   const onResizeUp = (e: ReactPointerEvent<HTMLSpanElement>) => {
     dragRef.current = null
     e.currentTarget.classList.remove('is-drag')
+    // Persist the committed widths (drag-end only — the move wrote straight to the DOM).
+    setColumnWidths(BUDGET_TABLE_ID, [...widthsRef.current])
   }
 
   // Header click cycles: unsorted → default dir → opposite → unsorted.

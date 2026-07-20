@@ -15,11 +15,16 @@ const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings()
-  // Boot-hydrate the persisted preference subset of AppState from settings. Phase 1
-  // bridges exactly one field (sidebarCollapsed); AppState stays the runtime source
-  // of truth — this only seeds the initial value. The lazy initializer reads settings
-  // once at mount (SettingsProvider loads synchronously above us in the tree).
-  const [state, setState] = useState<AppState>(() => ({ ...initialState, sidebarCollapsed: settings.sidebarCollapsed }))
+  // Boot-hydrate the persisted preference subset of AppState from settings (the mirror
+  // of SettingsBridge's persistedFromState). AppState stays the runtime source of truth
+  // — this only seeds the initial value. The lazy initializer reads settings once at
+  // mount (SettingsProvider loads synchronously above us in the tree).
+  const [state, setState] = useState<AppState>(() => ({
+    ...initialState,
+    sidebarCollapsed: settings.sidebarCollapsed,
+    drawerWidth: settings.drawerWidth,
+    drawerFull: settings.drawerFull,
+  }))
 
   const patch = useCallback((p: Patch) => {
     setState((prev) => ({ ...prev, ...(typeof p === 'function' ? p(prev) : p) }))
