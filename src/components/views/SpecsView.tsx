@@ -4,10 +4,11 @@
 // (divisions in book order, sections natural-sorted), and lets each division
 // collapse/expand (state lives in AppState; default = all expanded).
 //
-// Each row shows the current revision's Issued date and a smart action: "Open PDF"
-// opens the spec section IN-APP (the spec-file edge fn streams a fresh PDF) when the
-// section has one; otherwise "Open in Procore ↗" (built from current_revision_id);
-// a section with no current revision shows "—". Mirrors DrawingsView.
+// Each row shows the current revision's Issued date and its actions: "Open PDF" opens
+// the spec section IN-APP (the spec-file edge fn streams a fresh PDF) when the section
+// has one, and "Open in Procore ↗" (built from current_revision_id) opens it in Procore
+// — both shown when available; a section with no current revision shows "—". Mirrors
+// DrawingsView.
 
 import { useState } from 'react'
 import { fuzzyMatch, fuzzyMatchesAny } from '@/lib/fuzzy'
@@ -19,8 +20,8 @@ import type { Spec } from '@/types'
 import { Highlight } from '@/components/ui/Highlight'
 import { TableSearch } from '@/components/ui/TableSearch'
 
-// 3 data columns + a trailing action cell: Section · Title · Issued · (Open PDF / Procore).
-const GRID = '128px minmax(180px,1fr) 96px 150px'
+// 3 data columns + a trailing action cell: Section · Title · Issued · (Open PDF + Procore).
+const GRID = '128px minmax(180px,1fr) 96px 224px'
 const HEADS = ['Section', 'Title', 'Issued']
 
 // Division dot colors, drawn only from existing tokens (no ad-hoc hex). A stable
@@ -79,24 +80,26 @@ const actionBtn = {
   fontFamily: 'inherit',
 } as const
 
-// The per-row action, by state: an in-app "Open PDF" when the section has one, else the
-// "Open in Procore ↗" link (built from current_revision_id), else an inert "—".
+// The per-row actions: an in-app "Open PDF" when the section has one, AND an "Open in
+// Procore ↗" link when the section has a current revision (built from current_revision_id).
+// Both show side by side when available; a section with neither shows an inert "—".
 function RowAction({ section, onOpenPdf }: { section: Spec; onOpenPdf: (s: Spec) => void }) {
-  if (section.pdfUrl && section.revisionId) {
-    return (
-      <button type="button" className="sl-linked-row" onClick={() => onOpenPdf(section)} style={actionBtn}>
-        Open PDF <span aria-hidden style={{ fontSize: 10 }}>↗</span>
-      </button>
-    )
-  }
-  if (section.procoreUrl) {
-    return (
-      <a href={section.procoreUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="sl-linked-row" style={actionBtn}>
-        Open in Procore <span aria-hidden style={{ fontSize: 10 }}>↗</span>
-      </a>
-    )
-  }
-  return <span style={{ fontSize: 11.5, color: 'var(--tx-faint-2)' }}>—</span>
+  const hasPdf = !!(section.pdfUrl && section.revisionId)
+  if (!hasPdf && !section.procoreUrl) return <span style={{ fontSize: 11.5, color: 'var(--tx-faint-2)' }}>—</span>
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      {hasPdf && (
+        <button type="button" className="sl-linked-row" onClick={() => onOpenPdf(section)} style={actionBtn}>
+          Open PDF <span aria-hidden style={{ fontSize: 10 }}>↗</span>
+        </button>
+      )}
+      {section.procoreUrl && (
+        <a href={section.procoreUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="sl-linked-row" style={actionBtn}>
+          Open in Procore <span aria-hidden style={{ fontSize: 10 }}>↗</span>
+        </a>
+      )}
+    </span>
+  )
 }
 
 function SectionRow({ section, query, onOpenPdf }: { section: Spec; query?: string; onOpenPdf: (s: Spec) => void }) {
